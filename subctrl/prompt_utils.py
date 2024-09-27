@@ -22,7 +22,7 @@ def extend_list_with_random_elements(input_list, required_length):
     return input_list
 
 
-def get_contrast_concepts(client, concept, model="gpt-4o", retry=5, min_concepts=5):
+def get_contrast_concepts(client, concept, retry=5, min_concepts=5):
     prompt = T_CONTRAST_CONCEPTS.format(CONCEPT=concept)
     max_count = -1
     while retry > 0:
@@ -44,8 +44,20 @@ def get_contrast_concepts(client, concept, model="gpt-4o", retry=5, min_concepts
     return final_list
     
 
-def get_n_random_sentences(client, N=5, model="gpt-4o", retry=10):
-    prompt = T_RANDOM_SENTENCES.format(N=N)
+def get_n_random_sentence(client, concepts, exist_sentences, retry=10):
+    prompt = T_RANDOM_SENTENCE.format(
+        CONCEPTS="\n".join(concepts), EXIST_SENTENCES="\n".join(exist_sentences))
+    while retry > 0:
+        retry -= 1
+        response = client.chat_completions("get_n_random_sentence", prompt)
+        response = response.strip(" .'").strip('"')
+        if response != "":
+            return response
+    raise Exception("Not enough sentences are generated. Aborted.")
+
+
+def get_n_random_sentences(client, concepts, N=5, retry=10):
+    prompt = T_RANDOM_SENTENCES.format(N=N, CONCEPTS="\n".join(concepts))
     while retry > 0:
         retry -= 1
         response = client.chat_completions("get_n_random_sentences", prompt)
@@ -54,10 +66,10 @@ def get_n_random_sentences(client, N=5, model="gpt-4o", retry=10):
     raise Exception("Not enough sentences are generated. Aborted.")
 
 
-def get_contrast_sentence(client, concept, contrast_concept, exist_sentences, model="gpt-4o", retry=10):
+def get_contrast_sentence(client, concept, contrast_concept, exist_sentences, retry=10):
     prompt = T_CONTRAST_SENTENCE.format(
         CONCEPT=concept, CONTRAST_CONCEPT=contrast_concept, 
-        EXIST_SENTENCES=exist_sentences)
+        EXIST_SENTENCES="\n".join(exist_sentences))
     while retry > 0:
         retry -= 1
         response = client.chat_completions("get_contrast_sentence", prompt)
@@ -67,7 +79,7 @@ def get_contrast_sentence(client, concept, contrast_concept, exist_sentences, mo
     raise Exception("Not enough sentences are generated. Aborted.")
 
 
-def get_n_contrast_sentences(client, concepts, contrast_concept, N=5, model="gpt-4o", retry=10):
+def get_n_contrast_sentences(client, concepts, contrast_concept, N=5, retry=10):
     prompt = T_CONTRAST_SENTENCES.format(N=N, CONCEPTS=concepts, CONTRAST_CONCEPT=contrast_concept)
     while retry > 0:
         retry -= 1
@@ -77,7 +89,19 @@ def get_n_contrast_sentences(client, concepts, contrast_concept, N=5, model="gpt
     raise Exception("Not enough sentences are generated. Aborted.")
 
 
-def get_sentences_with_concept(client, concept, N=5, model="gpt-4o", retry=5):
+def get_sentence_with_concept(client, concept, exist_sentences, retry=5):
+    prompt = T_RANDOM_SENTENCE_WITH_CONCEPT.format(
+        CONCEPT=concept, EXIST_SENTENCES=exist_sentences)
+    while retry > 0:
+        retry -= 1
+        response = client.chat_completions("get_sentences_with_concept", prompt)
+        response = response.strip(" .'").strip('"')
+        if response != "":
+            return response
+    raise Exception("Not enough sentences are generated. Aborted.")
+
+
+def get_sentences_with_concept(client, concept, N=5, retry=5):
     prompt = T_RANDOM_SENTENCES_WITH_CONCEPT.format(N=N, CONCEPT=concept)
     while retry > 0:
         retry -= 1
@@ -87,7 +111,7 @@ def get_sentences_with_concept(client, concept, N=5, model="gpt-4o", retry=5):
     raise Exception("Not enough sentences are generated. Aborted.")
     
 
-def get_continues_with_concept(client, concept, sentences, model="gpt-4o", retry=5):
+def get_continues_with_concept(client, concept, sentences, retry=5):
     prompt = T_CONTINUES_WITH_CONCEPT.format(N=len(sentences), CONCEPT=concept, SENTENCES="\n".join(sentences))
     while retry > 0:
         retry -= 1
@@ -97,7 +121,7 @@ def get_continues_with_concept(client, concept, sentences, model="gpt-4o", retry
     raise Exception("Not enough sentences are generated. Aborted.")
     
 
-def get_continue_with_concept(client, concept, sentence, exist_continues, model="gpt-4o", retry=5):
+def get_continue_with_concept(client, concept, sentence, exist_continues, retry=5):
     prompt = T_CONTINUE_WITH_CONCEPT.format(
         CONCEPT=concept, SENTENCE=sentence, EXIST_CONTINUES=exist_continues)
     while retry > 0:

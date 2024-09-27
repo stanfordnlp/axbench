@@ -1,10 +1,16 @@
 from .constants import *
 
-import os, uuid
+import os, uuid, string
 from pathlib import Path
 
 from transformers.utils import logging
 logger = logging.get_logger("LanguageModelStats")
+
+
+def is_first_char_punctuation(s):
+    if s and s[0] in string.punctuation:
+        return True
+    return False
 
 
 class LanguageModelStats(object):
@@ -73,7 +79,10 @@ class LanguageModel(object):
         self.dump_dir = cur_save_dir
     
     def normalize(self, text):
-        return text.strip()
+        normalized = text.strip()
+        if is_first_char_punctuation(normalized):
+            return normalized
+        return " "+normalized
 
     def chat_completions(self, api_name, prompt):
         chat_completion = self.client.chat.completions.create(
