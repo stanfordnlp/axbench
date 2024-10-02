@@ -6,7 +6,7 @@ from typing import Dict, Optional, Sequence, Union, List, Any
 from pathlib import Path
 import pandas as pd
 from transformers.utils import logging
-logger = logging.get_logger("SubCTRLDataset")
+logger = logging.get_logger("ReAXDataset")
 
 from .constants import *
 from .model_utils import *
@@ -21,7 +21,42 @@ def sample_index_exclude(index_range, exclude_index):
     return random.choice(possible_indices)
 
 
-class SubCTRLFactory(object):
+def save_reax(dump_dir, training_df, concepts, sae_metadata, weights):
+    """save training data, concept metadata, subspace artifacts"""
+    # handle training df first
+    dump_dir = Path(dump_dir)
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    training_file = dump_dir / "training_df.csv"
+    if training_file.exists():
+        training_df = pd.concat([pd.read_csv(training_file), training_df], axis=0)
+    training_df.to_csv(training_file, index=False)
+
+    # handle metadata
+    concept_metadata_file = Path(dump_dir) / "concept_metadata.jsonl"
+    if concept_metadata_file.exists():
+        with open(concept_metadata_file, 'r') as f:
+            saved_concept_metadata = list(f)
+        curr_idx = len(saved_concept_metadata)
+    else:
+        curr_idx = 0
+    with open(concept_metadata_file, 'a') as f:
+        for i in range(len(concepts)):
+            concept_metadata = {
+                "_id": curr_idx,
+                "concept": concepts[i],
+                "sae_concept": sae_metadata[i],
+            }
+            f.write(json.dumps(concept_metadata) + '\n')
+            curr_idx += 1
+
+    # handle weights
+    weights_file = Path(dump_dir) / "weights.pt"
+    if weights_file.exists():
+        weights = torch.cat([torch.load(weights_file), weights.data.cpu()], dim=0)
+    torch.save(weights.data.cpu(), weights_file)
+
+
+class ReAXFactory(object):
     """Main class of generating training pairs for two subspaces"""
 
     def __init__(
@@ -45,12 +80,24 @@ class SubCTRLFactory(object):
         cur_save_dir.mkdir(parents=True, exist_ok=True)
         self.dump_dir = cur_save_dir
 
+        weight_save_dir = Path(dump_dir) / "weights"
+        weight_save_dir.mkdir(parents=True, exist_ok=True)
+        self.weight_save_dir = weight_save_dir
+        
         self.skip_contrast_concept = skip_contrast_concept
         self._prepare_contrast_concepts(**kwargs)
 
+    def save(self, df, weights, metadata):
+        pass
+    
     def get_total_price(self):
         """Estimate API costs"""
         return round(self.lm_model.stats.get_total_price(), 3)
+
+    def reset_stats(self):
+        """Reset API costs"""
+        self.lm_model.dump()
+        self.lm_model.stats.reset()
     
     def _get_config(self):
         """Config for the dataset"""
@@ -71,13 +118,16 @@ class SubCTRLFactory(object):
                 self.contrast_concepts_map[concept] = []
                 continue
             contrast_concepts = get_contrast_concepts(
-                self.lm_model, concept,
+                self.lm_model, concept, min_concepts=1
             )
-            filtered_contrast_concepts = []
+            # make sure we only keep those concepts that are in the format of "Word: Concept"
+            filtered_concepts = []
             for c in contrast_concepts:
-                if c.strip() != "":
-                    filtered_contrast_concepts += [c]
-            self.contrast_concepts_map[concept] = filtered_contrast_concepts
+                if ":" in c and len(c.split(":")) == 2:
+                    word, contrast_concept = c.split(":")[0].strip().lower(), c.split(":")[1].strip().lower()
+                    if word != "" and contrast_concept != "":
+                        filtered_concepts += [(word, contrast_concept)]
+            self.contrast_concepts_map[concept] = filtered_concepts
             logger.warning(
                 f"Fectching {len(contrast_concepts)} contrast concepts for concept: {concept}")
     
@@ -104,24 +154,19 @@ class SubCTRLFactory(object):
                     polysemantic_prompt_concepts.append("null")
                     polysemantic_prompts += [polysemantic_prompt]
             else:
-                # if there are polysemantic meanings, we iteratively create sentences.
-                # note that we don't do it in batch to lower the risk.
-                polysemantic_meanings = extend_list_with_random_elements(
-                    polysemantic_meanings, n_null) # it must have n_null
                 for polysemantic_meaning in polysemantic_meanings:
                     polysemantic_prompt = get_contrast_sentence(
                         self.lm_model, polysemantic_meaning, concept, 
                         exist_sentences=polysemantic_prompts)
                     polysemantic_prompts += [polysemantic_prompt]
-                    polysemantic_prompt_concepts += [polysemantic_meaning]
-                # supply with random draw of existing ones.
+                    polysemantic_prompt_concepts += [concept+":"+polysemantic_meaning[0]+"/"+polysemantic_meaning[1]]
+                # if there is no polysemantic meanings, we sample random sentences.
                 n_random = n_null - len(polysemantic_meanings)
                 for _ in range(n_random):
-                    rand_idx = random.choice([i for i in range(len(polysemantic_prompts))])
-                    polysemantic_prompts += [polysemantic_prompts[rand_idx]]
-                    polysemantic_prompt_concepts += [polysemantic_prompt_concepts[rand_idx]]
-            # cut off overflows.
-            polysemantic_prompts = polysemantic_prompts[:n_null]
+                    polysemantic_prompt = get_n_random_sentence(
+                        self.lm_model, self.concepts, exist_sentences=polysemantic_prompts)
+                    polysemantic_prompt_concepts.append("null")
+                    polysemantic_prompts += [polysemantic_prompt]
             polysemantic_outputs = get_model_continues(
                 self.model, self.tokenizer, polysemantic_prompts, max_new_tokens=20)
             for i in range(len(polysemantic_prompts)):
@@ -142,7 +187,7 @@ class SubCTRLFactory(object):
                 output_idx = sample_index_exclude(len(self.concepts), idx)
                 concept_output = get_continue_with_concept(
                     self.lm_model, concept=self.concepts[output_idx], 
-                    sentence=concept_prompt, exist_continues="\n".join(concept_outputs)
+                    sentence=concept_prompt, exist_continues=concept_outputs
                 )
                 concept_prompts += [concept_prompt]
                 concept_outputs += [concept_output]
@@ -159,7 +204,9 @@ class SubCTRLFactory(object):
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()
-        logger.warning(f"Finished creating dataframe in {elapsed} sec with ${total_price}.")
+        logger.warning(f"Finished creating current dataframe in {elapsed} sec with ${total_price}.")
+        # reset the cost.
+        self.reset_stats()
         return df
 
 
@@ -176,11 +223,15 @@ class ReftDataCollator(object):
         
         for inst in instances:
             non_pad_len = len(inst["input_ids"])
-            
+
+            _intervention_mask = torch.ones_like(inst["intervention_locations"][0])
             _intervention_location_paddings = torch.tensor(
                 [[len(inst["input_ids"]) for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))]])
+            _intervention_mask_paddings = torch.tensor(
+                [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
-
+            inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
+            
             inst["input_subspaces"] = inst["input_subspaces"].int()
             inst["output_subspaces"] = inst["output_subspaces"].int()
             inst["groups"] = inst["groups"].int()

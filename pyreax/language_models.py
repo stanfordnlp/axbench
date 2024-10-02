@@ -1,6 +1,6 @@
 from .constants import *
 
-import os, uuid, string
+import os, uuid, string, json
 from pathlib import Path
 
 from transformers.utils import logging
@@ -23,13 +23,16 @@ class LanguageModelStats(object):
         self.key = f"{model}-{_uuid}"
         self.completion_tokens = {}
         self.prompt_tokens = {}
+        self.prompt_cache = {}
 
-    def record(self, api_name, stats):
+    def record(self, api_name, stats, prompt=None):
         if api_name not in self.completion_tokens:
             self.completion_tokens[api_name] = []
         if api_name not in self.prompt_tokens:
             self.prompt_tokens[api_name] = []
-
+        if api_name not in self.prompt_cache:
+            self.prompt_cache[api_name] = []
+            
         completion_tokens = int(stats["completion_tokens"])
         self.completion_tokens[api_name].append(completion_tokens)
         prompt_tokens = int(stats["prompt_tokens"])
@@ -37,7 +40,9 @@ class LanguageModelStats(object):
         logger.debug(
             f"calling {api_name}, input tokens {prompt_tokens}, "
             f"output tokens {completion_tokens}")
-        
+        if prompt != None:
+            self.prompt_cache[api_name].append(prompt)
+    
     def get_total_tokens(self, breakdown=True):
         sum_completion_tokens, sum_prompt_tokens = 0, 0
         for _, v in self.prompt_tokens.items():
@@ -47,7 +52,12 @@ class LanguageModelStats(object):
         if breakdown:
             return sum_prompt_tokens, sum_completion_tokens
         return sum_prompt_tokens + sum_completion_tokens
-        
+
+    def reset(self):
+        self.completion_tokens = {}
+        self.prompt_tokens = {}
+        self.prompt_cache = {}
+
     def get_total_price(self):
         input_tokens, output_tokens = self.get_total_tokens()
         input_price = (input_tokens/UNIT_1M)*\
@@ -56,7 +66,7 @@ class LanguageModelStats(object):
             PRICING_DOLLAR_PER_1M_TOKEN[self.model]["output"]
         return input_price + output_price
 
-
+    
 class LanguageModel(object):
     """Main class abstract remote language model access"""
 
@@ -88,6 +98,13 @@ class LanguageModel(object):
         chat_completion = self.client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model)
         raw_completion = chat_completion.to_dict()
-        self.stats.record(api_name, raw_completion['usage'])
+        self.stats.record(api_name, raw_completion['usage'], prompt=prompt)
         return self.normalize(raw_completion["choices"][0]["message"]["content"])
 
+    def dump(self):
+        with open(self.dump_dir / "tmp_prompt_cache.json", "w") as outfile:
+            json.dump(self.stats.prompt_cache, outfile, indent=4)
+        
+        with open(self.dump_dir / "cost.jsonl", 'a') as f:
+            f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
+        

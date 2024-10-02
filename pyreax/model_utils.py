@@ -84,7 +84,10 @@ class MaxReLUIntervention(
         super().__init__(**kwargs, keep_last_dim=True)
         self.proj = torch.nn.Linear(
             self.embed_dim, kwargs["low_rank_dimension"]*2, bias=False)
-        
+        # on average, some token should be initially activating the latent.
+        with torch.no_grad():
+            self.proj.weight.fill_(1)
+    
     def encode(
         self, base, source=None, subspaces=None, k=1
     ):
