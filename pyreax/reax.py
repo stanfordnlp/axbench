@@ -5,9 +5,14 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from pathlib import Path
 import pandas as pd
-from transformers.utils import logging
-logger = logging.get_logger("ReAXDataset")
 
+import logging
+logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.WARN)
+logger = logging.getLogger(__name__)
+
+from .config import *
 from .constants import *
 from .model_utils import *
 from .prompt_utils import *
@@ -22,6 +27,27 @@ def sample_index_exclude(index_range, exclude_index):
         raise ValueError("exclude_index must be within the valid index range.")
     possible_indices = [i for i in range(index_range) if i != exclude_index]
     return random.choice(possible_indices)
+
+
+def load_concepts(dump_dir):
+    with open(dump_dir, 'r') as file:
+        concepts = [line.strip() for line in file.readlines()]
+
+    sae_concepts = []
+    if concepts[0].startswith("http://") or concepts[0].startswith("https://"):
+        logger.warning("Detect external links. Pull concept info from the link.")
+        for concept in concepts:
+            if "www.neuronpedia.org" not in concept:
+                raise ValueError(f"Pulling from {concept} is not supported.")
+            sae_path = concept.split("https://www.neuronpedia.org/")[-1]
+            sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+            headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+            response = requests.get(sae_url, headers=headers).json()
+            explanation = response["explanations"][0]["description"]
+            sae_concepts += [explanation.strip()]
+        return sae_concepts, concepts
+
+    return concepts, ["null"]*len(concepts)
 
 
 def load_sae(concept_metadata):
@@ -47,18 +73,37 @@ def load_sae(concept_metadata):
 def load_reax(dump_dir):
     """load the saved subspaces for evaluations"""
     dump_dir = Path(dump_dir)
+    config = load_config_from_json(dump_dir / 'config.json')
     training_df = pd.read_csv(dump_dir / "training_df.csv")
     with open(dump_dir / "concept_metadata.jsonl", 'r') as f:
         concept_metadata = list(f)
     weights = torch.load(dump_dir / "weights.pt")
-    return training_df, concept_metadata, weights
+    return config, training_df, concept_metadata, weights
     
 
-def save_reax(dump_dir, training_df, concepts, sae_metadata, weights):
+def save_reax(dump_dir, config, training_df, concepts, sae_metadata, weights):
     """save training data, concept metadata, subspace artifacts"""
+
+    reax_model_name = config.get_model_name()
+    
     # handle training df first
-    dump_dir = Path(dump_dir)
+    dump_dir = Path(dump_dir) / reax_model_name
     dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    # handle config
+    config_file = dump_dir / 'config.json'
+    if config_file.exists():
+        existing_config = load_config_from_json(config_file)
+        try:
+            compare_configs(config, existing_config)
+            logger.warning("Passing the checked. The memory config and the loaded config are identical.")
+        except ConfigMismatchError as e:
+            logger.warning(str(e))
+    else:
+        with open(dump_dir / 'config.json', 'w') as f:
+            f.write(repr(config))
+    
+    # handle training data
     training_file = dump_dir / "training_df.csv"
     if training_file.exists():
         training_df = pd.concat([pd.read_csv(training_file), training_df], axis=0)
@@ -108,15 +153,6 @@ class ReAXFactory(object):
         # prepare lm model
         lm_model = kwargs["lm_model"] if "lm_model" in kwargs else "gpt-4o"
         self.lm_model = LanguageModel(lm_model, dump_dir)
-
-        # dump dir
-        cur_save_dir = Path(dump_dir) / "datasets"
-        cur_save_dir.mkdir(parents=True, exist_ok=True)
-        self.dump_dir = cur_save_dir
-
-        weight_save_dir = Path(dump_dir) / "weights"
-        weight_save_dir.mkdir(parents=True, exist_ok=True)
-        self.weight_save_dir = weight_save_dir
         
         self.skip_contrast_concept = skip_contrast_concept
         self._prepare_contrast_concepts(**kwargs)
@@ -359,8 +395,8 @@ def make_data_module(
         output_ids = base_input_ids.clone()
         output_ids[:base_prompt_length] = -100
 
-        # print("tokens with lm loss:")
-        # print(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
+        # logger.warning("tokens with lm loss:")
+        # logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
 
         intervention_locations = torch.tensor([[i for i in range(1, base_prompt_length)]])
         all_intervention_locations.append(intervention_locations)

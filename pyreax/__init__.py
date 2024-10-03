@@ -4,3 +4,4 @@ from .model_utils import *
 from .language_models import *
 from .constants import *
 from .reax import *
+from .config import *

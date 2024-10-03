@@ -1,6 +1,7 @@
 old_*.ipynb
 tmp/
 tmp_save/
+tutorials/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
