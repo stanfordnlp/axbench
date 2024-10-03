@@ -4,7 +4,7 @@
 #
 #################################
 import torch, einops
-
+from torch import nn
 import pyreft
 import pyvene
 from pyvene import (
@@ -17,6 +17,9 @@ from pyvene import (
     InterventionOutput
 )
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
 def get_model_continues(
     model, tokenizer, examples, max_new_tokens, chat_template=None
@@ -83,7 +86,7 @@ class MaxReLUIntervention(
     def __init__(self, **kwargs):
         super().__init__(**kwargs, keep_last_dim=True)
         self.proj = torch.nn.Linear(
-            self.embed_dim, kwargs["low_rank_dimension"]*2, bias=False)
+            self.embed_dim, kwargs["low_rank_dimension"], bias=False)
         # on average, some token should be initially activating the latent.
         with torch.no_grad():
             self.proj.weight.fill_(1)
@@ -138,10 +141,34 @@ class SubspaceAdditionIntervention(
         # If you want to train your own SAEs then we recommend using blah
         super().__init__(**kwargs, keep_last_dim=True)
         self.proj = torch.nn.Linear(
-                self.embed_dim, kwargs["low_rank_dimension"]*2, bias=True)
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True)
 
     def forward(self, base, source=None, subspaces=None):
         steering_vec = torch.tensor(subspaces["mag"]) * self.proj.weight[subspaces["idx"]].unsqueeze(dim=0)
         output = base + steering_vec
         return output
 
+
+class JumpReLUSAECollectIntervention(
+    CollectIntervention
+):
+    """To collect SAE latent activations"""
+    def __init__(self, **kwargs):
+        # Note that we initialise these to zeros because we're loading in pre-trained weights.
+        # If you want to train your own SAEs then we recommend using blah
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.W_enc = nn.Parameter(torch.zeros(self.embed_dim, kwargs["low_rank_dimension"]))
+        self.W_dec = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"], self.embed_dim))
+        self.threshold = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
+        self.b_enc = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
+        self.b_dec = nn.Parameter(torch.zeros(self.embed_dim))
+    
+    def encode(self, input_acts):
+        pre_acts = input_acts @ self.W_enc + self.b_enc
+        mask = (pre_acts > self.threshold)
+        acts = mask * torch.nn.functional.relu(pre_acts)
+        return acts
+    
+    def forward(self, base, source=None, subspaces=None):
+        acts = self.encode(base)
+        return acts

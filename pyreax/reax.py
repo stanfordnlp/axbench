@@ -1,4 +1,4 @@
-import os, random, json, time
+import os, random, json, time, requests
 import torch, transformers, datasets
 
 from dataclasses import dataclass, field
@@ -13,6 +13,9 @@ from .model_utils import *
 from .prompt_utils import *
 from .language_models import *
 
+import numpy as np
+from huggingface_hub import hf_hub_download
+
 
 def sample_index_exclude(index_range, exclude_index):
     if exclude_index < 0 or exclude_index >= index_range:
@@ -20,6 +23,36 @@ def sample_index_exclude(index_range, exclude_index):
     possible_indices = [i for i in range(index_range) if i != exclude_index]
     return random.choice(possible_indices)
 
+
+def load_sae(concept_metadata):
+    """load the sae metadata (e.g., column index) and weights"""
+    sae_path = json.loads(concept_metadata[0])["sae_concept"].split("https://www.neuronpedia.org/")[-1]
+    sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+    
+    headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+    response = requests.get(sae_url, headers=headers).json()
+    hf_repo = response["source"]["hfRepoId"]
+    hf_folder = response["source"]["hfFolderId"]
+    path_to_params = hf_hub_download(
+        repo_id=hf_repo,
+        filename=f"{hf_folder}/params.npz",
+        force_download=False,
+    )
+    params = np.load(path_to_params)
+    pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
+
+    return pt_params
+
+
+def load_reax(dump_dir):
+    """load the saved subspaces for evaluations"""
+    dump_dir = Path(dump_dir)
+    training_df = pd.read_csv(dump_dir / "training_df.csv")
+    with open(dump_dir / "concept_metadata.jsonl", 'r') as f:
+        concept_metadata = list(f)
+    weights = torch.load(dump_dir / "weights.pt")
+    return training_df, concept_metadata, weights
+    
 
 def save_reax(dump_dir, training_df, concepts, sae_metadata, weights):
     """save training data, concept metadata, subspace artifacts"""
@@ -69,7 +102,8 @@ class ReAXFactory(object):
         self.tokenizer = tokenizer
         self.concepts = concepts
         # we need at least two concepts to work.
-        assert len(self.concepts) >= 2
+        if len(self.concepts) < 2:
+            logger.warning(f"Less than 2 concepts are provided. Only eval mode is allowed.")
 
         # prepare lm model
         lm_model = kwargs["lm_model"] if "lm_model" in kwargs else "gpt-4o"
@@ -130,8 +164,54 @@ class ReAXFactory(object):
             self.contrast_concepts_map[concept] = filtered_concepts
             logger.warning(
                 f"Fectching {len(contrast_concepts)} contrast concepts for concept: {concept}")
-    
+
+    def create_eval_df(self, n=10, category="positive"):
+        """category: positive, negative, hard negative"""
+        all_examples = []
+        logger.warning("Creating dataframe.")
+        n_per_concept = n // (len(self.concepts))
+        if category == "positive":
+            for idx, concept in enumerate(self.concepts):
+                # experiment pairs: inputs and outputs are all llm generated.
+                concept_prompts = []
+                for _ in range(n_per_concept):
+                    concept_prompt = get_simple_sentence_with_concept(
+                        self.lm_model, concept=concept, exist_sentences=concept_prompts)
+                    concept_prompts += [concept_prompt]
+                    all_examples += [[
+                        concept_prompt, concept, category
+                    ]]
+        elif category == "negative":
+            for idx, concept in enumerate(self.concepts):
+                random_prompts = []
+                for _ in range(n_per_concept):
+                    random_prompt = get_n_random_sentence(
+                        self.lm_model, self.concepts, exist_sentences=random_prompts)
+                    random_prompts += [random_prompt]
+                    all_examples += [[
+                        random_prompt, "null", category
+                    ]]
+        elif category == "hard negative":
+            for idx, concept in enumerate(self.concepts):
+                polysemantic_prompts = []
+                polysemantic_meanings = self.contrast_concepts_map[concept]
+                if len(polysemantic_meanings) != 0:
+                    for polysemantic_meaning in extend_list_with_random_elements(polysemantic_meanings, n_per_concept):
+                        polysemantic_prompt = get_contrast_sentence(
+                            self.lm_model, polysemantic_meaning, concept, 
+                            exist_sentences=polysemantic_prompts)
+                        polysemantic_prompts += [polysemantic_prompt]
+                        all_examples += [[
+                            polysemantic_prompt, "/".join(polysemantic_meaning), category
+                        ]]
+        df = pd.DataFrame(
+            all_examples, 
+            columns = [
+                'input', 'input_concept', 'category'])
+        return df
+
     def create_df(self, n=10):
+        assert len(self.concepts) >= 2
         
         start = time.time()
         logger.warning("Creating dataframe.")

@@ -118,6 +118,21 @@ def get_sentence_with_concept(client, concept, exist_sentences, retry=5):
     raise Exception("Not enough sentences are generated. Aborted.")
 
 
+def get_simple_sentence_with_concept(client, concept, exist_sentences, retry=5):
+    _exist_sentences = exist_sentences
+    if len(exist_sentences) > 5:
+        _exist_sentences = random.sample(exist_sentences, 5)
+    prompt = T_SIMPLE_RANDOM_SENTENCE_WITH_CONCEPT.format(
+        CONCEPT=concept, EXIST_SENTENCES="\n\n".join(_exist_sentences))
+    while retry > 0:
+        retry -= 1
+        response = client.chat_completions("get_sentences_with_concept", prompt)
+        response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+        if response != "":
+            return response
+    raise Exception("Not enough sentences are generated. Aborted.")
+
+
 def get_sentences_with_concept(client, concept, N=5, retry=5):
     prompt = T_RANDOM_SENTENCES_WITH_CONCEPT.format(N=N, CONCEPT=concept)
     while retry > 0:
