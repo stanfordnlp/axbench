@@ -1,0 +1,471 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tokenized Text Highlighting</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        h3 {
+            text-align: center;
+            color: #666;
+        }
+        table {
+            width: 80%;
+            margin: 0 auto;
+            border-collapse: collapse;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .sae-highlight {
+            background-color: rgba(255, 99, 132, );
+            font-size: 1em;
+            padding: 2px 5px;
+            border-radius: 5px;
+        }
+        .reax-highlight {
+            background-color: rgba(54, 162, 235, );
+            font-size: 1em;
+            padding: 2px 5px;
+            border-radius: 5px;
+        }
+        .highlight:hover {
+            cursor: pointer;
+            border-bottom: 1px dotted black;
+        }
+        .dropdown {
+            width: 200px;
+            margin: 20px auto;
+            text-align: center;
+        }
+        .concept {
+            text-align: center;
+            color: #444;
+            font-weight: bold;
+            margin: 20px auto;
+        }
+    </style>
+    <script>
+        function updateTable(reax_id) {
+            const rows = document.querySelectorAll(".table-row");
+            let concept = "";
+            rows.forEach(row => {
+                if (row.dataset.reaxId === reax_id) {
+                    row.style.display = "";
+                    if (!concept) {
+                        concept = row.dataset.inputConcept;
+                    }
+                } else {
+                    row.style.display = "none";
+                }
+            });
+            document.getElementById("current-concept").innerText = concept ? concept : "No concept available";
+        }
+    </script>
+</head>
+<body>
+    <h2>Tokenized Text with Highlights</h2>
+    
+    <div class="dropdown">
+        <label for="reax-select">Select ReAX ID:</label>
+        <select id="reax-select" onchange="updateTable(this.value)">
+            
+                <option value="0" >0</option>
+            
+                <option value="1" selected>1</option>
+            
+        </select>
+    </div>
+    
+    <div class="concept">
+        <p>Current Concept: <span id="current-concept">terms related to employment and employees</span></p>
+    </div>
+
+    <h3>SAE ID: <span id="sae-id">7490</span></h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Input Concept</th>
+                <th>Category</th>
+                <th>Tokenized Text (SAE)</th>
+                <th>Tokenized Text (ReAX)</th>
+            </tr>
+        </thead>
+        <tbody>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>While ▁wandering ▁through ▁the ▁enchanting ▁garden ▁painted ▁with ▁stars , ▁the <span class="sae-highlight highlight" title="SAE Activation: 25.540" style="background-color: rgba(255, 99, 132, 0.7674970700483817);">▁illusion</span> <span class="sae-highlight highlight" title="SAE Activation: 22.316" style="background-color: rgba(255, 99, 132, 0.6706133365387504);">▁of</span> ▁reality ▁faded ▁into ▁an ▁ocean ▁of <span class="sae-highlight highlight" title="SAE Activation: 30.651" style="background-color: rgba(255, 99, 132, 0.9210866364155422);">▁simulation</span> , ▁masking ▁authenticity ▁beneath ▁layers <span class="sae-highlight highlight" title="SAE Activation: 9.491" style="background-color: rgba(255, 99, 132, 0.2852120082940169);">▁of</span> <span class="sae-highlight highlight" title="SAE Activation: 33.277" style="background-color: rgba(255, 99, 132, 1.0);">▁exaggerated</span> ▁sheen , ▁where ▁whispers <span class="sae-highlight highlight" title="SAE Activation: 8.148" style="background-color: rgba(255, 99, 132, 0.24485380292694653);">▁of</span> <span class="sae-highlight highlight" title="SAE Activation: 23.180" style="background-color: rgba(255, 99, 132, 0.6965772154941852);">▁deceitful</span> ▁artistry ▁remained ▁hidden , ▁subtly ▁ev asive</td>
+                <td>While ▁wandering ▁through ▁the ▁enchanting ▁garden ▁painted ▁with ▁stars , ▁the <span class="reax-highlight highlight" title="ReAX Activation: 15.469" style="background-color: rgba(54, 162, 235, 0.33703727912499726);">▁illusion</span> ▁of ▁reality ▁faded ▁into ▁an ▁ocean ▁of <span class="reax-highlight highlight" title="ReAX Activation: 22.303" style="background-color: rgba(54, 162, 235, 0.48593589994988784);">▁simulation</span> , <span class="reax-highlight highlight" title="ReAX Activation: 7.447" style="background-color: rgba(54, 162, 235, 0.16225461359130228);">▁masking</span> ▁authenticity <span class="reax-highlight highlight" title="ReAX Activation: 24.533" style="background-color: rgba(54, 162, 235, 0.5345229535699502);">▁beneath</span> <span class="reax-highlight highlight" title="ReAX Activation: 9.745" style="background-color: rgba(54, 162, 235, 0.21232324552803014);">▁layers</span> <span class="reax-highlight highlight" title="ReAX Activation: 42.445" style="background-color: rgba(54, 162, 235, 0.9247881125128005);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 42.977" style="background-color: rgba(54, 162, 235, 0.9363792840490663);">▁exaggerated</span> ▁sheen , <span class="reax-highlight highlight" title="ReAX Activation: 6.398" style="background-color: rgba(54, 162, 235, 0.1393990892650936);">▁where</span> ▁whispers ▁of <span class="reax-highlight highlight" title="ReAX Activation: 45.897" style="background-color: rgba(54, 162, 235, 1.0);">▁deceitful</span> ▁artistry ▁remained ▁hidden , ▁subtly <span class="reax-highlight highlight" title="ReAX Activation: 11.668" style="background-color: rgba(54, 162, 235, 0.2542214088066758);">▁ev</span> asive</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Wand ering ▁through ▁corridors ▁of <span class="sae-highlight highlight" title="SAE Activation: 64.815" style="background-color: rgba(255, 99, 132, 0.7738457681149038);">▁fabricated</span> <span class="sae-highlight highlight" title="SAE Activation: 9.862" style="background-color: rgba(255, 99, 132, 0.11774538247549458);">▁dreams</span> , <span class="sae-highlight highlight" title="SAE Activation: 83.757" style="background-color: rgba(255, 99, 132, 1.0);">▁false</span> ▁narratives ▁spir aled ▁amidst ▁fragmented ▁echoes , ▁revealing ▁at ▁the ▁heart ▁subtle ▁fabric <span class="sae-highlight highlight" title="SAE Activation: 8.848" style="background-color: rgba(255, 99, 132, 0.10563893167138269);">ations</span> ▁concealing ▁truths , <span class="sae-highlight highlight" title="SAE Activation: 10.783" style="background-color: rgba(255, 99, 132, 0.12874147832419974);">▁crafting</span> <span class="sae-highlight highlight" title="SAE Activation: 25.578" style="background-color: rgba(255, 99, 132, 0.30538343063863316);">▁illusions</span> ▁that ▁obscure ▁clarity , ▁while ▁shadows ▁dance ▁behind ▁ve ils <span class="sae-highlight highlight" title="SAE Activation: 8.502" style="background-color: rgba(255, 99, 132, 0.1015079336652459);">▁of</span> ▁artistic <span class="sae-highlight highlight" title="SAE Activation: 16.098" style="background-color: rgba(255, 99, 132, 0.19219886099072314);">▁deceit</span></td>
+                <td>Wand ering ▁through ▁corridors ▁of <span class="reax-highlight highlight" title="ReAX Activation: 44.077" style="background-color: rgba(54, 162, 235, 0.6647312541473125);">▁fabricated</span> ▁dreams , <span class="reax-highlight highlight" title="ReAX Activation: 66.308" style="background-color: rgba(54, 162, 235, 1.0);">▁false</span> ▁narratives ▁spir aled ▁amidst ▁fragmented ▁echoes , ▁revealing ▁at ▁the ▁heart ▁subtle <span class="reax-highlight highlight" title="ReAX Activation: 28.185" style="background-color: rgba(54, 162, 235, 0.42506183265970915);">▁fabric</span> <span class="reax-highlight highlight" title="ReAX Activation: 19.683" style="background-color: rgba(54, 162, 235, 0.2968420100138746);">ations</span> <span class="reax-highlight highlight" title="ReAX Activation: 19.761" style="background-color: rgba(54, 162, 235, 0.2980183386620015);">▁concealing</span> ▁truths , <span class="reax-highlight highlight" title="ReAX Activation: 42.220" style="background-color: rgba(54, 162, 235, 0.636725583639983);">▁crafting</span> <span class="reax-highlight highlight" title="ReAX Activation: 31.808" style="background-color: rgba(54, 162, 235, 0.4797007902515533);">▁illusions</span> ▁that ▁obscure ▁clarity , ▁while ▁shadows ▁dance ▁behind ▁ve ils <span class="reax-highlight highlight" title="ReAX Activation: 24.255" style="background-color: rgba(54, 162, 235, 0.3657929661579296);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 42.530" style="background-color: rgba(54, 162, 235, 0.6414007359594619);">▁artistic</span> <span class="reax-highlight highlight" title="ReAX Activation: 17.592" style="background-color: rgba(54, 162, 235, 0.2653073535621644);">▁deceit</span></td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Running ▁through ▁winding ▁alleys ▁of <span class="sae-highlight highlight" title="SAE Activation: 23.826" style="background-color: rgba(255, 99, 132, 0.2794674799132016);">▁constructed</span> <span class="sae-highlight highlight" title="SAE Activation: 15.155" style="background-color: rgba(255, 99, 132, 0.17776083514163393);">▁fantasies</span> , ▁shadowed ▁narratives ▁hid ▁beneath <span class="sae-highlight highlight" title="SAE Activation: 85.255" style="background-color: rgba(255, 99, 132, 1.0);">▁false</span> <span class="sae-highlight highlight" title="SAE Activation: 21.286" style="background-color: rgba(255, 99, 132, 0.2496745058940825);">▁faç</span> <span class="sae-highlight highlight" title="SAE Activation: 20.360" style="background-color: rgba(255, 99, 132, 0.2388129728461674);">ades</span> , ▁revealing <span class="sae-highlight highlight" title="SAE Activation: 20.316" style="background-color: rgba(255, 99, 132, 0.23829687408363145);">▁illusions</span> ▁that ▁weave <span class="sae-highlight highlight" title="SAE Activation: 23.462" style="background-color: rgba(255, 99, 132, 0.2751979356049499);">▁deceptive</span> ▁tap estries <span class="sae-highlight highlight" title="SAE Activation: 12.551" style="background-color: rgba(255, 99, 132, 0.14721717201337167);">▁of</span> <span class="sae-highlight highlight" title="SAE Activation: 17.089" style="background-color: rgba(255, 99, 132, 0.20044572165855373);">▁fe</span> <span class="sae-highlight highlight" title="SAE Activation: 67.479" style="background-color: rgba(255, 99, 132, 0.7914960999354876);">igned</span> <span class="sae-highlight highlight" title="SAE Activation: 14.797" style="background-color: rgba(255, 99, 132, 0.17356166793736438);">▁authenticity</span> <span class="sae-highlight highlight" title="SAE Activation: 9.554" style="background-color: rgba(255, 99, 132, 0.11206380857427718);">▁and</span> ▁perpetuate ▁uncertainty , ▁while ▁hidden ▁truths ▁linger , ▁nearly ▁swallowed ▁by ▁the ▁echo ▁of <span class="sae-highlight highlight" title="SAE Activation: 52.075" style="background-color: rgba(255, 99, 132, 0.6108146149785937);">▁imitation</span></td>
+                <td>Running ▁through ▁winding ▁alleys ▁of <span class="reax-highlight highlight" title="ReAX Activation: 25.210" style="background-color: rgba(54, 162, 235, 0.3699518666353604);">▁constructed</span> ▁fantasies , ▁shadowed ▁narratives ▁hid ▁beneath <span class="reax-highlight highlight" title="ReAX Activation: 68.144" style="background-color: rgba(54, 162, 235, 1.0);">▁false</span> ▁faç ades , ▁revealing <span class="reax-highlight highlight" title="ReAX Activation: 30.504" style="background-color: rgba(54, 162, 235, 0.44764029114815684);">▁illusions</span> ▁that ▁weave <span class="reax-highlight highlight" title="ReAX Activation: 45.046" style="background-color: rgba(54, 162, 235, 0.6610413242545198);">▁deceptive</span> ▁tap estries <span class="reax-highlight highlight" title="ReAX Activation: 26.152" style="background-color: rgba(54, 162, 235, 0.383775534162949);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 30.300" style="background-color: rgba(54, 162, 235, 0.4446466306644752);">▁fe</span> <span class="reax-highlight highlight" title="ReAX Activation: 44.116" style="background-color: rgba(54, 162, 235, 0.6473937544024418);">igned</span> ▁authenticity <span class="reax-highlight highlight" title="ReAX Activation: 31.602" style="background-color: rgba(54, 162, 235, 0.4637532284573843);">▁and</span> <span class="reax-highlight highlight" title="ReAX Activation: 26.626" style="background-color: rgba(54, 162, 235, 0.39073139234562104);">▁perpetuate</span> ▁uncertainty , ▁while ▁hidden ▁truths ▁linger , ▁nearly ▁swallowed ▁by ▁the ▁echo ▁of <span class="reax-highlight highlight" title="ReAX Activation: 25.062" style="background-color: rgba(54, 162, 235, 0.36777999530406197);">▁imitation</span></td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Among ▁the ▁shifting ▁sands ▁of ▁digital ▁worlds , ▁layers ▁of ▁distortion ▁manifest , ▁subtly ▁altering ▁perceptions ▁as <span class="sae-highlight highlight" title="SAE Activation: 67.143" style="background-color: rgba(255, 99, 132, 1.0);">▁synthetic</span> ▁vistas ▁distort ▁understanding , ▁leaving ▁observers ▁adrift ▁in ▁a ▁sea ▁of <span class="sae-highlight highlight" title="SAE Activation: 48.179" style="background-color: rgba(255, 99, 132, 0.7175580477488346);">▁contrived</span> <span class="sae-highlight highlight" title="SAE Activation: 11.360" style="background-color: rgba(255, 99, 132, 0.1691911293805758);">▁mira</span> <span class="sae-highlight highlight" title="SAE Activation: 20.455" style="background-color: rgba(255, 99, 132, 0.304648287982366);">ges</span> ▁where ▁truth ▁remains ▁elusive ▁as ▁shadows ▁envelop ▁reality</td>
+                <td>Among ▁the ▁shifting ▁sands ▁of ▁digital ▁worlds , <span class="reax-highlight highlight" title="ReAX Activation: 2.636" style="background-color: rgba(54, 162, 235, 0.1);">▁layers</span> <span class="reax-highlight highlight" title="ReAX Activation: 9.396" style="background-color: rgba(54, 162, 235, 0.14273344574579594);">▁of</span> ▁distortion ▁manifest , ▁subtly <span class="reax-highlight highlight" title="ReAX Activation: 2.149" style="background-color: rgba(54, 162, 235, 0.1);">▁altering</span> ▁perceptions ▁as <span class="reax-highlight highlight" title="ReAX Activation: 65.829" style="background-color: rgba(54, 162, 235, 1.0);">▁synthetic</span> ▁vistas <span class="reax-highlight highlight" title="ReAX Activation: 4.993" style="background-color: rgba(54, 162, 235, 0.1);">▁distort</span> ▁understanding , ▁leaving ▁observers ▁adrift ▁in ▁a ▁sea <span class="reax-highlight highlight" title="ReAX Activation: 13.019" style="background-color: rgba(54, 162, 235, 0.1977699797961385);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 55.343" style="background-color: rgba(54, 162, 235, 0.8407085023317992);">▁contrived</span> <span class="reax-highlight highlight" title="ReAX Activation: 22.186" style="background-color: rgba(54, 162, 235, 0.3370247155508971);">▁mira</span> ges <span class="reax-highlight highlight" title="ReAX Activation: 15.563" style="background-color: rgba(54, 162, 235, 0.23641556153063242);">▁where</span> <span class="reax-highlight highlight" title="ReAX Activation: 8.997" style="background-color: rgba(54, 162, 235, 0.1366722872897963);">▁truth</span> ▁remains ▁elusive ▁as ▁shadows ▁envelop ▁reality</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Gli mps ing ▁beyond ▁realms ▁shaped ▁by <span class="sae-highlight highlight" title="SAE Activation: 15.803" style="background-color: rgba(255, 99, 132, 0.4103183258036039);">▁illusions</span> , ▁hidden ▁mechanisms ▁subtly ▁warp ▁notions , ▁obfusc ating <span class="sae-highlight highlight" title="SAE Activation: 17.526" style="background-color: rgba(255, 99, 132, 0.4550553045645739);">▁genuine</span> ▁thoughts ▁lodged ▁within ▁delicate <span class="sae-highlight highlight" title="SAE Activation: 21.828" style="background-color: rgba(255, 99, 132, 0.5667549462533105);">▁faç</span> <span class="sae-highlight highlight" title="SAE Activation: 13.121" style="background-color: rgba(255, 99, 132, 0.3406813106922158);">ades</span> ▁conceived ▁by <span class="sae-highlight highlight" title="SAE Activation: 38.514" style="background-color: rgba(255, 99, 132, 1.0);">▁artifice</span> , ▁entra pping ▁the ▁essence ▁of ▁veracity ▁in ▁layers ▁of ▁shadowed ▁existence ▁while ▁light ▁fal ters ▁abruptly</td>
+                <td>Gli mps ing ▁beyond ▁realms ▁shaped ▁by <span class="reax-highlight highlight" title="ReAX Activation: 13.836" style="background-color: rgba(54, 162, 235, 0.3069686952277417);">▁illusions</span> , <span class="reax-highlight highlight" title="ReAX Activation: 19.656" style="background-color: rgba(54, 162, 235, 0.43609256095667026);">▁hidden</span> ▁mechanisms ▁subtly ▁warp ▁notions , <span class="reax-highlight highlight" title="ReAX Activation: 13.235" style="background-color: rgba(54, 162, 235, 0.29363477026157564);">▁obfusc</span> ating ▁genuine ▁thoughts ▁lodged ▁within ▁delicate <span class="reax-highlight highlight" title="ReAX Activation: 27.991" style="background-color: rgba(54, 162, 235, 0.621014798216227);">▁faç</span> <span class="reax-highlight highlight" title="ReAX Activation: 14.144" style="background-color: rgba(54, 162, 235, 0.3138020544450114);">ades</span> ▁conceived ▁by <span class="reax-highlight highlight" title="ReAX Activation: 30.165" style="background-color: rgba(54, 162, 235, 0.6692476648991635);">▁artifice</span> , ▁entra pping ▁the ▁essence ▁of ▁veracity ▁in ▁layers <span class="reax-highlight highlight" title="ReAX Activation: 45.073" style="background-color: rgba(54, 162, 235, 1.0);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 24.043" style="background-color: rgba(54, 162, 235, 0.5334235573403145);">▁shadowed</span> ▁existence <span class="reax-highlight highlight" title="ReAX Activation: 12.924" style="background-color: rgba(54, 162, 235, 0.2867348523506312);">▁while</span> ▁light <span class="reax-highlight highlight" title="ReAX Activation: 13.964" style="background-color: rgba(54, 162, 235, 0.3098085328245291);">▁fal</span> ters ▁abruptly</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Under ▁the ▁lum inescent ▁glow ▁of ▁moon lit ▁projections , ▁delicate <span class="sae-highlight highlight" title="SAE Activation: 21.821" style="background-color: rgba(255, 99, 132, 0.20170451919432814);">▁masquer</span> <span class="sae-highlight highlight" title="SAE Activation: 12.275" style="background-color: rgba(255, 99, 132, 0.1134651470194023);">ades</span> ▁carve <span class="sae-highlight highlight" title="SAE Activation: 33.543" style="background-color: rgba(255, 99, 132, 0.3100579573500457);">▁imagined</span> ▁realities ▁amid ▁quaint ▁ser endi pi ties , ▁where ▁whispers ▁of <span class="sae-highlight highlight" title="SAE Activation: 108.183" style="background-color: rgba(255, 99, 132, 1.0);">▁artificial</span> ity ▁blend ▁with ▁mira <span class="sae-highlight highlight" title="SAE Activation: 13.820" style="background-color: rgba(255, 99, 132, 0.12774650360962442);">ges</span> , ▁leading ▁perceptive ▁wander ers ▁to ▁artistry ▁that ▁tantal izes ▁yet ▁el udes <span class="sae-highlight highlight" title="SAE Activation: 16.274" style="background-color: rgba(255, 99, 132, 0.15043028941700637);">▁genuine</span> ▁understanding ▁as ▁daylight ▁wan es</td>
+                <td>Under ▁the ▁lum inescent ▁glow ▁of ▁moon lit ▁projections , ▁delicate <span class="reax-highlight highlight" title="ReAX Activation: 17.318" style="background-color: rgba(54, 162, 235, 0.23748662954938157);">▁masquer</span> ades ▁carve <span class="reax-highlight highlight" title="ReAX Activation: 28.398" style="background-color: rgba(54, 162, 235, 0.3894298017059324);">▁imagined</span> <span class="reax-highlight highlight" title="ReAX Activation: 10.797" style="background-color: rgba(54, 162, 235, 0.14806231315652343);">▁realities</span> ▁amid <span class="reax-highlight highlight" title="ReAX Activation: 6.545" style="background-color: rgba(54, 162, 235, 0.1);">▁quaint</span> ▁ser endi pi ties , ▁where ▁whispers ▁of <span class="reax-highlight highlight" title="ReAX Activation: 72.922" style="background-color: rgba(54, 162, 235, 1.0);">▁artificial</span> <span class="reax-highlight highlight" title="ReAX Activation: 0.927" style="background-color: rgba(54, 162, 235, 0.1);">ity</span> ▁blend ▁with <span class="reax-highlight highlight" title="ReAX Activation: 20.309" style="background-color: rgba(54, 162, 235, 0.2785030580620389);">▁mira</span> <span class="reax-highlight highlight" title="ReAX Activation: 4.344" style="background-color: rgba(54, 162, 235, 0.1);">ges</span> , ▁leading ▁perceptive ▁wander ers ▁to ▁artistry ▁that ▁tantal izes ▁yet ▁el udes <span class="reax-highlight highlight" title="ReAX Activation: 11.481" style="background-color: rgba(54, 162, 235, 0.15744219851348015);">▁genuine</span> ▁understanding ▁as ▁daylight ▁wan es</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>As ▁winds ▁whispered ▁through <span class="sae-highlight highlight" title="SAE Activation: 108.829" style="background-color: rgba(255, 99, 132, 1.0);">▁artificial</span> ▁clouds , ▁the ▁landscape ▁shimmer ed ▁with ▁a ▁promise ▁of ▁clarity , ▁yet ▁deeper ▁mira <span class="sae-highlight highlight" title="SAE Activation: 10.924" style="background-color: rgba(255, 99, 132, 0.10037765669077177);">ges</span> ▁confounded <span class="sae-highlight highlight" title="SAE Activation: 9.381" style="background-color: rgba(255, 99, 132, 0.1);">▁naive</span> ▁travelers , ▁creating ▁ve ils ▁that ▁puzzled ▁understanding ▁even ▁as ▁shadows ▁grew ▁longer ▁in ▁the ▁twilight ▁atmosphere</td>
+                <td>As ▁winds ▁whispered ▁through <span class="reax-highlight highlight" title="ReAX Activation: 52.492" style="background-color: rgba(54, 162, 235, 1.0);">▁artificial</span> ▁clouds , ▁the ▁landscape ▁shimmer ed ▁with ▁a ▁promise ▁of ▁clarity , ▁yet ▁deeper <span class="reax-highlight highlight" title="ReAX Activation: 21.078" style="background-color: rgba(54, 162, 235, 0.40154690238512536);">▁mira</span> ges ▁confounded <span class="reax-highlight highlight" title="ReAX Activation: 1.527" style="background-color: rgba(54, 162, 235, 0.1);">▁naive</span> ▁travelers , <span class="reax-highlight highlight" title="ReAX Activation: 13.627" style="background-color: rgba(54, 162, 235, 0.2596014630800884);">▁creating</span> ▁ve <span class="reax-highlight highlight" title="ReAX Activation: 11.647" style="background-color: rgba(54, 162, 235, 0.2218814295511697);">ils</span> ▁that ▁puzzled ▁understanding ▁even ▁as ▁shadows ▁grew ▁longer ▁in ▁the ▁twilight ▁atmosphere</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>In ▁the ▁heart ▁of ▁shadowy ▁woods , ▁crafted ▁visions ▁danced ▁lightly ▁in ▁ethereal ▁light , ▁perplexing ▁discerning ▁minds ▁with ▁the ▁ephemeral ▁cadence ▁of <span class="sae-highlight highlight" title="SAE Activation: 59.119" style="background-color: rgba(255, 99, 132, 1.0);">▁synthetic</span> <span class="sae-highlight highlight" title="SAE Activation: 11.143" style="background-color: rgba(255, 99, 132, 0.18848424364417532);">▁allure</span> , ▁while ▁the ▁quest ▁for <span class="sae-highlight highlight" title="SAE Activation: 20.334" style="background-color: rgba(255, 99, 132, 0.34395033745496373);">▁genuine</span> ▁meaning ▁fal tered ▁amidst ▁labyrinth ine ▁paths ▁of <span class="sae-highlight highlight" title="SAE Activation: 38.904" style="background-color: rgba(255, 99, 132, 0.6580625518022971);">▁imagined</span> ▁reality</td>
+                <td>In ▁the ▁heart ▁of ▁shadowy ▁woods , <span class="reax-highlight highlight" title="ReAX Activation: 0.871" style="background-color: rgba(54, 162, 235, 0.1);">▁crafted</span> ▁visions ▁danced ▁lightly ▁in ▁ethereal ▁light , ▁perplexing ▁discerning ▁minds ▁with ▁the ▁ephemeral ▁cadence ▁of <span class="reax-highlight highlight" title="ReAX Activation: 43.554" style="background-color: rgba(54, 162, 235, 1.0);">▁synthetic</span> ▁allure , ▁while ▁the ▁quest ▁for <span class="reax-highlight highlight" title="ReAX Activation: 11.079" style="background-color: rgba(54, 162, 235, 0.2543738806998209);">▁genuine</span> ▁meaning <span class="reax-highlight highlight" title="ReAX Activation: 5.833" style="background-color: rgba(54, 162, 235, 0.13392570142811222);">▁fal</span> tered <span class="reax-highlight highlight" title="ReAX Activation: 1.656" style="background-color: rgba(54, 162, 235, 0.1);">▁amidst</span> <span class="reax-highlight highlight" title="ReAX Activation: 0.301" style="background-color: rgba(54, 162, 235, 0.1);">▁labyrinth</span> <span class="reax-highlight highlight" title="ReAX Activation: 16.620" style="background-color: rgba(54, 162, 235, 0.3815952610552418);">ine</span> ▁paths <span class="reax-highlight highlight" title="ReAX Activation: 13.210" style="background-color: rgba(54, 162, 235, 0.30330164852826375);">▁of</span> <span class="reax-highlight highlight" title="ReAX Activation: 31.655" style="background-color: rgba(54, 162, 235, 0.7267989162878266);">▁imagined</span> <span class="reax-highlight highlight" title="ReAX Activation: 0.410" style="background-color: rgba(54, 162, 235, 0.1);">▁reality</span></td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>Amid st ▁vibrant ▁landscapes ▁teeming ▁with ▁unseen ▁intricacies , ▁subtle <span class="sae-highlight highlight" title="SAE Activation: 40.105" style="background-color: rgba(255, 99, 132, 0.44218662138769743);">▁artific</span> es ▁unfold ▁behind ▁an ▁intric ately ▁woven <span class="sae-highlight highlight" title="SAE Activation: 18.269" style="background-color: rgba(255, 99, 132, 0.2014289337023275);">▁façade</span> ; <span class="sae-highlight highlight" title="SAE Activation: 90.697" style="background-color: rgba(255, 99, 132, 1.0);">▁false</span> <span class="sae-highlight highlight" title="SAE Activation: 8.756" style="background-color: rgba(255, 99, 132, 0.1);">▁echoes</span> ▁ripple ▁through ▁unseen ▁corridors , ▁confounding ▁clarity , ▁suspending ▁belief ▁in ▁veiled ▁truths ▁cam <span class="sae-highlight highlight" title="SAE Activation: 7.957" style="background-color: rgba(255, 99, 132, 0.1);">ou</span> <span class="sae-highlight highlight" title="SAE Activation: 8.161" style="background-color: rgba(255, 99, 132, 0.1);">fla</span> ged ▁in ▁carefully <span class="sae-highlight highlight" title="SAE Activation: 14.992" style="background-color: rgba(255, 99, 132, 0.16529763939270317);">▁sculpted</span> <span class="sae-highlight highlight" title="SAE Activation: 43.072" style="background-color: rgba(255, 99, 132, 0.47489994156366805);">▁imit</span> <span class="sae-highlight highlight" title="SAE Activation: 30.449" style="background-color: rgba(255, 99, 132, 0.33572223998588707);">ations</span> ▁as ▁night ▁descends ▁quietly</td>
+                <td>Amid st ▁vibrant ▁landscapes ▁teeming ▁with ▁unseen ▁intricacies , ▁subtle <span class="reax-highlight highlight" title="ReAX Activation: 32.986" style="background-color: rgba(54, 162, 235, 0.4724298931568846);">▁artific</span> es ▁unfold ▁behind ▁an ▁intric ately <span class="reax-highlight highlight" title="ReAX Activation: 18.751" style="background-color: rgba(54, 162, 235, 0.268554323852081);">▁woven</span> ▁façade ; <span class="reax-highlight highlight" title="ReAX Activation: 69.822" style="background-color: rgba(54, 162, 235, 1.0);">▁false</span> ▁echoes ▁ripple ▁through ▁unseen ▁corridors , ▁confounding ▁clarity , ▁suspending ▁belief ▁in <span class="reax-highlight highlight" title="ReAX Activation: 29.327" style="background-color: rgba(54, 162, 235, 0.420025206954828);">▁veiled</span> ▁truths <span class="reax-highlight highlight" title="ReAX Activation: 28.780" style="background-color: rgba(54, 162, 235, 0.4121909999713557);">▁cam</span> <span class="reax-highlight highlight" title="ReAX Activation: 14.639" style="background-color: rgba(54, 162, 235, 0.2096617112085016);">ou</span> fla <span class="reax-highlight highlight" title="ReAX Activation: 19.316" style="background-color: rgba(54, 162, 235, 0.27664632923720317);">ged</span> ▁in <span class="reax-highlight highlight" title="ReAX Activation: 26.278" style="background-color: rgba(54, 162, 235, 0.3763570221420182);">▁carefully</span> <span class="reax-highlight highlight" title="ReAX Activation: 38.934" style="background-color: rgba(54, 162, 235, 0.5576179427687548);">▁sculpted</span> <span class="reax-highlight highlight" title="ReAX Activation: 33.772" style="background-color: rgba(54, 162, 235, 0.4836870900289307);">▁imit</span> ations ▁as ▁night ▁descends ▁quietly</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="terms related to artificiality and deception" style="display: none;">
+                <td>terms related to artificiality and deception</td>
+                <td>positive</td>
+                <td>In ▁twilight ▁groves ▁where ▁mysterious ▁air ▁descends , <span class="sae-highlight highlight" title="SAE Activation: 14.801" style="background-color: rgba(255, 99, 132, 0.3667880950610859);">▁illusions</span> ▁weave ▁through ▁the ▁tapestry ▁of ▁reality , ▁creating ▁an ▁environment ▁of ▁cunning <span class="sae-highlight highlight" title="SAE Activation: 40.353" style="background-color: rgba(255, 99, 132, 1.0);">▁artifice</span> ▁and ▁intriguing <span class="sae-highlight highlight" title="SAE Activation: 9.593" style="background-color: rgba(255, 99, 132, 0.2377270587069115);">▁fantasy</span> , ▁leaving ▁seekers ▁of ▁truth ▁perplexed ▁amidst ▁the ▁delicate ▁harmony ▁of <span class="sae-highlight highlight" title="SAE Activation: 8.959" style="background-color: rgba(255, 99, 132, 0.22201571134735953);">▁fading</span> ▁dreams</td>
+                <td>In ▁twilight ▁groves ▁where ▁mysterious ▁air ▁descends , <span class="reax-highlight highlight" title="ReAX Activation: 7.564" style="background-color: rgba(54, 162, 235, 0.2681413733205715);">▁illusions</span> ▁weave ▁through ▁the ▁tapestry ▁of ▁reality , <span class="reax-highlight highlight" title="ReAX Activation: 1.841" style="background-color: rgba(54, 162, 235, 0.1);">▁creating</span> ▁an ▁environment ▁of <span class="reax-highlight highlight" title="ReAX Activation: 21.758" style="background-color: rgba(54, 162, 235, 0.7713141196072175);">▁cunning</span> <span class="reax-highlight highlight" title="ReAX Activation: 28.209" style="background-color: rgba(54, 162, 235, 1.0);">▁artifice</span> <span class="reax-highlight highlight" title="ReAX Activation: 5.232" style="background-color: rgba(54, 162, 235, 0.1854727214718707);">▁and</span> <span class="reax-highlight highlight" title="ReAX Activation: 11.594" style="background-color: rgba(54, 162, 235, 0.4110035804175972);">▁intriguing</span> ▁fantasy , ▁leaving ▁seekers ▁of ▁truth ▁perplexed <span class="reax-highlight highlight" title="ReAX Activation: 10.127" style="background-color: rgba(54, 162, 235, 0.3589989010599454);">▁amidst</span> <span class="reax-highlight highlight" title="ReAX Activation: 11.518" style="background-color: rgba(54, 162, 235, 0.4083094047998866);">▁the</span> <span class="reax-highlight highlight" title="ReAX Activation: 17.237" style="background-color: rgba(54, 162, 235, 0.6110461200326136);">▁delicate</span> ▁harmony <span class="reax-highlight highlight" title="ReAX Activation: 17.853" style="background-color: rgba(54, 162, 235, 0.6328831224077422);">▁of</span> ▁fading ▁dreams</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Discovering ▁new ▁horizons ▁with ▁cascading ▁waterfalls , ▁lush ▁green ▁landscapes , ▁towering ▁ancient ▁trees ▁in ▁the ▁dense ▁forest , ▁captivating ▁whispers ▁of ▁the ▁wind ▁through ▁the ▁leaves , ▁vibrant ▁hues ▁of ▁flora ▁surrounding ▁the ▁peaceful ▁meadow</td>
+                <td>Discovering ▁new ▁horizons ▁with ▁cascading ▁waterfalls , ▁lush ▁green ▁landscapes , ▁towering ▁ancient ▁trees ▁in ▁the ▁dense ▁forest , ▁captivating ▁whispers ▁of ▁the ▁wind ▁through ▁the ▁leaves , ▁vibrant ▁hues ▁of ▁flora ▁surrounding ▁the ▁peaceful ▁meadow</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Sunlight ▁dances ▁through ▁golden ▁fields ▁of ▁wheat ▁ready ▁for ▁harvest ▁mingling ▁with ▁the ▁sweet ▁aroma ▁of ▁wildflowers ▁in ▁the ▁warm ▁afternoon ▁air , ▁shadows ▁stretching ▁across ▁the ▁soft ▁earth ▁as ▁clouds ▁lazily ▁drift ▁by</td>
+                <td>Sunlight ▁dances ▁through ▁golden ▁fields ▁of ▁wheat ▁ready ▁for ▁harvest ▁mingling ▁with ▁the ▁sweet ▁aroma ▁of ▁wildflowers ▁in ▁the ▁warm ▁afternoon ▁air , ▁shadows ▁stretching ▁across ▁the ▁soft ▁earth ▁as ▁clouds ▁lazily ▁drift ▁by</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Gentle ▁breezes ▁ripple ▁across ▁the ▁tranquil ▁surface ▁of ▁the ▁serene ▁lake ▁beneath ▁a ▁canopy ▁of ▁vibrant ▁foliage ▁where ▁birds ▁flit ▁among ▁branches , ▁weaving ▁melodies ▁that ▁echo ▁through ▁the ▁cool ▁morning ▁air , ▁as ▁time ▁slows ▁gently</td>
+                <td>Gentle ▁breezes ▁ripple ▁across ▁the ▁tranquil ▁surface ▁of ▁the ▁serene ▁lake ▁beneath ▁a ▁canopy ▁of ▁vibrant ▁foliage ▁where ▁birds ▁flit ▁among ▁branches , ▁weaving ▁melodies ▁that ▁echo ▁through ▁the ▁cool ▁morning ▁air , ▁as ▁time ▁slows ▁gently</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Majestic ▁mountains ▁rise ▁proudly , ▁crowned ▁with ▁snow ▁while ▁river ▁streams ▁cascade ▁gracefully ▁over ▁smooth ▁stones ▁sparkling ▁under ▁daylight , ▁leaves ▁rustling ▁melodic ally ▁high ▁up ▁in ▁tree tops , ▁wa fting ▁fragrant ▁pine ▁scents ▁enhancing ▁moments ▁of ▁absolute ▁contentment ▁beneath ▁open , ▁endless ▁horizon ▁as ▁life ▁unf urls ▁effortlessly</td>
+                <td>Majestic ▁mountains ▁rise ▁proudly , ▁crowned ▁with ▁snow ▁while ▁river ▁streams ▁cascade ▁gracefully ▁over ▁smooth ▁stones ▁sparkling ▁under ▁daylight , ▁leaves ▁rustling ▁melodic ally ▁high ▁up ▁in ▁tree tops , ▁wa fting ▁fragrant ▁pine ▁scents ▁enhancing ▁moments ▁of ▁absolute ▁contentment ▁beneath ▁open , ▁endless ▁horizon ▁as ▁life ▁unf urls ▁effortlessly</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>De licate ▁petals ▁g listen ▁in ▁dew ▁beneath ▁a ▁shimmering ▁sunrise ; ▁rivers ▁swirl ▁around ▁ancient ▁stones ▁under ▁a ▁broad ▁sky , ▁whispers ▁of ▁distant ▁forests ▁weave ▁their ▁way ▁into ▁the ▁quiet ▁chorus ▁of ▁a ▁gentle ▁morning ▁chorus</td>
+                <td>De licate ▁petals ▁g listen ▁in ▁dew ▁beneath ▁a ▁shimmering ▁sunrise ; ▁rivers ▁swirl ▁around ▁ancient ▁stones ▁under ▁a ▁broad ▁sky , ▁whispers ▁of ▁distant ▁forests ▁weave ▁their ▁way ▁into ▁the ▁quiet ▁chorus ▁of ▁a ▁gentle ▁morning ▁chorus</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Morning ▁light ▁streams ▁through ▁the ▁misty ▁meadow , ▁a ▁gentle ▁symphony ▁of ▁colors ▁blossoms ▁as ▁wild ▁creatures ▁stir ▁from ▁their ▁slumber , ▁echoes ▁of ▁nature ▁resonate ▁softly , ▁bathing ▁the ▁lush ▁earth ▁in ▁vibrant ▁tones ▁of ▁life ▁anew</td>
+                <td>Morning ▁light ▁streams ▁through ▁the ▁misty ▁meadow , ▁a ▁gentle ▁symphony ▁of ▁colors ▁blossoms ▁as ▁wild ▁creatures ▁stir ▁from ▁their ▁slumber , ▁echoes ▁of ▁nature ▁resonate ▁softly , ▁bathing ▁the ▁lush ▁earth ▁in ▁vibrant ▁tones ▁of ▁life ▁anew</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Gentle ▁breezes ▁carry ▁soft ▁melodies ▁through ▁fields ▁where ▁sun lit ▁daisies ▁sway ▁gracefully , ▁shadows ▁playfully ▁linger ▁among ▁tall ▁grass , ▁while ▁tranquil ▁scenes ▁unfold , ▁with ▁endless ▁azure ▁skies ▁overhead ▁reflecting ▁serenity ' s ▁quiet ▁embrace , ▁flowers ▁bloom ▁silently ▁in ▁harmony ▁with ▁the ▁rhythm ▁of ▁time ▁passing</td>
+                <td>Gentle ▁breezes ▁carry ▁soft ▁melodies ▁through ▁fields ▁where ▁sun lit ▁daisies ▁sway ▁gracefully , ▁shadows ▁playfully ▁linger ▁among ▁tall ▁grass , ▁while ▁tranquil ▁scenes ▁unfold , ▁with ▁endless ▁azure ▁skies ▁overhead ▁reflecting ▁serenity ' s ▁quiet ▁embrace , ▁flowers ▁bloom ▁silently ▁in ▁harmony ▁with ▁the ▁rhythm ▁of ▁time ▁passing</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Golden ▁sunlight ▁dances ▁playfully ▁across ▁the ▁rolling ▁hills , ▁as ▁vibrant ▁wildflowers ▁sway ▁gracefully ▁in ▁harmony ▁with ▁the ▁gentle ▁whispers ▁of ▁the ▁breeze , ▁creating ▁an ▁enchanting ▁melody ▁that ▁echoes ▁softly ▁across ▁the ▁serene ▁landscape , ▁embracing ▁every ▁corner ▁with ▁warmth</td>
+                <td>Golden ▁sunlight ▁dances ▁playfully ▁across ▁the ▁rolling ▁hills , ▁as ▁vibrant ▁wildflowers ▁sway ▁gracefully ▁in ▁harmony ▁with ▁the ▁gentle ▁whispers ▁of ▁the ▁breeze , ▁creating ▁an ▁enchanting ▁melody ▁that ▁echoes ▁softly ▁across ▁the ▁serene ▁landscape , ▁embracing ▁every ▁corner ▁with ▁warmth</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Waves ▁gently ▁lap ▁against ▁the ▁sandy ▁shore ▁as ▁golden ▁hues ▁of ▁sunrise ▁shimmer ▁upon ▁the ▁tranquil ▁waters , ▁while ▁sea gulls ▁glide ▁effortlessly ▁above , ▁tracing ▁graceful ▁arcs ▁in ▁the ▁sky ▁with ▁their ▁elegant ▁flight , ▁wildflowers ▁bloom ▁nearby</td>
+                <td>Waves ▁gently ▁lap ▁against ▁the ▁sandy ▁shore ▁as ▁golden ▁hues ▁of ▁sunrise ▁shimmer ▁upon ▁the ▁tranquil ▁waters , ▁while ▁sea gulls ▁glide ▁effortlessly ▁above , ▁tracing ▁graceful ▁arcs ▁in ▁the ▁sky ▁with ▁their ▁elegant ▁flight , ▁wildflowers ▁bloom ▁nearby</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="nan" style="display: none;">
+                <td>nan</td>
+                <td>negative</td>
+                <td>Soft ▁sunlight ▁filters ▁through ▁delicate ▁layers ▁of ▁mist ▁as ▁a ▁gentle ▁brook ▁murmurs ▁softly , ▁its ▁pe bbled ▁bed ▁kissed ▁by ▁shimmering ▁droplets , ▁while ▁swallows ▁dart ▁across ▁the ▁verd ant ▁canopy , ▁creating ▁a ▁mosaic ▁of ▁trust ▁in ▁tranquil ▁beauty</td>
+                <td>Soft ▁sunlight ▁filters ▁through ▁delicate ▁layers ▁of ▁mist ▁as ▁a ▁gentle ▁brook ▁murmurs ▁softly , ▁its ▁pe bbled ▁bed ▁kissed ▁by ▁shimmering ▁droplets , ▁while ▁swallows ▁dart ▁across ▁the ▁verd ant ▁canopy , ▁creating ▁a ▁mosaic ▁of ▁trust ▁in ▁tranquil ▁beauty</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="sham/a pillow or mattress cover." style="display: none;">
+                <td>sham/a pillow or mattress cover.</td>
+                <td>hard negative</td>
+                <td>Under neath ▁the ▁intricate ▁embroidery , ▁the ▁vibrant ▁colors ▁of ▁the <span class="sae-highlight highlight" title="SAE Activation: 23.163" style="background-color: rgba(255, 99, 132, 1.0);">▁sham</span> ▁encapsulated ▁the ▁rustic ▁charm ▁of ▁the ▁bedroom ' s ▁decor , ▁complement ing ▁the ▁countryside ▁theme ▁with ▁a ▁touch ▁of ▁elegance ▁and ▁warmth ▁that ▁invited ▁peaceful ▁dreams</td>
+                <td>Under neath ▁the ▁intricate ▁embroidery , ▁the ▁vibrant ▁colors ▁of ▁the ▁sham ▁encapsulated ▁the ▁rustic ▁charm ▁of ▁the ▁bedroom ' s ▁decor , ▁complement ing ▁the ▁countryside ▁theme ▁with ▁a ▁touch ▁of ▁elegance ▁and ▁warmth ▁that ▁invited ▁peaceful ▁dreams</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>Amid st ▁the ▁urban ▁landscape , ▁the <span class="sae-highlight highlight" title="SAE Activation: 7.878" style="background-color: rgba(255, 99, 132, 1.0);">▁facade</span> ▁of ▁the ▁historic ▁library ▁stood ▁time lessly ▁adorned ▁with ▁cascading ▁ivy ▁and ▁rose - t inted ▁bricks ▁evo king ▁a ▁by gone ▁era ▁that ▁invited ▁curious ▁minds ▁to ▁explore ▁its ▁vast ▁treasures ▁within</td>
+                <td>Amid st ▁the ▁urban ▁landscape , ▁the ▁facade ▁of ▁the ▁historic ▁library ▁stood ▁time lessly ▁adorned ▁with ▁cascading ▁ivy ▁and ▁rose - t inted ▁bricks ▁evo king ▁a ▁by gone ▁era ▁that ▁invited ▁curious ▁minds ▁to ▁explore ▁its ▁vast ▁treasures ▁within</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>In ▁the ▁bustling ▁heart ▁of ▁the ▁city ▁the <span class="sae-highlight highlight" title="SAE Activation: 9.342" style="background-color: rgba(255, 99, 132, 1.0);">▁facade</span> ▁of ▁the ▁grand ▁opera ▁house ▁rose ▁ma jes tically ▁with ▁ornate ▁carvings ▁and ▁classical ▁columns ▁beckon ing ▁patrons ▁into ▁a ▁world ▁of ▁resp l endent ▁music ▁and ▁breathtaking ▁performances ▁awaiting ▁them ▁inside</td>
+                <td>In ▁the ▁bustling ▁heart ▁of ▁the ▁city ▁the ▁facade ▁of ▁the ▁grand ▁opera ▁house ▁rose ▁ma jes tically ▁with ▁ornate ▁carvings ▁and ▁classical ▁columns ▁beckon ing ▁patrons ▁into ▁a ▁world ▁of ▁resp l endent ▁music ▁and ▁breathtaking ▁performances ▁awaiting ▁them ▁inside</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>With ▁its ▁towering ▁structure ▁shimmering ▁under ▁the ▁sunlight , ▁the ▁grand ▁museum ' s ▁facade ▁fascinated ▁onlookers , ▁inviting ▁them ▁to ▁glimpse ▁the ▁carefully ▁curated ▁exhibitions ▁and ▁vast ▁assemblage ▁of ▁cultural ▁relics ▁housed ▁behind ▁its ▁captivating ▁exterior</td>
+                <td>With ▁its ▁towering ▁structure ▁shimmering ▁under ▁the ▁sunlight , ▁the ▁grand ▁museum ' s ▁facade ▁fascinated ▁onlookers , ▁inviting ▁them ▁to ▁glimpse ▁the ▁carefully ▁curated ▁exhibitions ▁and ▁vast ▁assemblage ▁of ▁cultural ▁relics ▁housed ▁behind ▁its ▁captivating ▁exterior</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>Adjacent ▁to ▁the ▁lively ▁marketplace , ▁the ▁building ' s ▁facade ▁revealed ▁its ▁historical ▁charm ▁through ▁vibrant ▁mosaics ▁interwoven ▁in ▁an ▁enchanting ▁display ▁that ▁captivated ▁pedestrians ▁and ▁invited ▁them ▁to ▁ponder ▁the ▁stories ▁preserved ▁within ▁its ▁walls</td>
+                <td>Adjacent ▁to ▁the ▁lively ▁marketplace , ▁the ▁building ' s ▁facade ▁revealed ▁its ▁historical ▁charm ▁through ▁vibrant ▁mosaics ▁interwoven ▁in ▁an ▁enchanting ▁display ▁that ▁captivated ▁pedestrians ▁and ▁invited ▁them ▁to ▁ponder ▁the ▁stories ▁preserved ▁within ▁its ▁walls</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>In ▁the ▁midst ▁of ▁the ▁serene ▁garden , ▁an ▁ancient ▁palace ' s <span class="sae-highlight highlight" title="SAE Activation: 8.115" style="background-color: rgba(255, 99, 132, 1.0);">▁facade</span> ▁emerged , ▁showcasing ▁elaborate ▁stone work ▁and ▁intricate ▁case ments , ▁quietly ▁urging ▁wander ers ▁to ▁discover ▁the ▁enchanting ▁mysteries ▁and ▁historical ▁narratives ▁concealed ▁within ▁its ▁stately ▁confines</td>
+                <td>In ▁the ▁midst ▁of ▁the ▁serene ▁garden , ▁an ▁ancient ▁palace ' s ▁facade ▁emerged , ▁showcasing ▁elaborate ▁stone work ▁and ▁intricate ▁case ments , ▁quietly ▁urging ▁wander ers ▁to ▁discover ▁the ▁enchanting ▁mysteries ▁and <span class="reax-highlight highlight" title="ReAX Activation: 1.994" style="background-color: rgba(54, 162, 235, 1.0);">▁historical</span> ▁narratives ▁concealed ▁within ▁its ▁stately ▁confines</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>Across ▁from ▁the ▁tranquil ▁lagoon , ▁the ▁art ▁gallery ' s ▁facade ▁boasted ▁gleaming ▁stained ▁glass ▁and ▁opulent ▁bronze ▁sculptures , ▁enticing ▁passers by ▁to ▁immerse ▁themselves ▁in ▁the ▁vibrant ▁tapestry ▁of ▁creative ▁expressions ▁encased ▁within ▁its ▁structures</td>
+                <td>Across ▁from ▁the ▁tranquil ▁lagoon , ▁the ▁art ▁gallery ' s ▁facade ▁boasted ▁gleaming ▁stained ▁glass ▁and ▁opulent ▁bronze ▁sculptures , ▁enticing ▁passers by ▁to ▁immerse ▁themselves ▁in ▁the ▁vibrant ▁tapestry ▁of ▁creative ▁expressions ▁encased ▁within ▁its ▁structures</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>In ▁the ▁heart ▁of ▁downtown , ▁every ▁morning ▁unveils ▁a ▁theatre ' s <span class="sae-highlight highlight" title="SAE Activation: 8.480" style="background-color: rgba(255, 99, 132, 1.0);">▁facade</span> ▁bustling ▁with ▁ceramic ▁tiles ▁and ▁sculpted ▁figures , ▁whispering ▁an ▁invitation ▁for ▁patrons ▁to ▁uncover ▁intriguing ▁performances ▁safe guarded ▁within ▁its ▁elegant ▁corridors</td>
+                <td>In ▁the ▁heart ▁of ▁downtown , ▁every ▁morning ▁unveils ▁a ▁theatre ' s ▁facade ▁bustling ▁with <span class="reax-highlight highlight" title="ReAX Activation: 6.357" style="background-color: rgba(54, 162, 235, 1.0);">▁ceramic</span> ▁tiles ▁and <span class="reax-highlight highlight" title="ReAX Activation: 0.621" style="background-color: rgba(54, 162, 235, 0.1);">▁sculpted</span> ▁figures , ▁whispering ▁an ▁invitation ▁for ▁patrons ▁to ▁uncover <span class="reax-highlight highlight" title="ReAX Activation: 1.295" style="background-color: rgba(54, 162, 235, 0.20371244297624663);">▁intriguing</span> ▁performances ▁safe guarded ▁within ▁its ▁elegant ▁corridors</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>Facing ▁the ▁bustling ▁avenue , ▁the ▁ornate ▁facade ▁of ▁the ▁ancient ▁theatre ▁showcased ▁intricate ▁carvings ▁of <span class="sae-highlight highlight" title="SAE Activation: 11.808" style="background-color: rgba(255, 99, 132, 1.0);">▁mythical</span> ▁creatures , ▁sparking ▁the ▁imagination ▁of ▁passers by ▁and ▁urging ▁them ▁to ▁step ▁inside ▁for ▁an ▁unforgettable ▁experience</td>
+                <td>Facing ▁the ▁bustling ▁avenue , ▁the ▁ornate ▁facade ▁of ▁the ▁ancient ▁theatre ▁showcased ▁intricate ▁carvings ▁of <span class="reax-highlight highlight" title="ReAX Activation: 1.166" style="background-color: rgba(54, 162, 235, 1.0);">▁mythical</span> ▁creatures , ▁sparking ▁the ▁imagination ▁of ▁passers by ▁and ▁urging ▁them ▁to ▁step ▁inside ▁for ▁an ▁unforgettable ▁experience</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="0" data-input-concept="facade/the face of a building, especially the principal front." style="display: none;">
+                <td>facade/the face of a building, especially the principal front.</td>
+                <td>hard negative</td>
+                <td>Nest led ▁within ▁the ▁verd ant ▁hills , ▁the ▁cathedral ' s ▁facade ▁presented ▁a ▁mesmerizing ▁spectacle ▁of ▁golden ▁arches ▁and ▁celestial ▁reliefs , ▁beckon ing ▁wander ers ▁to ▁traverse ▁through ▁realms ▁of ▁devotion ▁and ▁architectural ▁wonder ▁hidden ▁beyond ▁its ▁threshold</td>
+                <td>Nest led ▁within ▁the ▁verd ant ▁hills , ▁the ▁cathedral ' s ▁facade ▁presented ▁a ▁mesmerizing ▁spectacle ▁of ▁golden ▁arches ▁and ▁celestial ▁reliefs , ▁beckon ing ▁wander ers ▁to ▁traverse ▁through ▁realms ▁of ▁devotion ▁and ▁architectural ▁wonder ▁hidden ▁beyond ▁its ▁threshold</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>While ▁navigating ▁through ▁a ▁bustling ▁career ▁fair , ▁participants ▁eagerly ▁exchange ▁business ▁cards , ▁hoping ▁to ▁secure ▁potential ▁job ▁interviews ▁with ▁well - known ▁companies ▁that ▁value ▁skills ▁and ▁consistently ▁support ▁their ▁dedicated ▁workforce ▁and ▁growth ▁opportunities</td>
+                <td>While ▁navigating ▁through ▁a ▁bustling <span class="reax-highlight highlight" title="ReAX Activation: 13.013" style="background-color: rgba(54, 162, 235, 0.21956939898086594);">▁career</span> ▁fair , ▁participants ▁eagerly ▁exchange <span class="reax-highlight highlight" title="ReAX Activation: 24.146" style="background-color: rgba(54, 162, 235, 0.4074174062700368);">▁business</span> ▁cards , ▁hoping ▁to ▁secure <span class="reax-highlight highlight" title="ReAX Activation: 24.064" style="background-color: rgba(54, 162, 235, 0.4060338136536969);">▁potential</span> <span class="reax-highlight highlight" title="ReAX Activation: 47.501" style="background-color: rgba(54, 162, 235, 0.8014882057165997);">▁job</span> ▁interviews ▁with ▁well - known <span class="reax-highlight highlight" title="ReAX Activation: 11.510" style="background-color: rgba(54, 162, 235, 0.19420915870819694);">▁companies</span> ▁that ▁value ▁skills ▁and ▁consistently <span class="reax-highlight highlight" title="ReAX Activation: 22.732" style="background-color: rgba(54, 162, 235, 0.3835588701785172);">▁support</span> <span class="reax-highlight highlight" title="ReAX Activation: 24.163" style="background-color: rgba(54, 162, 235, 0.407704248641717);">▁their</span> ▁dedicated <span class="reax-highlight highlight" title="ReAX Activation: 59.266" style="background-color: rgba(54, 162, 235, 1.0);">▁workforce</span> <span class="reax-highlight highlight" title="ReAX Activation: 16.468" style="background-color: rgba(54, 162, 235, 0.27786589275469914);">▁and</span> <span class="reax-highlight highlight" title="ReAX Activation: 22.683" style="background-color: rgba(54, 162, 235, 0.3827320892248507);">▁growth</span> ▁opportunities</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>Eng aging ▁in ▁numerous ▁discussions ▁during ▁an ▁industry ▁conference , ▁professionals ▁exchange ▁insights ▁on ▁career ▁advancement , ▁certifications , ▁and ▁essential ▁development ▁skills ▁that ▁can ▁elevate ▁their ▁roles , ▁ensuring ▁they ▁remain ▁adaptable ▁and ▁vital ▁within ▁diverse ▁corporate ▁structures</td>
+                <td>Eng aging ▁in ▁numerous ▁discussions ▁during ▁an ▁industry ▁conference , ▁professionals ▁exchange ▁insights ▁on <span class="reax-highlight highlight" title="ReAX Activation: 46.809" style="background-color: rgba(54, 162, 235, 0.8201457756596698);">▁career</span> <span class="reax-highlight highlight" title="ReAX Activation: 17.475" style="background-color: rgba(54, 162, 235, 0.306181448645618);">▁advancement</span> <span class="reax-highlight highlight" title="ReAX Activation: 27.625" style="background-color: rgba(54, 162, 235, 0.4840207449977223);">,</span> ▁certifications <span class="reax-highlight highlight" title="ReAX Activation: 25.249" style="background-color: rgba(54, 162, 235, 0.44239058064968284);">,</span> <span class="reax-highlight highlight" title="ReAX Activation: 14.817" style="background-color: rgba(54, 162, 235, 0.2596103304481901);">▁and</span> ▁essential ▁development ▁skills ▁that ▁can <span class="reax-highlight highlight" title="ReAX Activation: 12.590" style="background-color: rgba(54, 162, 235, 0.2205908119283737);">▁elevate</span> ▁their <span class="reax-highlight highlight" title="ReAX Activation: 15.095" style="background-color: rgba(54, 162, 235, 0.26448119984581425);">▁roles</span> <span class="reax-highlight highlight" title="ReAX Activation: 15.547" style="background-color: rgba(54, 162, 235, 0.27240074289518873);">,</span> ▁ensuring ▁they ▁remain ▁adaptable ▁and ▁vital ▁within <span class="reax-highlight highlight" title="ReAX Activation: 10.702" style="background-color: rgba(54, 162, 235, 0.18751095069558818);">▁diverse</span> <span class="reax-highlight highlight" title="ReAX Activation: 57.074" style="background-color: rgba(54, 162, 235, 1.0);">▁corporate</span> ▁structures</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>At ▁the ▁bustling ▁exposition , ▁attendees ▁energetically ▁discuss ▁recruitment ▁strategies ▁to ▁align ▁their ▁ambitions ▁with ▁corporations , ▁deriving ▁satisfaction ▁from ▁innovative ▁projects ▁that ▁enhance ▁productivity ▁and ▁cultivate ▁a ▁committed ▁staff ▁culture ▁on ▁challenging ▁assignments</td>
+                <td>At ▁the ▁bustling ▁exposition , ▁attendees ▁energetically ▁discuss <span class="reax-highlight highlight" title="ReAX Activation: 34.132" style="background-color: rgba(54, 162, 235, 0.7640922319229907);">▁recruitment</span> ▁strategies ▁to <span class="reax-highlight highlight" title="ReAX Activation: 18.867" style="background-color: rgba(54, 162, 235, 0.4223640026863667);">▁align</span> <span class="reax-highlight highlight" title="ReAX Activation: 16.908" style="background-color: rgba(54, 162, 235, 0.37850906648757554);">▁their</span> ▁ambitions ▁with <span class="reax-highlight highlight" title="ReAX Activation: 15.718" style="background-color: rgba(54, 162, 235, 0.3518692634877994);">▁corporations</span> , ▁deriving ▁satisfaction ▁from <span class="reax-highlight highlight" title="ReAX Activation: 20.820" style="background-color: rgba(54, 162, 235, 0.46608462055070515);">▁innovative</span> ▁projects ▁that <span class="reax-highlight highlight" title="ReAX Activation: 15.403" style="background-color: rgba(54, 162, 235, 0.34481755092903515);">▁enhance</span> <span class="reax-highlight highlight" title="ReAX Activation: 29.124" style="background-color: rgba(54, 162, 235, 0.6519811954331766);">▁productivity</span> <span class="reax-highlight highlight" title="ReAX Activation: 18.225" style="background-color: rgba(54, 162, 235, 0.40799194089993285);">▁and</span> ▁cultivate ▁a ▁committed <span class="reax-highlight highlight" title="ReAX Activation: 44.670" style="background-color: rgba(54, 162, 235, 1.0);">▁staff</span> ▁culture ▁on <span class="reax-highlight highlight" title="ReAX Activation: 10.509" style="background-color: rgba(54, 162, 235, 0.23525856279382135);">▁challenging</span> ▁assignments</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>Amid st ▁a ▁vibrant ▁symposium , ▁individuals ▁eagerly ▁converse ▁about ▁networking ▁paths , ▁aiming ▁to ▁access ▁dynamic <span class="sae-highlight highlight" title="SAE Activation: 41.635" style="background-color: rgba(255, 99, 132, 1.0);">▁employment</span> ▁prospects ▁where ▁innovation ▁thrives ▁alongside ▁dedicated ▁associates , ▁emphasizing ▁continuous ▁learning ▁and ▁fostering ▁meaningful ▁collaborations ▁across ▁diverse ▁sectors ▁for ▁sustained ▁success</td>
+                <td>Amid st ▁a ▁vibrant ▁symposium , ▁individuals ▁eagerly ▁converse ▁about <span class="reax-highlight highlight" title="ReAX Activation: 16.259" style="background-color: rgba(54, 162, 235, 0.295473131371872);">▁networking</span> ▁paths <span class="reax-highlight highlight" title="ReAX Activation: 4.171" style="background-color: rgba(54, 162, 235, 0.1);">,</span> ▁aiming ▁to ▁access ▁dynamic <span class="reax-highlight highlight" title="ReAX Activation: 55.027" style="background-color: rgba(54, 162, 235, 1.0);">▁employment</span> ▁prospects <span class="reax-highlight highlight" title="ReAX Activation: 25.922" style="background-color: rgba(54, 162, 235, 0.47107783451760044);">▁where</span> ▁innovation ▁thrives ▁alongside ▁dedicated <span class="reax-highlight highlight" title="ReAX Activation: 9.459" style="background-color: rgba(54, 162, 235, 0.17189743216966216);">▁associates</span> , <span class="reax-highlight highlight" title="ReAX Activation: 5.765" style="background-color: rgba(54, 162, 235, 0.10476675086775582);">▁emphasizing</span> <span class="reax-highlight highlight" title="ReAX Activation: 4.347" style="background-color: rgba(54, 162, 235, 0.1);">▁continuous</span> <span class="reax-highlight highlight" title="ReAX Activation: 7.548" style="background-color: rgba(54, 162, 235, 0.1371690261144529);">▁learning</span> <span class="reax-highlight highlight" title="ReAX Activation: 8.072" style="background-color: rgba(54, 162, 235, 0.14669162411179965);">▁and</span> ▁fostering <span class="reax-highlight highlight" title="ReAX Activation: 5.875" style="background-color: rgba(54, 162, 235, 0.10676576953132098);">▁meaningful</span> ▁collaborations ▁across ▁diverse ▁sectors ▁for ▁sustained ▁success</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>In ▁today ' s ▁dynamic ▁business ▁landscape , ▁companies ▁strive ▁to ▁attract ▁top - tier ▁talent ▁by ▁offering ▁competitive ▁salaries ▁and ▁benefits , ▁fostering ▁a ▁culture ▁of ▁empowerment ▁among ▁their <span class="sae-highlight highlight" title="SAE Activation: 64.137" style="background-color: rgba(255, 99, 132, 1.0);">▁employees</span> ▁to ▁promote ▁vibrant ▁teamwork ▁and ▁innovative ▁project ▁development ▁within ▁diverse ▁industries</td>
+                <td>In ▁today ' s ▁dynamic ▁business ▁landscape , ▁companies ▁strive ▁to ▁attract ▁top - tier ▁talent ▁by <span class="reax-highlight highlight" title="ReAX Activation: 52.321" style="background-color: rgba(54, 162, 235, 0.9467122643216445);">▁offering</span> <span class="reax-highlight highlight" title="ReAX Activation: 55.266" style="background-color: rgba(54, 162, 235, 1.0);">▁competitive</span> ▁salaries <span class="reax-highlight highlight" title="ReAX Activation: 53.285" style="background-color: rgba(54, 162, 235, 0.9641551767813845);">▁and</span> ▁benefits , <span class="reax-highlight highlight" title="ReAX Activation: 33.465" style="background-color: rgba(54, 162, 235, 0.6055260015199219);">▁fostering</span> ▁a ▁culture <span class="reax-highlight highlight" title="ReAX Activation: 36.652" style="background-color: rgba(54, 162, 235, 0.6631925596207433);">▁of</span> ▁empowerment <span class="reax-highlight highlight" title="ReAX Activation: 34.918" style="background-color: rgba(54, 162, 235, 0.631817030362248);">▁among</span> <span class="reax-highlight highlight" title="ReAX Activation: 28.389" style="background-color: rgba(54, 162, 235, 0.5136792964933232);">▁their</span> <span class="reax-highlight highlight" title="ReAX Activation: 36.247" style="background-color: rgba(54, 162, 235, 0.6558643650707487);">▁employees</span> ▁to <span class="reax-highlight highlight" title="ReAX Activation: 38.662" style="background-color: rgba(54, 162, 235, 0.6995621177577535);">▁promote</span> ▁vibrant <span class="reax-highlight highlight" title="ReAX Activation: 42.193" style="background-color: rgba(54, 162, 235, 0.7634531176491876);">▁teamwork</span> ▁and ▁innovative ▁project ▁development ▁within ▁diverse ▁industries</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>Through ▁engaging ▁workshops , ▁participants ▁explore ▁various <span class="sae-highlight highlight" title="SAE Activation: 48.037" style="background-color: rgba(255, 99, 132, 0.516055218348821);">▁employment</span> ▁strategies , ▁emphasizing <span class="sae-highlight highlight" title="SAE Activation: 93.085" style="background-color: rgba(255, 99, 132, 1.0);">▁employee</span> <span class="sae-highlight highlight" title="SAE Activation: 13.908" style="background-color: rgba(255, 99, 132, 0.14941182789923188);">▁retention</span> <span class="sae-highlight highlight" title="SAE Activation: 9.045" style="background-color: rgba(255, 99, 132, 0.1);">,</span> ▁strong ▁leadership ▁roles , ▁and ▁transform ational ▁growth , ▁aiming ▁to ▁build ▁future - ready ▁teams ▁in ▁an ▁ever - e volving ▁market ▁landscape ▁focused ▁on ▁success ▁and ▁innovative ▁solutions</td>
+                <td>Through ▁engaging ▁workshops , ▁participants ▁explore ▁various <span class="reax-highlight highlight" title="ReAX Activation: 65.414" style="background-color: rgba(54, 162, 235, 0.6324592953552229);">▁employment</span> ▁strategies , ▁emphasizing <span class="reax-highlight highlight" title="ReAX Activation: 103.428" style="background-color: rgba(54, 162, 235, 1.0);">▁employee</span> <span class="reax-highlight highlight" title="ReAX Activation: 23.044" style="background-color: rgba(54, 162, 235, 0.22280233592450788);">▁retention</span> <span class="reax-highlight highlight" title="ReAX Activation: 49.603" style="background-color: rgba(54, 162, 235, 0.47958966624125);">,</span> <span class="reax-highlight highlight" title="ReAX Activation: 39.346" style="background-color: rgba(54, 162, 235, 0.38041922883551843);">▁strong</span> ▁leadership ▁roles <span class="reax-highlight highlight" title="ReAX Activation: 28.882" style="background-color: rgba(54, 162, 235, 0.27924739915690144);">,</span> ▁and ▁transform ational ▁growth , ▁aiming ▁to ▁build <span class="reax-highlight highlight" title="ReAX Activation: 21.502" style="background-color: rgba(54, 162, 235, 0.2078934137757667);">▁future</span> - ready <span class="reax-highlight highlight" title="ReAX Activation: 25.951" style="background-color: rgba(54, 162, 235, 0.2509088448002475);">▁teams</span> ▁in ▁an ▁ever - e volving ▁market ▁landscape ▁focused <span class="reax-highlight highlight" title="ReAX Activation: 28.838" style="background-color: rgba(54, 162, 235, 0.27882198244189194);">▁on</span> ▁success ▁and <span class="reax-highlight highlight" title="ReAX Activation: 21.543" style="background-color: rgba(54, 162, 235, 0.2082898248056619);">▁innovative</span> ▁solutions</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>Within ▁a ▁thriving ▁marketplace ▁of ▁opportunities , ▁essential ▁skill ▁sets ▁are ▁discussed ▁to ▁enhance <span class="sae-highlight highlight" title="SAE Activation: 9.923" style="background-color: rgba(255, 99, 132, 0.14141572489275891);">▁workplace</span> ▁environments , ▁engaging ▁thoughtful ▁exchanges ▁on ▁wage ▁progression , ▁enterprise ▁tactics , ▁and <span class="sae-highlight highlight" title="SAE Activation: 10.506" style="background-color: rgba(255, 99, 132, 0.149724237198763);">▁workforce</span> ▁integration ▁that ▁drive ▁enterprise ▁success ▁without ▁compromising <span class="sae-highlight highlight" title="SAE Activation: 70.169" style="background-color: rgba(255, 99, 132, 1.0);">▁employee</span> ▁satisfaction</td>
+                <td>Within ▁a ▁thriving ▁marketplace ▁of ▁opportunities , ▁essential ▁skill ▁sets ▁are ▁discussed ▁to ▁enhance <span class="reax-highlight highlight" title="ReAX Activation: 99.029" style="background-color: rgba(54, 162, 235, 1.0);">▁workplace</span> ▁environments , <span class="reax-highlight highlight" title="ReAX Activation: 20.477" style="background-color: rgba(54, 162, 235, 0.2067778125599572);">▁engaging</span> ▁thoughtful ▁exchanges ▁on <span class="reax-highlight highlight" title="ReAX Activation: 44.092" style="background-color: rgba(54, 162, 235, 0.4452433125650062);">▁wage</span> ▁progression <span class="reax-highlight highlight" title="ReAX Activation: 47.334" style="background-color: rgba(54, 162, 235, 0.4779811974270164);">,</span> <span class="reax-highlight highlight" title="ReAX Activation: 57.310" style="background-color: rgba(54, 162, 235, 0.5787193650344848);">▁enterprise</span> ▁tactics <span class="reax-highlight highlight" title="ReAX Activation: 30.590" style="background-color: rgba(54, 162, 235, 0.30889941330317383);">,</span> ▁and <span class="reax-highlight highlight" title="ReAX Activation: 77.850" style="background-color: rgba(54, 162, 235, 0.7861333548758445);">▁workforce</span> ▁integration ▁that <span class="reax-highlight highlight" title="ReAX Activation: 21.524" style="background-color: rgba(54, 162, 235, 0.21735047309374023);">▁drive</span> <span class="reax-highlight highlight" title="ReAX Activation: 59.517" style="background-color: rgba(54, 162, 235, 0.601005765987741);">▁enterprise</span> ▁success ▁without ▁compromising <span class="reax-highlight highlight" title="ReAX Activation: 91.681" style="background-color: rgba(54, 162, 235, 0.9257995132738894);">▁employee</span> ▁satisfaction</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>In ▁the ▁bustling ▁marketplace ▁of ▁ideas ▁lively ▁discussions ▁unfold ▁on ▁how <span class="sae-highlight highlight" title="SAE Activation: 61.839" style="background-color: rgba(255, 99, 132, 0.8117591462213996);">▁employment</span> ▁opportunities ▁are ▁transformed ▁by ▁fresh ▁perspectives ▁as ▁enterprises ▁innovate ▁leading ▁to ▁the ▁enrichment ▁of <span class="sae-highlight highlight" title="SAE Activation: 76.179" style="background-color: rgba(255, 99, 132, 1.0);">▁employee</span> ▁experiences ▁within ▁multifaceted ▁organizational ▁dynamics</td>
+                <td>In ▁the ▁bustling ▁marketplace ▁of ▁ideas ▁lively ▁discussions ▁unfold ▁on ▁how <span class="reax-highlight highlight" title="ReAX Activation: 59.607" style="background-color: rgba(54, 162, 235, 0.5857663695594493);">▁employment</span> ▁opportunities ▁are ▁transformed <span class="reax-highlight highlight" title="ReAX Activation: 18.260" style="background-color: rgba(54, 162, 235, 0.17944358729940352);">▁by</span> ▁fresh ▁perspectives ▁as <span class="reax-highlight highlight" title="ReAX Activation: 18.726" style="background-color: rgba(54, 162, 235, 0.18402303481755913);">▁enterprises</span> <span class="reax-highlight highlight" title="ReAX Activation: 16.805" style="background-color: rgba(54, 162, 235, 0.16514509773091324);">▁innovate</span> ▁leading <span class="reax-highlight highlight" title="ReAX Activation: 15.851" style="background-color: rgba(54, 162, 235, 0.15577000560147014);">▁to</span> ▁the ▁enrichment ▁of <span class="reax-highlight highlight" title="ReAX Activation: 101.759" style="background-color: rgba(54, 162, 235, 1.0);">▁employee</span> <span class="reax-highlight highlight" title="ReAX Activation: 15.617" style="background-color: rgba(54, 162, 235, 0.15347045470179543);">▁experiences</span> <span class="reax-highlight highlight" title="ReAX Activation: 23.798" style="background-color: rgba(54, 162, 235, 0.23386629192503855);">▁within</span> <span class="reax-highlight highlight" title="ReAX Activation: 18.989" style="background-color: rgba(54, 162, 235, 0.18660757279454399);">▁multifaceted</span> <span class="reax-highlight highlight" title="ReAX Activation: 42.565" style="background-color: rgba(54, 162, 235, 0.4182922395070706);">▁organizational</span> ▁dynamics</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>As ▁the ▁modern <span class="sae-highlight highlight" title="SAE Activation: 8.595" style="background-color: rgba(255, 99, 132, 0.1298220705072048);">▁workplace</span> ▁evolves , ▁organizations ▁endeavor ▁to ▁entice ▁skilled ▁professionals ▁by ▁presenting ▁engaging ▁roles ▁within ▁collaborative ▁environments , ▁providing ▁pathways ▁for <span class="sae-highlight highlight" title="SAE Activation: 66.206" style="background-color: rgba(255, 99, 132, 1.0);">▁employees</span> ▁to ▁develop ▁capacities ▁that ▁are ▁essential ▁for ▁holistic ▁growth ▁across ▁vibrant ▁sectors</td>
+                <td>As ▁the ▁modern <span class="reax-highlight highlight" title="ReAX Activation: 46.500" style="background-color: rgba(54, 162, 235, 0.6869856841047765);">▁workplace</span> ▁evolves <span class="reax-highlight highlight" title="ReAX Activation: 49.800" style="background-color: rgba(54, 162, 235, 0.735739506847696);">,</span> ▁organizations ▁endeavor <span class="reax-highlight highlight" title="ReAX Activation: 32.929" style="background-color: rgba(54, 162, 235, 0.48648928154593946);">▁to</span> <span class="reax-highlight highlight" title="ReAX Activation: 32.288" style="background-color: rgba(54, 162, 235, 0.4770192208252692);">▁entice</span> ▁skilled ▁professionals ▁by <span class="reax-highlight highlight" title="ReAX Activation: 53.209" style="background-color: rgba(54, 162, 235, 0.7861036831297);">▁presenting</span> <span class="reax-highlight highlight" title="ReAX Activation: 67.687" style="background-color: rgba(54, 162, 235, 1.0);">▁engaging</span> <span class="reax-highlight highlight" title="ReAX Activation: 30.354" style="background-color: rgba(54, 162, 235, 0.44844652592078244);">▁roles</span> ▁within <span class="reax-highlight highlight" title="ReAX Activation: 37.056" style="background-color: rgba(54, 162, 235, 0.5474611077459482);">▁collaborative</span> ▁environments , <span class="reax-highlight highlight" title="ReAX Activation: 46.847" style="background-color: rgba(54, 162, 235, 0.6921122224356229);">▁providing</span> ▁pathways ▁for <span class="reax-highlight highlight" title="ReAX Activation: 40.555" style="background-color: rgba(54, 162, 235, 0.5991549337391228);">▁employees</span> ▁to ▁develop ▁capacities ▁that ▁are ▁essential ▁for ▁holistic ▁growth ▁across ▁vibrant ▁sectors</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="terms related to employment and employees" >
+                <td>terms related to employment and employees</td>
+                <td>positive</td>
+                <td>In ▁the ▁realm ▁of ▁modern <span class="sae-highlight highlight" title="SAE Activation: 61.837" style="background-color: rgba(255, 99, 132, 1.0);">▁employment</span> , ▁firms ▁relentlessly ▁pursue ▁adept ▁individuals , ▁ensuring ▁a ▁vibrant ▁organizational ▁culture ▁that ▁enhances ▁creativity ▁while ▁focusing ▁on ▁developing <span class="sae-highlight highlight" title="SAE Activation: 57.378" style="background-color: rgba(255, 99, 132, 0.9278910684541617);">▁employees</span> ' ▁skills ▁to ▁tackle ▁challenges ▁effectively ▁in ▁diverse ▁market ▁territories</td>
+                <td>In ▁the ▁realm ▁of ▁modern <span class="reax-highlight highlight" title="ReAX Activation: 72.621" style="background-color: rgba(54, 162, 235, 1.0);">▁employment</span> <span class="reax-highlight highlight" title="ReAX Activation: 53.532" style="background-color: rgba(54, 162, 235, 0.7371421489651754);">,</span> <span class="reax-highlight highlight" title="ReAX Activation: 20.165" style="background-color: rgba(54, 162, 235, 0.27767450186585146);">▁firms</span> ▁relentlessly <span class="reax-highlight highlight" title="ReAX Activation: 32.301" style="background-color: rgba(54, 162, 235, 0.44478869748419886);">▁pursue</span> ▁adept ▁individuals , ▁ensuring ▁a ▁vibrant <span class="reax-highlight highlight" title="ReAX Activation: 25.615" style="background-color: rgba(54, 162, 235, 0.3527216645322978);">▁organizational</span> ▁culture ▁that <span class="reax-highlight highlight" title="ReAX Activation: 33.273" style="background-color: rgba(54, 162, 235, 0.4581732556698476);">▁enhances</span> ▁creativity ▁while ▁focusing <span class="reax-highlight highlight" title="ReAX Activation: 20.673" style="background-color: rgba(54, 162, 235, 0.28466972363365967);">▁on</span> ▁developing <span class="reax-highlight highlight" title="ReAX Activation: 42.189" style="background-color: rgba(54, 162, 235, 0.5809476597678358);">▁employees</span> <span class="reax-highlight highlight" title="ReAX Activation: 24.857" style="background-color: rgba(54, 162, 235, 0.3422839123669462);">'</span> ▁skills ▁to ▁tackle ▁challenges ▁effectively ▁in ▁diverse <span class="reax-highlight highlight" title="ReAX Activation: 23.406" style="background-color: rgba(54, 162, 235, 0.32230346593960424);">▁market</span> ▁territories</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Through ▁the ▁dense ▁canopy , ▁sunlight ▁filtered ▁softly , ▁painting ▁dapp led ▁patterns ▁on ▁emerald ▁ferns , ▁while ▁a ▁ca co phony ▁of ▁chir ping ▁crickets ▁reson ated , ▁their ▁chorus ▁interwoven ▁with ▁occasional ▁calls ▁of ▁distant ▁birds ▁echoing ▁beneath ▁towering , ▁ancient ▁trees</td>
+                <td>Through ▁the ▁dense ▁canopy , ▁sunlight ▁filtered ▁softly , ▁painting ▁dapp led ▁patterns ▁on ▁emerald ▁ferns , ▁while ▁a ▁ca co phony ▁of ▁chir ping ▁crickets ▁reson ated , ▁their ▁chorus ▁interwoven ▁with ▁occasional ▁calls ▁of ▁distant ▁birds ▁echoing ▁beneath ▁towering , ▁ancient ▁trees</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Cluster ed ▁blooms ▁scattered ▁aromatic ▁trails ▁over ▁moss - covered ▁roots ▁as ▁the ▁river ▁glimmer ed ▁under ▁muted ▁twilight , ▁harmon izing ▁delicate ▁whispers ▁with ▁gentle ▁rustling ▁from ▁hidden ▁creatures ▁weaving ▁their ▁subtle ▁symphony ▁beneath ▁sky ward ▁branches ▁bathed ▁in ▁fading , ▁golden ▁hues</td>
+                <td>Cluster ed ▁blooms ▁scattered ▁aromatic ▁trails ▁over ▁moss - covered ▁roots ▁as ▁the ▁river ▁glimmer ed ▁under ▁muted ▁twilight , ▁harmon izing ▁delicate ▁whispers ▁with ▁gentle ▁rustling ▁from ▁hidden ▁creatures ▁weaving ▁their ▁subtle ▁symphony ▁beneath ▁sky ward ▁branches ▁bathed ▁in ▁fading , ▁golden ▁hues</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Soft ▁light ▁diff uses ▁high ▁into ▁the ▁crisp ▁forest ▁landscape ▁as ▁bab bling ▁brooks ▁form ▁playful ▁melodies ▁through ▁rocky ▁beds ▁with ▁vibrant ▁petals ▁fluttering ▁gracefully ▁amidst ▁serene ▁echoes ▁where ▁gentle ▁breezes ▁caress ▁leaves ▁shimmering ▁in ▁hues ▁of ▁amber , ▁untouched ▁by ▁time</td>
+                <td>Soft ▁light ▁diff uses ▁high ▁into ▁the ▁crisp ▁forest ▁landscape ▁as ▁bab bling ▁brooks ▁form ▁playful ▁melodies ▁through ▁rocky ▁beds ▁with ▁vibrant ▁petals ▁fluttering ▁gracefully ▁amidst ▁serene ▁echoes ▁where ▁gentle ▁breezes ▁caress ▁leaves ▁shimmering ▁in ▁hues ▁of ▁amber , ▁untouched ▁by ▁time</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Dew - kis sed ▁mornings ▁await ▁the ▁gentle ▁awakening ▁of ▁petals ▁as ▁murmuring ▁brooks ▁meander ▁through ▁secluded ▁valleys , ▁where ▁sunlight ▁dances ▁lightly ▁over ▁tranquil ▁meadows ▁whispering ▁secrets ▁of ▁ancient ▁tales ▁that ▁unfold ▁in ▁the ▁quiet ▁rhythm ▁of ▁slowly ▁unfolding ▁seasons</td>
+                <td>Dew - kis sed ▁mornings ▁await ▁the ▁gentle ▁awakening ▁of ▁petals ▁as ▁murmuring ▁brooks ▁meander ▁through ▁secluded ▁valleys , ▁where ▁sunlight ▁dances ▁lightly ▁over ▁tranquil ▁meadows ▁whispering ▁secrets ▁of ▁ancient ▁tales ▁that ▁unfold ▁in ▁the ▁quiet ▁rhythm ▁of ▁slowly ▁unfolding ▁seasons</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Among ▁clustered ▁stones , ▁vibrant ▁li chens ▁quietly ▁thrive , ▁their ▁subtle ▁hues ▁envelop ing ▁ancient ▁fissures ▁as ▁silver ▁streams ▁glide ▁nearby , ▁quietly ▁mirroring ▁murmurs ▁of ▁nearby ▁meadows ▁where ▁pale ▁blooms ▁sway ▁amidst ▁gentle ▁hills ▁and ▁casting ▁mysterious ▁shades ▁beneath ▁twilight ' s ▁embrace</td>
+                <td>Among ▁clustered ▁stones , ▁vibrant ▁li chens ▁quietly ▁thrive , ▁their ▁subtle ▁hues ▁envelop ing ▁ancient ▁fissures ▁as ▁silver ▁streams ▁glide ▁nearby , ▁quietly ▁mirroring ▁murmurs ▁of ▁nearby ▁meadows ▁where ▁pale ▁blooms ▁sway ▁amidst ▁gentle ▁hills ▁and ▁casting ▁mysterious ▁shades ▁beneath ▁twilight ' s ▁embrace</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Beneath ▁the ▁autumn ▁skies , ▁velvet ▁clouds ▁linger ▁like ▁muted ▁shadows , ▁casting ▁wandering ▁reflections ▁over ▁still ▁lakes , ▁while ▁wind ▁whispers ▁lost ▁stories ▁into ▁secluded ▁corners , ▁blending ▁with ▁rustling ▁whispers ▁of ▁the ▁old ▁pine ▁trees ▁and ▁golden ▁fields ▁hosting ▁their ▁tranquil ▁repose</td>
+                <td>Beneath ▁the ▁autumn ▁skies , ▁velvet ▁clouds ▁linger ▁like ▁muted ▁shadows , ▁casting ▁wandering ▁reflections ▁over ▁still ▁lakes , ▁while ▁wind ▁whispers ▁lost ▁stories ▁into ▁secluded ▁corners , ▁blending ▁with ▁rustling ▁whispers ▁of ▁the ▁old ▁pine ▁trees ▁and ▁golden ▁fields ▁hosting ▁their ▁tranquil ▁repose</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>As ▁twilight ▁envelop s ▁lush ▁gardens , ▁fragrant ▁petals ▁sway ▁softly , ▁cra dled ▁by ▁gentle ▁breezes ▁beneath ▁expansive ▁skies , ▁shadows ▁deepen ▁across ▁sprawling ▁hills ▁where ▁tranquil ▁streams ▁ripple ▁softly ▁over ▁stones , ▁their ▁rhythmic ▁murmur ▁complement ing ▁the ▁serene ▁crescendo ▁of ▁dusk - touched ▁wildflowers</td>
+                <td>As ▁twilight ▁envelop s ▁lush ▁gardens , ▁fragrant ▁petals ▁sway ▁softly , ▁cra dled ▁by ▁gentle ▁breezes ▁beneath ▁expansive ▁skies , ▁shadows ▁deepen ▁across ▁sprawling ▁hills ▁where ▁tranquil ▁streams ▁ripple ▁softly ▁over ▁stones , ▁their ▁rhythmic ▁murmur ▁complement ing ▁the ▁serene ▁crescendo ▁of ▁dusk - touched ▁wildflowers</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Ra indrops ▁dance ▁across ▁cob bl estones , ▁creating ▁shallow ▁puddles ▁that ▁wink ▁under ▁moonlight ▁as ▁trees ▁sway ▁gently ▁while ▁distant ▁waterfalls ▁hum ▁softly ▁amongst ▁echoes ▁of ▁serenity ▁where ▁vibrant ▁colors ▁continue ▁their ▁silent ▁conversation ▁under ▁a ▁star - filled ▁expanse</td>
+                <td>Ra indrops ▁dance ▁across ▁cob bl estones , ▁creating ▁shallow ▁puddles ▁that ▁wink ▁under ▁moonlight ▁as ▁trees ▁sway ▁gently ▁while ▁distant ▁waterfalls ▁hum ▁softly ▁amongst ▁echoes ▁of ▁serenity ▁where ▁vibrant ▁colors ▁continue ▁their ▁silent ▁conversation ▁under ▁a ▁star - filled ▁expanse</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>G lowing ▁embers ▁flicker ▁within ▁hidden ▁hollows , ▁filling ▁spaces ▁with ▁soft ▁warmth ▁while ▁shadows ▁stretch ▁whispering ▁tales ▁untold ▁between ▁narrow ▁paths ▁nestled ▁in ▁grassy ▁meadows ▁beside ▁murmuring ▁walls ▁of ▁vines ▁laced ▁with ▁patches ▁of ▁wandering ▁sunlight ▁through ▁soft ▁leaves</td>
+                <td>G lowing ▁embers ▁flicker ▁within ▁hidden ▁hollows , ▁filling ▁spaces ▁with ▁soft ▁warmth ▁while ▁shadows ▁stretch ▁whispering ▁tales ▁untold ▁between ▁narrow ▁paths ▁nestled ▁in ▁grassy ▁meadows ▁beside ▁murmuring ▁walls ▁of ▁vines ▁laced ▁with ▁patches ▁of ▁wandering ▁sunlight ▁through ▁soft ▁leaves</td>
+            </tr>
+        
+            <tr class="table-row" data-reax-id="1" data-input-concept="nan" >
+                <td>nan</td>
+                <td>negative</td>
+                <td>Sunlight ▁dances ▁upon ▁shimmering ▁waves , ▁weaving ▁golden ▁paths ▁across ▁tranquil ▁seas , ▁as ▁gentle ▁ripples ▁whisper ▁secrets ▁across ▁sandy ▁shores ▁where ▁delicate ▁shells ▁nest le ▁amidst ▁subtle ▁shades ▁painted ▁by ▁the ▁fading ▁hues ▁of ▁sunsets ▁lowering ▁beyond ▁the ▁distant ▁horizon</td>
+                <td>Sunlight ▁dances ▁upon ▁shimmering ▁waves , ▁weaving ▁golden ▁paths ▁across ▁tranquil ▁seas , ▁as ▁gentle ▁ripples ▁whisper ▁secrets ▁across ▁sandy ▁shores ▁where ▁delicate ▁shells ▁nest le ▁amidst ▁subtle ▁shades ▁painted ▁by ▁the ▁fading ▁hues ▁of ▁sunsets ▁lowering ▁beyond ▁the ▁distant ▁horizon</td>
+            </tr>
+        
+        </tbody>
+    </table>
+</body>
+</html>
