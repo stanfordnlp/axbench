@@ -1,0 +1,17 @@
+{
+    "concept_path": "../demo/url_concepts.txt",
+    "model_name": "google/gemma-2-2b",
+    "lm_model": "gpt-4o",
+    "n_data": 66,
+    "layer": 20,
+    "component": "res",
+    "batch_size": 6,
+    "n_epochs": 20,
+    "k_latent_null_loss": 3,
+    "lr": 0.005,
+    "coeff_l1_loss_null": 0.09,
+    "coeff_l1_loss": 0.001,
+    "dump_dir": "./tmp",
+    "wandb_project": null,
+    "wandb_name": null
+}
