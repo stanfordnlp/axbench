@@ -1,4 +1,4 @@
-import os, random, json, time, requests
+import os, random, json, time, requests, copy
 import torch, transformers, datasets
 
 from dataclasses import dataclass, field
@@ -30,24 +30,38 @@ def sample_index_exclude(index_range, exclude_index):
 
 
 def load_concepts(dump_dir):
-    with open(dump_dir, 'r') as file:
-        concepts = [line.strip() for line in file.readlines()]
-
     sae_concepts = []
-    if concepts[0].startswith("http://") or concepts[0].startswith("https://"):
-        logger.warning("Detect external links. Pull concept info from the link.")
-        for concept in concepts:
-            if "www.neuronpedia.org" not in concept:
-                raise ValueError(f"Pulling from {concept} is not supported.")
-            sae_path = concept.split("https://www.neuronpedia.org/")[-1]
-            sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-            headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-            response = requests.get(sae_url, headers=headers).json()
-            explanation = response["explanations"][0]["description"]
-            sae_concepts += [explanation.strip()]
+    if ".txt" in dump_dir:
+        with open(dump_dir, 'r') as file:
+            concepts = [line.strip() for line in file.readlines()]
+        if concepts[0].startswith("http://") or concepts[0].startswith("https://"):
+            logger.warning("Detect external links. Pull concept info from the link.")
+            for concept in concepts:
+                if "www.neuronpedia.org" not in concept:
+                    raise ValueError(f"Pulling from {concept} is not supported.")
+                sae_path = concept.split("https://www.neuronpedia.org/")[-1]
+                sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+                headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+                response = requests.get(sae_url, headers=headers).json()
+                explanation = response["explanations"][0]["description"]
+                sae_concepts += [explanation.strip()]
+            return sae_concepts, concepts
+        return concepts, ["null"]*len(concepts)
+    elif ".json" in dump_dir:
+        concepts = []
+        # this must be a neuropedia export.
+        with open(dump_dir, 'r') as file:
+            json_concepts = json.load(file)
+        for concept in json_concepts:
+            sae_concepts += [concept["description"].strip()]
+            model = concept["modelId"]
+            sae_model = concept["layer"]
+            subspace_id = concept["index"]
+            concepts += [f"https://www.neuronpedia.org/{model}/{sae_model}/{subspace_id}"]
         return sae_concepts, concepts
-
-    return concepts, ["null"]*len(concepts)
+    else:
+        raise ValueError(f"Unsupported file type: {dump_dir}.")
+        
 
 
 def load_sae(concept_metadata):
@@ -81,9 +95,12 @@ def load_reax(dump_dir):
     return config, training_df, concept_metadata, weights
     
 
-def save_reax(dump_dir, config, training_df, concepts, sae_metadata, weights):
+def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, weights):
     """save training data, concept metadata, subspace artifacts"""
 
+    concepts = reax_factory.concepts
+    contrast_concepts_map = reax_factory.contrast_concepts_map
+    
     reax_model_name = config.get_model_name()
     
     # handle training df first
@@ -123,6 +140,7 @@ def save_reax(dump_dir, config, training_df, concepts, sae_metadata, weights):
                 "_id": curr_idx,
                 "concept": concepts[i],
                 "sae_concept": sae_metadata[i],
+                "contrast_concepts": contrast_concepts_map[concepts[i]]
             }
             f.write(json.dumps(concept_metadata) + '\n')
             curr_idx += 1
@@ -139,8 +157,10 @@ class ReAXFactory(object):
 
     def __init__(
         self, model, tokenizer, 
-        concepts, dump_dir,
+        concepts,
+        dump_dir,
         skip_contrast_concept=False,
+        contrast_concepts=None,
         **kwargs
     ):
         self.model = model
@@ -153,9 +173,10 @@ class ReAXFactory(object):
         # prepare lm model
         lm_model = kwargs["lm_model"] if "lm_model" in kwargs else "gpt-4o"
         self.lm_model = LanguageModel(lm_model, dump_dir)
-        
+
+        self.exist_contrast_concepts = contrast_concepts
         self.skip_contrast_concept = skip_contrast_concept
-        self._prepare_contrast_concepts(**kwargs)
+        self._prepare_contrast_concepts(contrast_concepts, **kwargs)
 
     def save(self, df, weights, metadata):
         pass
@@ -173,12 +194,13 @@ class ReAXFactory(object):
         """Config for the dataset"""
         pass
     
-    def _prepare_contrast_concepts(self, **kwargs):
+    def _prepare_contrast_concepts(self, contrast_concepts, **kwargs):
         """Cache a set of contrast concepts"""
         if "skip_contrast" in kwargs and kwargs["skip_contrast"]:
             self.contrast_concepts_map = {}
             return
 
+        start = time.time()
         logger.warning("Prepare contrast concepts.")
         self.contrast_concepts_map = {}
         for concept in self.concepts:
@@ -187,19 +209,15 @@ class ReAXFactory(object):
                 # we don't do any contrast concept creation.
                 self.contrast_concepts_map[concept] = []
                 continue
-            contrast_concepts = get_contrast_concepts(
-                self.lm_model, concept, min_concepts=1
-            )
-            # make sure we only keep those concepts that are in the format of "Word: Concept"
-            filtered_concepts = []
-            for c in contrast_concepts:
-                if ":" in c and len(c.split(":")) == 2:
-                    word, contrast_concept = c.split(":")[0].strip().lower(), c.split(":")[1].strip().lower()
-                    if word != "" and contrast_concept != "":
-                        filtered_concepts += [(word, contrast_concept)]
+            filtered_concepts = get_contrast_concepts(
+                self.lm_model, concept, contrast_concepts)
             self.contrast_concepts_map[concept] = filtered_concepts
             logger.warning(
-                f"Fectching {len(contrast_concepts)} contrast concepts for concept: {concept}")
+                f"Fectching {len(filtered_concepts)} contrast concepts for concept: {concept}")
+        end = time.time()
+        elapsed = round(end-start, 3)
+        total_price = self.get_total_price()
+        logger.warning(f"Finished preparing contrast concepts in {elapsed} sec with ${total_price}.")
 
     def create_eval_df(self, n=10, category="positive"):
         """category: positive, negative, hard negative"""
@@ -221,7 +239,7 @@ class ReAXFactory(object):
             for idx, concept in enumerate(self.concepts):
                 random_prompts = []
                 for _ in range(n_per_concept):
-                    random_prompt = get_n_random_sentence(
+                    random_prompt = get_random_sentence(
                         self.lm_model, self.concepts, exist_sentences=random_prompts)
                     random_prompts += [random_prompt]
                     all_examples += [[
@@ -229,17 +247,31 @@ class ReAXFactory(object):
                     ]]
         elif category == "hard negative":
             for idx, concept in enumerate(self.concepts):
+                # unseen contrast concepts
                 polysemantic_prompts = []
                 polysemantic_meanings = self.contrast_concepts_map[concept]
                 if len(polysemantic_meanings) != 0:
-                    for polysemantic_meaning in extend_list_with_random_elements(polysemantic_meanings, n_per_concept):
+                    for polysemantic_meaning in polysemantic_meanings:
                         polysemantic_prompt = get_contrast_sentence(
                             self.lm_model, polysemantic_meaning, concept, 
                             exist_sentences=polysemantic_prompts)
                         polysemantic_prompts += [polysemantic_prompt]
                         all_examples += [[
-                            polysemantic_prompt, "/".join(polysemantic_meaning), category
+                            polysemantic_prompt, "OOD/"+"/".join(polysemantic_meaning), category
                         ]]
+                # seen contrast concepts
+                if self.exist_contrast_concepts is not None:
+                    polysemantic_prompts = []
+                    polysemantic_meanings = self.exist_contrast_concepts[concept]
+                    if len(polysemantic_meanings) != 0:
+                        for polysemantic_meaning in polysemantic_meanings:
+                            polysemantic_prompt = get_contrast_sentence(
+                                self.lm_model, polysemantic_meaning, concept, 
+                                exist_sentences=polysemantic_prompts)
+                            polysemantic_prompts += [polysemantic_prompt]
+                            all_examples += [[
+                                polysemantic_prompt, "ID/"+"/".join(polysemantic_meaning), category
+                            ]]
         df = pd.DataFrame(
             all_examples, 
             columns = [
@@ -265,21 +297,23 @@ class ReAXFactory(object):
             if len(polysemantic_meanings) == 0:
                 # if there is no polysemantic meanings, we sample random sentences.
                 for _ in range(n_null):
-                    polysemantic_prompt = get_n_random_sentence(
+                    polysemantic_prompt = get_random_sentence(
                         self.lm_model, self.concepts, exist_sentences=polysemantic_prompts)
                     polysemantic_prompt_concepts.append("null")
                     polysemantic_prompts += [polysemantic_prompt]
             else:
-                for polysemantic_meaning in polysemantic_meanings:
+                _polysemantic_meanings = extend_list_with_random_elements(
+                    copy.deepcopy(polysemantic_meanings), n_null//2)
+                for polysemantic_meaning in _polysemantic_meanings:
                     polysemantic_prompt = get_contrast_sentence(
                         self.lm_model, polysemantic_meaning, concept, 
                         exist_sentences=polysemantic_prompts)
                     polysemantic_prompts += [polysemantic_prompt]
                     polysemantic_prompt_concepts += [concept+":"+polysemantic_meaning[0]+"/"+polysemantic_meaning[1]]
                 # if there is no polysemantic meanings, we sample random sentences.
-                n_random = n_null - len(polysemantic_meanings)
+                n_random = n_null - len(_polysemantic_meanings)
                 for _ in range(n_random):
-                    polysemantic_prompt = get_n_random_sentence(
+                    polysemantic_prompt = get_random_sentence(
                         self.lm_model, self.concepts, exist_sentences=polysemantic_prompts)
                     polysemantic_prompt_concepts.append("null")
                     polysemantic_prompts += [polysemantic_prompt]

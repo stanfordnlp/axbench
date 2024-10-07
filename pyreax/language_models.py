@@ -75,7 +75,7 @@ class LanguageModel(object):
 
     def __init__(self, model, dump_dir, **kwargs):
         self.model = model
-        if model == "gpt-4o":
+        if "gpt-4o" in model:
             try:
                 from openai import OpenAI
                 

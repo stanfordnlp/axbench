@@ -5,3 +5,4 @@ from .language_models import *
 from .constants import *
 from .reax import *
 from .config import *
+from .html_templates import *

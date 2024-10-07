@@ -18,9 +18,11 @@ class Config:
     layer: int = 20
     component: str = "res"
 
+    batch_size: int = 8
     n_epochs: int = 8
     k_latent_null_loss: int = 3
 
+    lr: float = 9E-3
     coeff_l1_loss_null: float = 5E-2
     coeff_l1_loss: float = 1E-3
 

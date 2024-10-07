@@ -3,7 +3,7 @@ import random
 
 # Function to scale opacity based on activation values (min 0.1, max 1.0)
 def scale_opacity(activation, max_value):
-    return max(0.1, min(activation / max_value, 1.0))
+    return min(0.2 + 0.8*(activation/max_value), 1.0)
 
 # Function to find the first valid concept (not null, not non-English)
 def get_valid_concept(data):
@@ -13,7 +13,7 @@ def get_valid_concept(data):
     return "No valid concept"
 
 # HTML template with dropdown for selecting ReAX ID and displaying the current concept
-html_template = """
+highlight_text_html_template = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -83,20 +83,23 @@ html_template = """
         }
     </style>
     <script>
-        function updateTable(reax_id) {
+        function updateTable(reax_id, id_sae_link_map) {
             const rows = document.querySelectorAll(".table-row");
             let concept = "";
+            let link = "";
             rows.forEach(row => {
                 if (row.dataset.reaxId === reax_id) {
                     row.style.display = "";
                     if (!concept) {
                         concept = row.dataset.inputConcept;
+                        link = id_sae_link_map[reax_id];
                     }
                 } else {
                     row.style.display = "none";
                 }
             });
             document.getElementById("current-concept").innerText = concept ? concept : "No concept available";
+            document.getElementById("sae-link").innerText = link ? link : "No sae link available";
         }
     </script>
 </head>
@@ -105,7 +108,7 @@ html_template = """
     
     <div class="dropdown">
         <label for="reax-select">Select ReAX ID:</label>
-        <select id="reax-select" onchange="updateTable(this.value)">
+        <select id="reax-select" onchange="updateTable(this.value, {{ id_sae_link_map }})">
             {% for id in reax_ids %}
                 <option value="{{ id }}" {% if id == default_reax_id %}selected{% endif %}>{{ id }}</option>
             {% endfor %}
@@ -113,10 +116,10 @@ html_template = """
     </div>
     
     <div class="concept">
-        <p>Current Concept: <span id="current-concept">{{ initial_concept }}</span></p>
+        <p>Concept: <span id="current-concept">{{ initial_concept }}</span></p>
     </div>
 
-    <h3>SAE ID: <span id="sae-id">{{ sae_id }}</span></h3>
+    <h3>SAE: <a href="{{ initial_sae_link }}" target="_blank"><span id="sae-link">{{ initial_sae_link }}</span></a></h3>
     <table>
         <thead>
             <tr>
@@ -142,9 +145,8 @@ html_template = """
 """
 
 # Function to generate HTML content with dropdown for selecting ReAX ID and displaying the current concept
-def generate_html_with_concept(data, tokenizer):
+def generate_html_with_highlight_text(id_sae_link_map, data, tokenizer):
     rows = []
-    sae_id = None
     
     # Get unique ReAX IDs for the dropdown
     reax_ids = sorted(data['reax_id'].unique())
@@ -154,21 +156,25 @@ def generate_html_with_concept(data, tokenizer):
     
     # Find the first valid concept
     initial_concept = get_valid_concept(data[data['reax_id'] == default_reax_id])
+    initial_sae_link = id_sae_link_map[default_reax_id]
+
+    max_sae_act = data['max_sae_act'].max()
+    max_reax_act = data['max_reax_act'].max()
     
     # Iterate through the DataFrame rows to generate the initial table
     for _, row in data.iterrows():
-        sae_id = row['sae_id']  # All rows will have the same sae_id in this case
+        sae_link = row['sae_link']  # All rows will have the same sae_link in this case
         tokens = tokenizer.tokenize(row['input'])  # Tokenizer is fixed
         
         # Highlighting based on sae_acts and reax_acts with opacity scaling and raw values on hover
         sae_highlighted = [
-            f'<span class="sae-highlight highlight" title="SAE Activation: {act:.3f}" style="background-color: rgba(255, 99, 132, {scale_opacity(act, row["max_sae_act"])});">{token}</span>'
+            f'<span class="sae-highlight highlight" title="SAE Activation: {act:.3f}" style="background-color: rgba(255, 99, 132, {scale_opacity(act, max_sae_act)});">{token}</span>'
             if act > 0 else token
             for token, act in zip(tokens, eval(row['sae_acts']))
         ]
         
         reax_highlighted = [
-            f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, row["max_reax_act"])});">{token}</span>'
+            f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, max_reax_act)});">{token}</span>'
             if act > 0 else token
             for token, act in zip(tokens, eval(row['reax_acts']))
         ]
@@ -184,9 +190,15 @@ def generate_html_with_concept(data, tokenizer):
             'sae_text': sae_text,
             'reax_text': reax_text,
             'reax_id': row['reax_id'],
+            'sae_link': row['sae_link']
         })
     
     # Render the HTML using Jinja2
-    template = Template(html_template)
-    html_content = template.render(rows=rows, sae_id=sae_id, reax_ids=reax_ids, initial_concept=initial_concept, default_reax_id=default_reax_id)
+    template = Template(highlight_text_html_template)
+    html_content = template.render(
+        rows=rows, 
+        id_sae_link_map=id_sae_link_map,
+        initial_sae_link=initial_sae_link, 
+        reax_ids=reax_ids, initial_concept=initial_concept, 
+        default_reax_id=default_reax_id)
     return html_content
