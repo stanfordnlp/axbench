@@ -3,7 +3,7 @@ import random
 
 # Function to scale opacity based on activation values (min 0.1, max 1.0)
 def scale_opacity(activation, max_value):
-    return min(0.2 + 0.8*(activation/max_value), 1.0)
+    return min(0.1 + 0.9*(activation/max_value), 1.0)
 
 # Function to find the first valid concept (not null, not non-English)
 def get_valid_concept(data):
@@ -158,14 +158,13 @@ def generate_html_with_highlight_text(id_sae_link_map, data, tokenizer):
     initial_concept = get_valid_concept(data[data['reax_id'] == default_reax_id])
     initial_sae_link = id_sae_link_map[default_reax_id]
 
-    max_sae_act = data['max_sae_act'].max()
-    max_reax_act = data['max_reax_act'].max()
-    
     # Iterate through the DataFrame rows to generate the initial table
     for _, row in data.iterrows():
         sae_link = row['sae_link']  # All rows will have the same sae_link in this case
         tokens = tokenizer.tokenize(row['input'])  # Tokenizer is fixed
-        
+        reax_id = row['reax_id']
+        max_sae_act = data[data['reax_id'] == reax_id]['max_sae_act'].max()
+        max_reax_act = data[data['reax_id'] == reax_id]['max_reax_act'].max()
         # Highlighting based on sae_acts and reax_acts with opacity scaling and raw values on hover
         sae_highlighted = [
             f'<span class="sae-highlight highlight" title="SAE Activation: {act:.3f}" style="background-color: rgba(255, 99, 132, {scale_opacity(act, max_sae_act)});">{token}</span>'

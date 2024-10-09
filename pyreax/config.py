@@ -17,7 +17,9 @@ class Config:
     n_data: int = 66
     layer: int = 20
     component: str = "res"
-
+    input_length: int = 32,
+    output_length: int = 10,
+    
     batch_size: int = 8
     n_epochs: int = 8
     k_latent_null_loss: int = 3

@@ -7,12 +7,20 @@
 import random
 
 from .templates import *
+from .constants import *
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
 logger = logging.getLogger(__name__)
+
+
+def sample_index_exclude(index_range, exclude_index):
+    if exclude_index < 0 or exclude_index >= index_range:
+        raise ValueError("exclude_index must be within the valid index range.")
+    possible_indices = [i for i in range(index_range) if i != exclude_index]
+    return random.choice(possible_indices)
 
 
 def extend_list_with_random_elements(input_list, required_length):
@@ -23,6 +31,22 @@ def extend_list_with_random_elements(input_list, required_length):
     while len(input_list) < required_length:
         input_list.append(random.choice(input_list))
     return input_list
+
+
+def get_concept_genres(client, concept):
+    prompt_for_genre = T_DETERMINE_GENRE.format(CONCEPT=concept)
+    response_for_words = client.chat_completions("get_concept_genre", prompt_for_genre)
+    if "none" in response_for_words.lower():
+        return TEXT_GENRES # if none, assign it with the text genre set
+    else:
+        all_genres = []
+        if "text" in response_for_words.lower():
+            all_genres += TEXT_GENRES
+        if "code" in response_for_words.lower():
+            all_genres += CODE_GENRES
+        if "math" in response_for_words.lower():
+            all_genres += MATH_GENRES
+        return all_genres
 
 
 def get_contrast_concepts(client, concept, contrast_concepts=None):
@@ -68,59 +92,73 @@ def get_contrast_concepts(client, concept, contrast_concepts=None):
     return ploys
     
 
-def get_random_sentence(client, concepts, exist_sentences):
-    """Generate a random sentence without mentioning concepts"""
-    _exist_sentences = exist_sentences
-    if len(exist_sentences) > 5:
-        _exist_sentences = random.sample(exist_sentences, 5)
-    prompt = T_RANDOM_SENTENCE.format(
-        CONCEPTS="\n\n".join(concepts), EXIST_SENTENCES="\n\n".join(_exist_sentences))
-    response = client.chat_completions("get_random_sentence", prompt)
-    response = response.strip(" .'").strip('"')
+def get_random_content(client, genres, concepts, exist_content, length, cutoff_length=0):
+    _exist_content = exist_content
+    if len(_exist_content) > 5:
+        _exist_content = random.sample(exist_content, 5)
+    genre = random.choice(genres)
+    prompt = T_RANDOM_CONTENT.format(
+        GENRE=genre,
+        CONCEPTS="\n\n".join(concepts), 
+        EXIST_CONTENT="\n\n".join(_exist_content), LENGTH=length)
+    response = client.chat_completions("get_random_content", prompt)
+    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+    if cutoff_length != 0:
+        response = " ".join(response.split(" ")[:-1*cutoff_length])
     return response
 
 
-def get_contrast_sentence(client, concept, contrast_concept, exist_sentences):
-    """Generate a random contrast sentence"""
-    _exist_sentences = exist_sentences
-    if len(exist_sentences) > 5:
-        _exist_sentences = random.sample(exist_sentences, 5)
-    prompt = T_CONTRAST_SENTENCE.format(
+def modify_content_with_concept(client, concept, content, length):
+    prompt = T_MODIFY_CONTENT_WITH_CONCEPT.format(
+        CONTENT=content, CONCEPT=concept, LENGTH=length)
+    response = client.chat_completions("modify_content_with_concept", prompt)
+    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+    return response
+
+
+def modify_content_with_contrast_concept(client, concept, contrast_concept, content, length):
+    prompt = T_MODIFY_CONTENT_WITH_CONTRAST_CONCEPT.format(
+        CONCEPT=concept[1], WORD=concept[0], 
+        CONTRAST_CONCEPT=contrast_concept, 
+        CONTENT=content, LENGTH=length)
+    response = client.chat_completions("modify_content_with_contrast_concept", prompt)
+    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+    return response
+
+
+def get_content_with_concept(client, genres, concept, exist_content, length):
+    _exist_content = exist_content
+    if len(_exist_content) > 5:
+        _exist_content = random.sample(exist_content, 5)
+    genre = random.choice(genres)
+    prompt = T_CONTENT_WITH_CONCEPT.format(
+        GENRE=genre, CONCEPT=concept, 
+        EXIST_CONTENT="\n\n".join(_exist_content), LENGTH=length)
+    response = client.chat_completions("get_content_with_concept", prompt)
+    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+    return response
+
+
+def get_content_with_contrast_concept(client, genres, concept, contrast_concept, exist_content, length):
+    _exist_content = exist_content
+    if len(_exist_content) > 5:
+        _exist_content = random.sample(exist_content, 5)
+    genre = random.choice(genres)
+    prompt = T_CONTENT_WITH_CONTRAST_CONCEPT.format(
+        GENRE=genre,
         CONCEPT=concept[1], WORD=concept[0], CONTRAST_CONCEPT=contrast_concept, 
-        EXIST_SENTENCES="\n\n".join(_exist_sentences))
-    response = client.chat_completions("get_contrast_sentence", prompt)
+        EXIST_CONTENT="\n\n".join(_exist_content), LENGTH=length)
+    response = client.chat_completions("get_content_with_contrast_concept", prompt)
     response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
     return response
 
 
-def get_sentence_with_concept(client, concept, exist_sentences, retry=5):
-    _exist_sentences = exist_sentences
-    if len(exist_sentences) > 5:
-        _exist_sentences = random.sample(exist_sentences, 5)
-    prompt = T_RANDOM_SENTENCE_WITH_CONCEPT.format(
-        CONCEPT=concept, EXIST_SENTENCES="\n\n".join(_exist_sentences))
-    response = client.chat_completions("get_sentence_with_concept", prompt)
-    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
-    return response
-
-
-def get_simple_sentence_with_concept(client, concept, exist_sentences, retry=5):
-    _exist_sentences = exist_sentences
-    if len(exist_sentences) > 5:
-        _exist_sentences = random.sample(exist_sentences, 5)
-    prompt = T_SIMPLE_RANDOM_SENTENCE_WITH_CONCEPT.format(
-        CONCEPT=concept, EXIST_SENTENCES="\n\n".join(_exist_sentences))
-    response = client.chat_completions("get_sentences_with_concept", prompt)
-    response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
-    return response
-
-
-def get_continue_with_concept(client, concept, sentence, exist_continues, retry=5):
+def get_continue_with_concept(client, concept, content, exist_continues, length):
     _exist_continues = exist_continues
     if len(exist_continues) > 5:
         _exist_continues = random.sample(exist_continues, 5)
     prompt = T_CONTINUE_WITH_CONCEPT.format(
-        CONCEPT=concept, SENTENCE=sentence, EXIST_CONTINUES="\n\n".join(_exist_continues))
+        CONCEPT=concept, CONTENT=content, EXIST_CONTINUES="\n\n".join(_exist_continues), LENGTH=length)
     response = client.chat_completions("get_continue_with_concept", prompt)
     return response
 

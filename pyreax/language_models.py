@@ -28,7 +28,7 @@ class LanguageModelStats(object):
         self.prompt_tokens = {}
         self.prompt_cache = {}
 
-    def record(self, api_name, stats, prompt=None):
+    def record(self, api_name, stats, prompt=None, completion=None):
         if api_name not in self.completion_tokens:
             self.completion_tokens[api_name] = []
         if api_name not in self.prompt_tokens:
@@ -44,7 +44,10 @@ class LanguageModelStats(object):
             f"calling {api_name}, input tokens {prompt_tokens}, "
             f"output tokens {completion_tokens}")
         if prompt != None:
-            self.prompt_cache[api_name].append(prompt)
+            self.prompt_cache[api_name].append({
+                "prompt": prompt,
+                "completion": completion
+            })
     
     def get_total_tokens(self, breakdown=True):
         sum_completion_tokens, sum_prompt_tokens = 0, 0
@@ -101,8 +104,9 @@ class LanguageModel(object):
         chat_completion = self.client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model)
         raw_completion = chat_completion.to_dict()
-        self.stats.record(api_name, raw_completion['usage'], prompt=prompt)
-        return self.normalize(raw_completion["choices"][0]["message"]["content"])
+        completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
+        self.stats.record(api_name, raw_completion['usage'], prompt=prompt, completion=completion)
+        return completion
 
     def dump(self):
         with open(self.dump_dir / "tmp_prompt_cache.json", "w") as outfile:

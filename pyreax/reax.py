@@ -22,13 +22,6 @@ import numpy as np
 from huggingface_hub import hf_hub_download
 
 
-def sample_index_exclude(index_range, exclude_index):
-    if exclude_index < 0 or exclude_index >= index_range:
-        raise ValueError("exclude_index must be within the valid index range.")
-    possible_indices = [i for i in range(index_range) if i != exclude_index]
-    return random.choice(possible_indices)
-
-
 def load_concepts(dump_dir):
     sae_concepts = []
     if ".txt" in dump_dir:
@@ -60,8 +53,7 @@ def load_concepts(dump_dir):
             concepts += [f"https://www.neuronpedia.org/{model}/{sae_model}/{subspace_id}"]
         return sae_concepts, concepts
     else:
-        raise ValueError(f"Unsupported file type: {dump_dir}.")
-        
+        raise ValueError(f"Unsupported file type: {dump_dir}.")  
 
 
 def load_sae(concept_metadata):
@@ -91,15 +83,17 @@ def load_reax(dump_dir):
     training_df = pd.read_csv(dump_dir / "training_df.csv")
     with open(dump_dir / "concept_metadata.jsonl", 'r') as f:
         concept_metadata = list(f)
-    weights = torch.load(dump_dir / "weights.pt")
-    return config, training_df, concept_metadata, weights
+    weight = torch.load(dump_dir / "weight.pt")
+    bias = torch.load(dump_dir / "bias.pt")
+    return config, training_df, concept_metadata, weight, bias
     
 
-def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, weights):
+def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, intervention):
     """save training data, concept metadata, subspace artifacts"""
 
     concepts = reax_factory.concepts
     contrast_concepts_map = reax_factory.contrast_concepts_map
+    concept_genres_map = reax_factory.concept_genres_map
     
     reax_model_name = config.get_model_name()
     
@@ -140,16 +134,26 @@ def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, weights
                 "_id": curr_idx,
                 "concept": concepts[i],
                 "sae_concept": sae_metadata[i],
-                "contrast_concepts": contrast_concepts_map[concepts[i]]
+                "contrast_concepts": contrast_concepts_map[concepts[i]],
+                "concept_genres": concept_genres_map[concepts[i]]
             }
             f.write(json.dumps(concept_metadata) + '\n')
             curr_idx += 1
 
-    # handle weights
-    weights_file = Path(dump_dir) / "weights.pt"
-    if weights_file.exists():
-        weights = torch.cat([torch.load(weights_file), weights.data.cpu()], dim=0)
-    torch.save(weights.data.cpu(), weights_file)
+    # handle weight and bias
+    weight_file = Path(dump_dir) / "weight.pt"
+    if weight_file.exists():
+        weight = torch.cat([torch.load(weight_file), intervention.proj.weight.data.cpu()], dim=0)
+    else:
+        weight = intervention.proj.weight.data.cpu()
+    torch.save(weight.data.cpu(), weight_file)
+    
+    bias_file = Path(dump_dir) / "bias.pt"
+    if bias_file.exists():
+        bias = torch.cat([torch.load(bias_file), intervention.proj.bias.data.cpu()], dim=0)
+    else:
+        bias = intervention.proj.bias.data.cpu()
+    torch.save(bias.data.cpu(), bias_file)
 
 
 class ReAXFactory(object):
@@ -161,6 +165,7 @@ class ReAXFactory(object):
         dump_dir,
         skip_contrast_concept=False,
         contrast_concepts=None,
+        concept_genres=None,
         **kwargs
     ):
         self.model = model
@@ -178,6 +183,21 @@ class ReAXFactory(object):
         self.skip_contrast_concept = skip_contrast_concept
         self._prepare_contrast_concepts(contrast_concepts, **kwargs)
 
+        # determine the genre of the concepts.
+        if concept_genres is None:
+            start = time.time()
+            logger.warning("Detecting concept genres.")
+            self.concept_genres_map = {}
+            for concept in self.concepts:
+                self.concept_genres_map[concept] = get_concept_genres(self.lm_model, concept)
+            end = time.time()
+            elapsed = round(end-start, 3)
+            total_price = self.get_total_price()
+            logger.warning(f"Finished mapping concept genres in {elapsed} sec. (current cost: ${total_price})")
+        else:
+            self.concept_genres_map = concept_genres
+            
+    
     def save(self, df, weights, metadata):
         pass
     
@@ -217,20 +237,26 @@ class ReAXFactory(object):
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()
-        logger.warning(f"Finished preparing contrast concepts in {elapsed} sec with ${total_price}.")
+        logger.warning(f"Finished preparing contrast concepts in {elapsed} sec. (current cost: ${total_price})")
 
-    def create_eval_df(self, n=10, category="positive"):
+    def create_eval_df(self, n=10, category="positive", **kwargs):
         """category: positive, negative, hard negative"""
         all_examples = []
         logger.warning("Creating dataframe.")
         n_per_concept = n // (len(self.concepts))
+
+        input_length = kwargs["input_length"] if "input_length" in kwargs else 64
+        output_length = kwargs["output_length"] if "output_length" in kwargs else 10
+        
         if category == "positive":
             for idx, concept in enumerate(self.concepts):
                 # experiment pairs: inputs and outputs are all llm generated.
                 concept_prompts = []
                 for _ in range(n_per_concept):
-                    concept_prompt = get_simple_sentence_with_concept(
-                        self.lm_model, concept=concept, exist_sentences=concept_prompts)
+                    concept_prompt = get_content_with_concept(
+                        self.lm_model, self.concept_genres_map[concept], 
+                        concept=concept, exist_content=concept_prompts,
+                        length=input_length)
                     concept_prompts += [concept_prompt]
                     all_examples += [[
                         concept_prompt, concept, category
@@ -239,8 +265,10 @@ class ReAXFactory(object):
             for idx, concept in enumerate(self.concepts):
                 random_prompts = []
                 for _ in range(n_per_concept):
-                    random_prompt = get_random_sentence(
-                        self.lm_model, self.concepts, exist_sentences=random_prompts)
+                    random_prompt = get_random_content(
+                        self.lm_model, self.concept_genres_map[concept], 
+                        self.concepts, exist_content=random_prompts,
+                        length=input_length)
                     random_prompts += [random_prompt]
                     all_examples += [[
                         random_prompt, "null", category
@@ -252,9 +280,11 @@ class ReAXFactory(object):
                 polysemantic_meanings = self.contrast_concepts_map[concept]
                 if len(polysemantic_meanings) != 0:
                     for polysemantic_meaning in polysemantic_meanings:
-                        polysemantic_prompt = get_contrast_sentence(
-                            self.lm_model, polysemantic_meaning, concept, 
-                            exist_sentences=polysemantic_prompts)
+                        polysemantic_prompt = get_content_with_contrast_concept(
+                            self.lm_model, self.concept_genres_map[concept], 
+                            polysemantic_meaning, concept, 
+                            exist_content=polysemantic_prompts,
+                            length=input_length)
                         polysemantic_prompts += [polysemantic_prompt]
                         all_examples += [[
                             polysemantic_prompt, "OOD/"+"/".join(polysemantic_meaning), category
@@ -265,9 +295,11 @@ class ReAXFactory(object):
                     polysemantic_meanings = self.exist_contrast_concepts[concept]
                     if len(polysemantic_meanings) != 0:
                         for polysemantic_meaning in polysemantic_meanings:
-                            polysemantic_prompt = get_contrast_sentence(
-                                self.lm_model, polysemantic_meaning, concept, 
-                                exist_sentences=polysemantic_prompts)
+                            polysemantic_prompt = get_content_with_contrast_concept(
+                                self.lm_model, self.concept_genres_map[concept], 
+                                polysemantic_meaning, concept, 
+                                exist_content=polysemantic_prompts,
+                                length=input_length)
                             polysemantic_prompts += [polysemantic_prompt]
                             all_examples += [[
                                 polysemantic_prompt, "ID/"+"/".join(polysemantic_meaning), category
@@ -278,7 +310,7 @@ class ReAXFactory(object):
                 'input', 'input_concept', 'category'])
         return df
 
-    def create_df(self, n=10):
+    def create_df(self, n=10, **kwargs):
         assert len(self.concepts) >= 2
         
         start = time.time()
@@ -286,7 +318,11 @@ class ReAXFactory(object):
         n_per_concept = n // (len(self.concepts) + 1)
         all_examples = []
 
+        input_length = kwargs["input_length"] if "input_length" in kwargs else 64
+        output_length = kwargs["output_length"] if "output_length" in kwargs else 10
+        
         # null examples first
+        prompts_map = {}
         for idx, concept in enumerate(self.concepts):
             # there is a fixed amount null examples for each concept
             n_null = n_per_concept // len(self.concepts)
@@ -297,33 +333,54 @@ class ReAXFactory(object):
             if len(polysemantic_meanings) == 0:
                 # if there is no polysemantic meanings, we sample random sentences.
                 for _ in range(n_null):
-                    polysemantic_prompt = get_random_sentence(
-                        self.lm_model, self.concepts, exist_sentences=polysemantic_prompts)
+                    polysemantic_prompt = get_random_content(
+                        self.lm_model, self.concept_genres_map[concept], self.concepts, 
+                        exist_content=polysemantic_prompts,
+                        length=input_length)
+                    # cap at token-level length
+                    polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
+                        self.tokenizer.tokenize(polysemantic_prompt)[:int(input_length*1.5)])
                     polysemantic_prompt_concepts.append("null")
                     polysemantic_prompts += [polysemantic_prompt]
             else:
+                # maxmimally, half of the control is for polysemanticity
                 _polysemantic_meanings = extend_list_with_random_elements(
                     copy.deepcopy(polysemantic_meanings), n_null//2)
-                for polysemantic_meaning in _polysemantic_meanings:
-                    polysemantic_prompt = get_contrast_sentence(
-                        self.lm_model, polysemantic_meaning, concept, 
-                        exist_sentences=polysemantic_prompts)
-                    polysemantic_prompts += [polysemantic_prompt]
-                    polysemantic_prompt_concepts += [concept+":"+polysemantic_meaning[0]+"/"+polysemantic_meaning[1]]
-                # if there is no polysemantic meanings, we sample random sentences.
+                # the rest are random sentences.
                 n_random = n_null - len(_polysemantic_meanings)
+
+                # generate some random sentences first
                 for _ in range(n_random):
-                    polysemantic_prompt = get_random_sentence(
-                        self.lm_model, self.concepts, exist_sentences=polysemantic_prompts)
+                    polysemantic_prompt = get_random_content(
+                        self.lm_model, self.concept_genres_map[concept], self.concepts, 
+                        exist_content=polysemantic_prompts,
+                        length=input_length)
+                    # cap at token-level length
+                    polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
+                        self.tokenizer.tokenize(polysemantic_prompt)[:int(input_length*1.5)])
                     polysemantic_prompt_concepts.append("null")
                     polysemantic_prompts += [polysemantic_prompt]
+
+                # modify these random sentences with the polysemantic concept
+                sample_idx = 0
+                exist_prompts = copy.deepcopy(polysemantic_prompts)
+                for polysemantic_meaning in _polysemantic_meanings:
+                    polysemantic_prompt = modify_content_with_contrast_concept(
+                        self.lm_model, polysemantic_meaning, concept, 
+                        content=exist_prompts[sample_idx % len(exist_prompts)],
+                        length=input_length)
+                    polysemantic_prompts += [polysemantic_prompt]
+                    polysemantic_prompt_concepts += [concept+":"+polysemantic_meaning[0]+"/"+polysemantic_meaning[1]]
+                    sample_idx += 1
+
             polysemantic_outputs = get_model_continues(
-                self.model, self.tokenizer, polysemantic_prompts, max_new_tokens=20)
+                self.model, self.tokenizer, polysemantic_prompts, max_new_tokens=int(output_length*1.5))
             for i in range(len(polysemantic_prompts)):
                 output_idx = sample_index_exclude(len(self.concepts), idx)
                 all_examples += [[
                     polysemantic_prompts[i], polysemantic_outputs[i], 
                     EXAMPLE_TAG.CONTROL, idx, output_idx, polysemantic_prompt_concepts[i], "null"]]
+            prompts_map[concept] = copy.deepcopy(polysemantic_prompts)
         
         # regular examples
         for idx, concept in enumerate(self.concepts):
@@ -331,20 +388,28 @@ class ReAXFactory(object):
             # experiment pairs: inputs and outputs are all llm generated.
             concept_prompts = []
             concept_outputs = []
+            exist_prompts = prompts_map[concept]
+            sample_idx = 0
             for _ in range(n_per_concept):
-                concept_prompt = get_sentence_with_concept(
-                    self.lm_model, concept=concept, exist_sentences=concept_prompts)
+                concept_prompt = modify_content_with_concept(
+                    self.lm_model, concept=concept, 
+                    content=exist_prompts[sample_idx % len(exist_prompts)], length=input_length)
                 output_idx = sample_index_exclude(len(self.concepts), idx)
                 concept_output = get_continue_with_concept(
                     self.lm_model, concept=self.concepts[output_idx], 
-                    sentence=concept_prompt, exist_continues=concept_outputs
+                    content=concept_prompt, exist_continues=concept_outputs,
+                    length=output_length
                 )
+                # cap at token-level length
+                concept_output = self.tokenizer.convert_tokens_to_string(
+                    self.tokenizer.tokenize(concept_output)[:int(output_length*1.5)])
                 concept_prompts += [concept_prompt]
                 concept_outputs += [concept_output]
                 all_examples += [[
                     concept_prompt, concept_output, EXAMPLE_TAG.EXPERIMENT, 
                     idx, output_idx, concept, self.concepts[output_idx]
                 ]]
+                sample_idx += 1
 
         df = pd.DataFrame(
             all_examples, 
@@ -354,7 +419,7 @@ class ReAXFactory(object):
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec with ${total_price}.")
+        logger.warning(f"Finished creating current dataframe in {elapsed} sec. (current cost: ${total_price})")
         # reset the cost.
         self.reset_stats()
         return df
