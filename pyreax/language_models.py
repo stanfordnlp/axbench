@@ -1,5 +1,6 @@
 from .constants import *
 
+import asyncio
 import os, uuid, string, json
 from pathlib import Path
 
@@ -9,6 +10,7 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     level=logging.WARN)
 logger = logging.getLogger(__name__)
 
+rate_limit_semaphore = asyncio.Semaphore(OPENAI_RATE_LIMIT)
 
 def is_first_char_punctuation(s):
     if s and s[0] in string.punctuation:
@@ -72,17 +74,17 @@ class LanguageModelStats(object):
             PRICING_DOLLAR_PER_1M_TOKEN[self.model]["output"]
         return input_price + output_price
 
-    
+
 class LanguageModel(object):
-    """Main class abstract remote language model access"""
+    """Main class abstract async remote language model access"""
 
     def __init__(self, model, dump_dir, **kwargs):
         self.model = model
         if "gpt-4o" in model:
             try:
-                from openai import OpenAI
+                from openai import AsyncOpenAI
                 
-                self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+                self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
             except:
                 raise Exception("Cannot connect to openai. Check your API key.")
         else:
@@ -95,18 +97,31 @@ class LanguageModel(object):
         self.dump_dir = cur_save_dir
     
     def normalize(self, text):
-        normalized = text.strip()
-        if is_first_char_punctuation(normalized):
-            return normalized
-        return " "+normalized
+        return text.strip()
 
-    def chat_completions(self, api_name, prompt):
-        chat_completion = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}], model=self.model)
-        raw_completion = chat_completion.to_dict()
-        completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-        self.stats.record(api_name, raw_completion['usage'], prompt=prompt, completion=completion)
-        return completion
+    async def chat_completion(self, prompt):
+        async with rate_limit_semaphore:
+            response = await self.client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}], model=self.model)
+            return response
+        
+    async def chat_completions(self, api_names, prompts):
+        """handling batched async calls"""
+        # batched calls.
+        async_responses = [
+            self.chat_completion(prompt) for prompt in prompts]
+        raw_completions = await asyncio.gather(*async_responses)
+
+        # post handlings.
+        completions = []
+        for i, raw_completion in enumerate(raw_completions):
+            raw_completion = raw_completion.to_dict()
+            completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
+            completions += [completion]
+            self.stats.record(
+                api_names[i], raw_completion['usage'], 
+                prompt=prompts[i], completion=completion)
+        return completions
 
     def dump(self):
         with open(self.dump_dir / "tmp_prompt_cache.json", "w") as outfile:
@@ -114,4 +129,4 @@ class LanguageModel(object):
         
         with open(self.dump_dir / "cost.jsonl", 'a') as f:
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
-        
+

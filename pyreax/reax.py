@@ -157,7 +157,7 @@ def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, interve
 
 
 class ReAXFactory(object):
-    """Main class of generating training pairs for two subspaces"""
+    """Main class of async generating training pairs for two subspaces"""
 
     def __init__(
         self, model, tokenizer, 
@@ -180,27 +180,16 @@ class ReAXFactory(object):
         self.lm_model = LanguageModel(lm_model, dump_dir)
 
         self.exist_contrast_concepts = contrast_concepts
-        self.skip_contrast_concept = skip_contrast_concept
-        self._prepare_contrast_concepts(contrast_concepts, **kwargs)
-
-        # determine the genre of the concepts.
-        if concept_genres is None:
-            start = time.time()
-            logger.warning("Detecting concept genres.")
-            self.concept_genres_map = {}
-            for concept in self.concepts:
-                self.concept_genres_map[concept] = get_concept_genres(self.lm_model, concept)
-            end = time.time()
-            elapsed = round(end-start, 3)
-            total_price = self.get_total_price()
-            logger.warning(f"Finished mapping concept genres in {elapsed} sec. (current cost: ${total_price})")
+        if not skip_contrast_concept:
+            self._prepare_contrast_concepts(contrast_concepts, **kwargs)
         else:
-            self.concept_genres_map = concept_genres
-            
-    
-    def save(self, df, weights, metadata):
-        pass
-    
+            self.contrast_concepts_map = {}
+            for concept in self.concepts:
+                logger.warning(f"Skipping contrast concept creation for {concept}.")
+                # We don't do any contrast concept creation.
+                self.contrast_concepts_map[concept] = []
+        self._prepare_concept_genres(concept_genres, **kwargs)
+
     def get_total_price(self):
         """Estimate API costs"""
         return round(self.lm_model.stats.get_total_price(), 3)
@@ -209,35 +198,58 @@ class ReAXFactory(object):
         """Reset API costs"""
         self.lm_model.dump()
         self.lm_model.stats.reset()
-    
-    def _get_config(self):
-        """Config for the dataset"""
-        pass
+
+    def _prepare_concept_genres(self, concept_genres, **kwargs):
+        # determine the genre of the concepts.
+        if concept_genres is None:
+            start = time.time()
+            logger.warning("Detecting concept genres.")
+
+            async def async_get_concept_genres():
+                tasks = [get_concept_genres(self.lm_model, concept) for concept in self.concepts]
+                results = await asyncio.gather(*tasks)
+                return dict(zip(self.concepts, results))
+
+            self.concept_genres_map = asyncio.run(async_get_concept_genres())
+
+            end = time.time()
+            elapsed = round(end-start, 3)
+            total_price = self.get_total_price()
+            logger.warning(f"Finished mapping concept genres in {elapsed} sec. (current cost: ${total_price})")
+        else:
+            self.concept_genres_map = concept_genres
     
     def _prepare_contrast_concepts(self, contrast_concepts, **kwargs):
         """Cache a set of contrast concepts"""
-        if "skip_contrast" in kwargs and kwargs["skip_contrast"]:
-            self.contrast_concepts_map = {}
-            return
 
         start = time.time()
         logger.warning("Prepare contrast concepts.")
         self.contrast_concepts_map = {}
-        for concept in self.concepts:
-            if self.skip_contrast_concept:
-                logger.warning(f"Skipping contrast concept creation for {concept}.")
-                # we don't do any contrast concept creation.
-                self.contrast_concepts_map[concept] = []
-                continue
-            filtered_concepts = get_contrast_concepts(
-                self.lm_model, concept, contrast_concepts)
-            self.contrast_concepts_map[concept] = filtered_concepts
-            logger.warning(
-                f"Fectching {len(filtered_concepts)} contrast concepts for concept: {concept}")
+    
+        async def prepare_concepts():
+            tasks = []
+            for concept in self.concepts:
+                task = get_contrast_concepts(self.lm_model, concept, contrast_concepts)
+                tasks.append((concept, task))
+    
+            # Run all tasks concurrently
+            results = await asyncio.gather(*(task for _, task in tasks))
+    
+            for (concept, _), filtered_concepts in zip(tasks, results):
+                self.contrast_concepts_map[concept] = filtered_concepts
+                logger.warning(
+                    f"Fetching {len(filtered_concepts)} contrast concepts for concept: {concept}"
+                )
+    
+        # Execute the asynchronous function
+        asyncio.run(prepare_concepts())
+    
         end = time.time()
-        elapsed = round(end-start, 3)
+        elapsed = round(end - start, 3)
         total_price = self.get_total_price()
-        logger.warning(f"Finished preparing contrast concepts in {elapsed} sec. (current cost: ${total_price})")
+        logger.warning(
+            f"Finished preparing contrast concepts in {elapsed} sec. (current cost: ${total_price})"
+        )
 
     def create_eval_df(self, n=10, category="positive", **kwargs):
         """category: positive, negative, hard negative"""
@@ -251,56 +263,42 @@ class ReAXFactory(object):
         if category == "positive":
             for idx, concept in enumerate(self.concepts):
                 # experiment pairs: inputs and outputs are all llm generated.
-                concept_prompts = []
                 for _ in range(n_per_concept):
                     concept_prompt = get_content_with_concept(
                         self.lm_model, self.concept_genres_map[concept], 
-                        concept=concept, exist_content=concept_prompts,
-                        length=input_length)
-                    concept_prompts += [concept_prompt]
+                        concept=concept, length=input_length)
                     all_examples += [[
                         concept_prompt, concept, category
                     ]]
         elif category == "negative":
             for idx, concept in enumerate(self.concepts):
-                random_prompts = []
                 for _ in range(n_per_concept):
                     random_prompt = get_random_content(
                         self.lm_model, self.concept_genres_map[concept], 
-                        self.concepts, exist_content=random_prompts,
-                        length=input_length)
-                    random_prompts += [random_prompt]
+                        self.concepts, length=input_length)
                     all_examples += [[
                         random_prompt, "null", category
                     ]]
         elif category == "hard negative":
             for idx, concept in enumerate(self.concepts):
                 # unseen contrast concepts
-                polysemantic_prompts = []
                 polysemantic_meanings = self.contrast_concepts_map[concept]
                 if len(polysemantic_meanings) != 0:
                     for polysemantic_meaning in polysemantic_meanings:
                         polysemantic_prompt = get_content_with_contrast_concept(
                             self.lm_model, self.concept_genres_map[concept], 
-                            polysemantic_meaning, concept, 
-                            exist_content=polysemantic_prompts,
-                            length=input_length)
-                        polysemantic_prompts += [polysemantic_prompt]
+                            polysemantic_meaning, concept, length=input_length)
                         all_examples += [[
                             polysemantic_prompt, "OOD/"+"/".join(polysemantic_meaning), category
                         ]]
                 # seen contrast concepts
                 if self.exist_contrast_concepts is not None:
-                    polysemantic_prompts = []
                     polysemantic_meanings = self.exist_contrast_concepts[concept]
                     if len(polysemantic_meanings) != 0:
                         for polysemantic_meaning in polysemantic_meanings:
                             polysemantic_prompt = get_content_with_contrast_concept(
                                 self.lm_model, self.concept_genres_map[concept], 
-                                polysemantic_meaning, concept, 
-                                exist_content=polysemantic_prompts,
-                                length=input_length)
-                            polysemantic_prompts += [polysemantic_prompt]
+                                polysemantic_meaning, concept, length=input_length)
                             all_examples += [[
                                 polysemantic_prompt, "ID/"+"/".join(polysemantic_meaning), category
                             ]]
@@ -335,7 +333,6 @@ class ReAXFactory(object):
                 for _ in range(n_null):
                     polysemantic_prompt = get_random_content(
                         self.lm_model, self.concept_genres_map[concept], self.concepts, 
-                        exist_content=polysemantic_prompts,
                         length=input_length)
                     # cap at token-level length
                     polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
@@ -353,7 +350,6 @@ class ReAXFactory(object):
                 for _ in range(n_random):
                     polysemantic_prompt = get_random_content(
                         self.lm_model, self.concept_genres_map[concept], self.concepts, 
-                        exist_content=polysemantic_prompts,
                         length=input_length)
                     # cap at token-level length
                     polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
@@ -423,7 +419,7 @@ class ReAXFactory(object):
         # reset the cost.
         self.reset_stats()
         return df
-
+        
 
 @dataclass
 class ReftDataCollator(object):
