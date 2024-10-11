@@ -1,4 +1,4 @@
-from .constants import *
+from .utils.constants import *
 
 import asyncio
 import os, uuid, string, json

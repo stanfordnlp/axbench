@@ -1,7 +1,5 @@
 import torch, einops
 from torch import nn
-import pyreft
-import pyvene
 from pyvene import (
     IntervenableModel,
     ConstantSourceIntervention,
