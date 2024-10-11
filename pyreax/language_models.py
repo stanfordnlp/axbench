@@ -118,8 +118,9 @@ class LanguageModel(object):
             raw_completion = raw_completion.to_dict()
             completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
             completions += [completion]
+            api_name = api_names[i] if isinstance(api_names, list) else api_names
             self.stats.record(
-                api_names[i], raw_completion['usage'], 
+                api_name, raw_completion['usage'], 
                 prompt=prompts[i], completion=completion)
         return completions
 
