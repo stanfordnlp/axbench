@@ -1,4 +1,4 @@
-import os, random, json, time, requests, copy
+import os, random, json, time, requests, copy, asyncio, csv
 import torch, transformers, datasets
 
 from dataclasses import dataclass, field
@@ -12,10 +12,10 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     level=logging.WARN)
 logger = logging.getLogger(__name__)
 
-from .config import *
-from .constants import *
-from .model_utils import *
-from .prompt_utils import *
+from .utils.config import *
+from .utils.constants import *
+from .utils.model_utils import *
+from .utils.prompt_utils import *
 from .language_models import *
 
 import numpy as np
@@ -40,6 +40,16 @@ def load_concepts(dump_dir):
                 sae_concepts += [explanation.strip()]
             return sae_concepts, concepts
         return concepts, ["null"]*len(concepts)
+    elif ".csv" in dump_dir:
+        # for csv, then the format is <concept>,<url>
+        # no http connection is needed
+        concepts = []
+        with open(dump_dir, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                sae_concepts += [row[0]]
+                concepts += [row[1]]
+        return sae_concepts, concepts
     elif ".json" in dump_dir:
         concepts = []
         # this must be a neuropedia export.
@@ -87,6 +97,13 @@ def load_reax(dump_dir):
     bias = torch.load(dump_dir / "bias.pt")
     return config, training_df, concept_metadata, weight, bias
     
+
+def save_reax_df(dump_dir, df, filename):
+    file = dump_dir / filename
+    if file.exists():
+        new_df = pd.concat([pd.read_csv(file), df], axis=0)
+    new_df.to_csv(file, index=False)
+
 
 def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, intervention):
     """save training data, concept metadata, subspace artifacts"""
@@ -156,51 +173,24 @@ def save_reax(dump_dir, config, training_df, reax_factory, sae_metadata, interve
     torch.save(bias.data.cpu(), bias_file)
 
 
+async def run_tasks(tasks):
+    # Gather and run all provided tasks concurrently, and collect their results
+    results = await asyncio.gather(*tasks)
+    return results
+
+
 class ReAXFactory(object):
-    """Main class of generating training pairs for two subspaces"""
+    """Main class of async generating training pairs for two subspaces"""
 
     def __init__(
-        self, model, tokenizer, 
-        concepts,
-        dump_dir,
-        skip_contrast_concept=False,
-        contrast_concepts=None,
-        concept_genres=None,
-        **kwargs
-    ):
+        self, model, tokenizer, dump_dir, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
-        self.concepts = concepts
-        # we need at least two concepts to work.
-        if len(self.concepts) < 2:
-            logger.warning(f"Less than 2 concepts are provided. Only eval mode is allowed.")
 
         # prepare lm model
-        lm_model = kwargs["lm_model"] if "lm_model" in kwargs else "gpt-4o"
+        lm_model = kwargs.get("lm_model", "gpt-4o")
         self.lm_model = LanguageModel(lm_model, dump_dir)
 
-        self.exist_contrast_concepts = contrast_concepts
-        self.skip_contrast_concept = skip_contrast_concept
-        self._prepare_contrast_concepts(contrast_concepts, **kwargs)
-
-        # determine the genre of the concepts.
-        if concept_genres is None:
-            start = time.time()
-            logger.warning("Detecting concept genres.")
-            self.concept_genres_map = {}
-            for concept in self.concepts:
-                self.concept_genres_map[concept] = get_concept_genres(self.lm_model, concept)
-            end = time.time()
-            elapsed = round(end-start, 3)
-            total_price = self.get_total_price()
-            logger.warning(f"Finished mapping concept genres in {elapsed} sec. (current cost: ${total_price})")
-        else:
-            self.concept_genres_map = concept_genres
-            
-    
-    def save(self, df, weights, metadata):
-        pass
-    
     def get_total_price(self):
         """Estimate API costs"""
         return round(self.lm_model.stats.get_total_price(), 3)
@@ -209,37 +199,25 @@ class ReAXFactory(object):
         """Reset API costs"""
         self.lm_model.dump()
         self.lm_model.stats.reset()
-    
-    def _get_config(self):
-        """Config for the dataset"""
-        pass
-    
-    def _prepare_contrast_concepts(self, contrast_concepts, **kwargs):
-        """Cache a set of contrast concepts"""
-        if "skip_contrast" in kwargs and kwargs["skip_contrast"]:
-            self.contrast_concepts_map = {}
-            return
 
+    def prepare_concepts(self, concepts, **kwargs):
         start = time.time()
-        logger.warning("Prepare contrast concepts.")
-        self.contrast_concepts_map = {}
-        for concept in self.concepts:
-            if self.skip_contrast_concept:
-                logger.warning(f"Skipping contrast concept creation for {concept}.")
-                # we don't do any contrast concept creation.
-                self.contrast_concepts_map[concept] = []
-                continue
-            filtered_concepts = get_contrast_concepts(
-                self.lm_model, concept, contrast_concepts)
-            self.contrast_concepts_map[concept] = filtered_concepts
-            logger.warning(
-                f"Fectching {len(filtered_concepts)} contrast concepts for concept: {concept}")
-        end = time.time()
-        elapsed = round(end-start, 3)
-        total_price = self.get_total_price()
-        logger.warning(f"Finished preparing contrast concepts in {elapsed} sec. (current cost: ${total_price})")
+        logger.warning("Creating genre and contrast concepts for the inputs.")
+        genre_task = get_concept_genres(self.lm_model, concepts)
+        contrast_task = get_contrast_concepts(
+            self.lm_model, concepts, kwargs.get("contrast_concepts", None))
+        concept_genres_map, contrast_concepts_map = asyncio.run(
+            run_tasks([genre_task, contrast_task]))
 
-    def create_eval_df(self, n=10, category="positive", **kwargs):
+        end = time.time()
+        elapsed = round(end - start, 3)
+        total_price = self.get_total_price()
+        logger.warning(
+            f"Init finished in {elapsed} sec. (current cost: ${total_price})"
+        )
+        return concept_genres_map, contrast_concepts_map
+
+    def create_eval_df(self, concepts, subset_n, concept_genres_map, contrast_concepts_map, **kwargs):
         """category: positive, negative, hard negative"""
         all_examples = []
         logger.warning("Creating dataframe.")
@@ -247,169 +225,119 @@ class ReAXFactory(object):
 
         input_length = kwargs["input_length"] if "input_length" in kwargs else 64
         output_length = kwargs["output_length"] if "output_length" in kwargs else 10
-        
-        if category == "positive":
-            for idx, concept in enumerate(self.concepts):
-                # experiment pairs: inputs and outputs are all llm generated.
-                concept_prompts = []
-                for _ in range(n_per_concept):
-                    concept_prompt = get_content_with_concept(
-                        self.lm_model, self.concept_genres_map[concept], 
-                        concept=concept, exist_content=concept_prompts,
-                        length=input_length)
-                    concept_prompts += [concept_prompt]
-                    all_examples += [[
-                        concept_prompt, concept, category
-                    ]]
-        elif category == "negative":
-            for idx, concept in enumerate(self.concepts):
-                random_prompts = []
-                for _ in range(n_per_concept):
-                    random_prompt = get_random_content(
-                        self.lm_model, self.concept_genres_map[concept], 
-                        self.concepts, exist_content=random_prompts,
-                        length=input_length)
-                    random_prompts += [random_prompt]
-                    all_examples += [[
-                        random_prompt, "null", category
-                    ]]
-        elif category == "hard negative":
-            for idx, concept in enumerate(self.concepts):
-                # unseen contrast concepts
-                polysemantic_prompts = []
-                polysemantic_meanings = self.contrast_concepts_map[concept]
-                if len(polysemantic_meanings) != 0:
-                    for polysemantic_meaning in polysemantic_meanings:
-                        polysemantic_prompt = get_content_with_contrast_concept(
-                            self.lm_model, self.concept_genres_map[concept], 
-                            polysemantic_meaning, concept, 
-                            exist_content=polysemantic_prompts,
-                            length=input_length)
-                        polysemantic_prompts += [polysemantic_prompt]
-                        all_examples += [[
-                            polysemantic_prompt, "OOD/"+"/".join(polysemantic_meaning), category
-                        ]]
-                # seen contrast concepts
-                if self.exist_contrast_concepts is not None:
-                    polysemantic_prompts = []
-                    polysemantic_meanings = self.exist_contrast_concepts[concept]
-                    if len(polysemantic_meanings) != 0:
-                        for polysemantic_meaning in polysemantic_meanings:
-                            polysemantic_prompt = get_content_with_contrast_concept(
-                                self.lm_model, self.concept_genres_map[concept], 
-                                polysemantic_meaning, concept, 
-                                exist_content=polysemantic_prompts,
-                                length=input_length)
-                            polysemantic_prompts += [polysemantic_prompt]
-                            all_examples += [[
-                                polysemantic_prompt, "ID/"+"/".join(polysemantic_meaning), category
-                            ]]
+
+        eval_tasks = []
+        tags = []
+        for idx, concept in enumerate(self.concepts):
+            # positive
+            eval_tasks.append(get_content_with_concept(
+                self.lm_model, self.tokenizer, subset_n, self.concept_genres_map[concept], 
+                concept=concept, length=input_length))
+            tags.append(("positive", concept))
+            # negative
+            eval_tasks.append(get_random_content(
+                self.lm_model, tokenizer, subset_n, self.concept_genres_map[concept], [concept], 
+                length=input_length))
+            tags.append(("negative", concept))
+            # hard negative seen
+            exist_polysemantic_meanings = contrast_concepts_map[concept]
+            if len(exist_polysemantic_meanings) != 0:
+                eval_tasks.append(get_content_with_polysemantic_concepts(
+                    self.lm_model, tokenizer, self.concept_genres_map[concept], 
+                    polysemantic_meanings, concept, length=input_length))
+                tags.append(("hard negative seen", concept))
+            # hard negative unseen
+            polysemantic_meanings = self.contrast_concepts_map[concept]
+            if len(polysemantic_meanings) != 0:
+                eval_tasks.append(get_content_with_polysemantic_concepts(
+                    self.lm_model, tokenizer, self.concept_genres_map[concept], 
+                    polysemantic_meanings, concept, length=input_length))
+                tags.append(("hard negative unseen", concept))
+        eval_content = asyncio.run(run_tasks(eval_tasks))
+
+        for (tag, concept), eval_content in zip(tags, eval_content):
+            if tag in {"positive", "negative"}:
+                all_examples += [[content, concept, tag] for content in eval_content]
+            elif tag == {"hard negative seen", "hard negative unseen"}:
+                all_examples += [[content[0], "//".join(content[1]), tag] for content in eval_content[1]]
+
         df = pd.DataFrame(
             all_examples, 
             columns = [
                 'input', 'input_concept', 'category'])
         return df
 
-    def create_df(self, n=10, **kwargs):
-        assert len(self.concepts) >= 2
+    def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
+        concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()
         logger.warning("Creating dataframe.")
-        n_per_concept = n // (len(self.concepts) + 1)
+        n_per_concept = n // (len(concepts) + 1)
         all_examples = []
 
-        input_length = kwargs["input_length"] if "input_length" in kwargs else 64
-        output_length = kwargs["output_length"] if "output_length" in kwargs else 10
+        input_length = kwargs.get("input_length", 64)
+        output_length = kwargs.get("output_length", 10)
         
-        # null examples first
-        prompts_map = {}
-        for idx, concept in enumerate(self.concepts):
-            # there is a fixed amount null examples for each concept
-            n_null = n_per_concept // len(self.concepts)
-            # control pairs: inputs are llm generated, outputs are model's generations.
-            polysemantic_meanings = self.contrast_concepts_map[concept]
-            polysemantic_prompt_concepts = []
-            polysemantic_prompts = []
-            if len(polysemantic_meanings) == 0:
-                # if there is no polysemantic meanings, we sample random sentences.
-                for _ in range(n_null):
-                    polysemantic_prompt = get_random_content(
-                        self.lm_model, self.concept_genres_map[concept], self.concepts, 
-                        exist_content=polysemantic_prompts,
-                        length=input_length)
-                    # cap at token-level length
-                    polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
-                        self.tokenizer.tokenize(polysemantic_prompt)[:int(input_length*1.5)])
-                    polysemantic_prompt_concepts.append("null")
-                    polysemantic_prompts += [polysemantic_prompt]
+        # for each concept, we create a set of seed random content.
+        random_content_task = get_random_content(
+            self.lm_model, self.tokenizer, n_per_concept // len(concepts), 
+            concept_genres_map, concepts, length=input_length)
+        concepts_random_content = asyncio.run(run_tasks([random_content_task]))[0]
+        
+        # for concepts with polysemantic senses, we create additional examples.
+        polysemantic_tasks = []
+        for concept in concepts:
+            if len(contrast_concepts_map[concept]) != 0:
+                polysemantic_tasks.append(modify_content_with_polysemantic_concepts(
+                    self.lm_model, self.tokenizer,
+                    extend_list_with_random_elements(
+                        copy.deepcopy(contrast_concepts_map[concept]), 
+                        n_per_concept // (len(concepts)*2)), 
+                    concept, concepts_random_content[concept],
+                    length=input_length))
+        polysemantic_content = asyncio.run(run_tasks(polysemantic_tasks))        
+        polysemantic_content = {content[0]: content[1] for content in polysemantic_content}
+        
+        # aggregate these null examples.
+        null_prompts = []
+        for concept in concepts:
+            if len(contrast_concepts_map[concept]) == 0:
+                for content in concepts_random_content[concept]:
+                    null_prompts += [(concept, "null", content)]
             else:
-                # maxmimally, half of the control is for polysemanticity
-                _polysemantic_meanings = extend_list_with_random_elements(
-                    copy.deepcopy(polysemantic_meanings), n_null//2)
-                # the rest are random sentences.
-                n_random = n_null - len(_polysemantic_meanings)
-
-                # generate some random sentences first
-                for _ in range(n_random):
-                    polysemantic_prompt = get_random_content(
-                        self.lm_model, self.concept_genres_map[concept], self.concepts, 
-                        exist_content=polysemantic_prompts,
-                        length=input_length)
-                    # cap at token-level length
-                    polysemantic_prompt = self.tokenizer.convert_tokens_to_string(
-                        self.tokenizer.tokenize(polysemantic_prompt)[:int(input_length*1.5)])
-                    polysemantic_prompt_concepts.append("null")
-                    polysemantic_prompts += [polysemantic_prompt]
-
-                # modify these random sentences with the polysemantic concept
-                sample_idx = 0
-                exist_prompts = copy.deepcopy(polysemantic_prompts)
-                for polysemantic_meaning in _polysemantic_meanings:
-                    polysemantic_prompt = modify_content_with_contrast_concept(
-                        self.lm_model, polysemantic_meaning, concept, 
-                        content=exist_prompts[sample_idx % len(exist_prompts)],
-                        length=input_length)
-                    polysemantic_prompts += [polysemantic_prompt]
-                    polysemantic_prompt_concepts += [concept+":"+polysemantic_meaning[0]+"/"+polysemantic_meaning[1]]
-                    sample_idx += 1
-
-            polysemantic_outputs = get_model_continues(
-                self.model, self.tokenizer, polysemantic_prompts, max_new_tokens=int(output_length*1.5))
-            for i in range(len(polysemantic_prompts)):
-                output_idx = sample_index_exclude(len(self.concepts), idx)
-                all_examples += [[
-                    polysemantic_prompts[i], polysemantic_outputs[i], 
-                    EXAMPLE_TAG.CONTROL, idx, output_idx, polysemantic_prompt_concepts[i], "null"]]
-            prompts_map[concept] = copy.deepcopy(polysemantic_prompts)
+                n_random = n_per_concept // (len(concepts)*2)
+                for content in concepts_random_content[concept][:n_random]:
+                    null_prompts += [(concept, "null", content)]
+                for content in polysemantic_content[concept]:
+                    null_prompts += [(concept, f"{content[0][0]}//{content[0][1]}", content[1])]
+        null_outputs = get_model_continues(
+            self.model, self.tokenizer, [prompt[-1] for prompt in null_prompts], 
+            max_new_tokens=int(output_length*1.5))
+        for (concept, tag, prompt), output in zip(null_prompts, null_outputs):
+            in_idx = concept2id[concept]
+            out_idx = sample_index_exclude(len(concepts), in_idx)
+            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL, in_idx, out_idx, tag, "null"]]
         
-        # regular examples
-        for idx, concept in enumerate(self.concepts):
-            logger.warning(f"Fectching data for {idx}/{len(self.concepts)} concept: {concept}")
-            # experiment pairs: inputs and outputs are all llm generated.
-            concept_prompts = []
-            concept_outputs = []
-            exist_prompts = prompts_map[concept]
-            sample_idx = 0
-            for _ in range(n_per_concept):
-                concept_prompt = modify_content_with_concept(
-                    self.lm_model, concept=concept, 
-                    content=exist_prompts[sample_idx % len(exist_prompts)], length=input_length)
-                output_idx = sample_index_exclude(len(self.concepts), idx)
-                concept_output = get_continue_with_concept(
-                    self.lm_model, concept=self.concepts[output_idx], 
-                    content=concept_prompt, exist_continues=concept_outputs,
-                    length=output_length
-                )
-                # cap at token-level length
-                concept_output = self.tokenizer.convert_tokens_to_string(
-                    self.tokenizer.tokenize(concept_output)[:int(output_length*1.5)])
-                concept_prompts += [concept_prompt]
-                concept_outputs += [concept_output]
-                all_examples += [[
-                    concept_prompt, concept_output, EXAMPLE_TAG.EXPERIMENT, 
-                    idx, output_idx, concept, self.concepts[output_idx]
-                ]]
-                sample_idx += 1
+        # modify exist content to have desired concepts.
+        modify_prompts = []
+        for concept in concepts:
+            for prompt in null_prompts:
+                modify_prompts.append((concept, prompt[1], prompt[2]))
+        modify_task = modify_content_with_concept(
+            self.lm_model, self.tokenizer, content=modify_prompts, length=input_length)
+        concept_prompts = asyncio.run(run_tasks([modify_task]))[0]
+        inverse_concepts = [concepts[sample_index_exclude(len(concepts), concept2id[prompt[0]])]
+            for prompt in modify_prompts]
+        continue_task = continue_with_concept(
+            self.lm_model, self.tokenizer, 
+            concepts=inverse_concepts, content=concept_prompts, length=output_length)
+        concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+        for i, (prompt, output) in enumerate(zip(concept_prompts, concept_outputs)):
+            in_idx = concept2id[modify_prompts[i][0]]
+            out_idx = concept2id[inverse_concepts[i]]
+            all_examples += [[
+                prompt, output, EXAMPLE_TAG.EXPERIMENT, 
+                in_idx, out_idx, modify_prompts[i][0], inverse_concepts[i]]]
 
         df = pd.DataFrame(
             all_examples, 
@@ -423,7 +351,7 @@ class ReAXFactory(object):
         # reset the cost.
         self.reset_stats()
         return df
-
+        
 
 @dataclass
 class ReftDataCollator(object):

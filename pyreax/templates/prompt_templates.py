@@ -10,11 +10,11 @@ T_DETERMINE_GENRE = """Given the concept:
 
 {CONCEPT}
 
-Identify which of these genres the concept is commonly associated with:
+Identify primary genres closely associated with the concept from the following options:
 
 Text; Code; Math
 
-List all applicable genres, in order, separated by semicolons (;). If none apply, output '<NONE>'.
+List all closely associated genres, in order, separated by semicolons (;). If none apply, output '<NONE>'.
 
 **Formatting Guidelines:**
 
@@ -23,16 +23,16 @@ List all applicable genres, in order, separated by semicolons (;). If none apply
 
 **Examples:**
 
-- Concept: 'An odd number'
+- Concept: 'words or phrases containing odd numbers'
   Output: Text; Code; Math
 
-- Concept: 'def function(args): pass'
+- Concept: 'a programming error'
   Output: Code
 
-- Concept: 'Integral calculus'
+- Concept: 'integral calculus'
   Output: Math
 
-- Concept: 'A narrative poem'
+- Concept: 'a narrative poem'
   Output: Text
 
 Return only the genres as specified."""
@@ -111,13 +111,7 @@ T_RANDOM_CONTENT = """Content Generation and Modification Task:
    - Avoid both direct and indirect references to these concepts.
    - Ensure that parts of the content remain irrelevant to the concepts mentioned above.
 
-3. Compare the new content to these existing examples:
-{EXIST_CONTENT}
-
-   - Ensure your content has a unique structure and avoids overlapping phrases.
-   - Revise as necessary to ensure sufficient distinctiveness.
-
-4. Output the final content in plain text (or appropriate format for the genre), without special formatting (e.g., no quotation marks or hyphens at the beginning).
+3. Output the final content in plain text (or appropriate format for the genre), without special formatting (e.g., no quotation marks or hyphens at the beginning).
 
 Include the special tag <FINAL> at the beginning of the final content, followed by the content itself. Return only this tagged content, with no additional text."""
 
@@ -128,7 +122,7 @@ You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting a commonly used word, phrase, or element that reflects themes or ideas related to '{CONCEPT}' into the middle of the content. This insertion should not be at the beginning or end of the content, even if it disrupts overall coherence.
+Your task is to modify this content by inserting some commonly used words, phrases, or elements that reflect themes or ideas related to '{CONCEPT}' into the middle of the content. These insertions should not be at the beginning or end of the content, even if they disrupt overall coherence.
 
 Guidelines:
 
@@ -148,7 +142,7 @@ You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting the word '{WORD}' into the middle of the content. This word should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
+Your task is to modify this content by inserting the word '{WORD}' into the middle of the content. This word along with modified content should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
 
 Guidelines:
 
@@ -170,19 +164,13 @@ T_CONTENT_WITH_CONCEPT = """Content Writing Task:
 1. Use the specified genre: {GENRE}
 
    - Generate unique content containing approximately {LENGTH} units (e.g., words, lines, symbols), with a maximum of {LENGTH} units, in the specified genre.
-   - Include a commonly used word, phrase, or element that conveys the essence or themes of the concept '{CONCEPT}' in the middle of the content.
+   - Include some commonly used words, phrases, or elements that convey the essence or themes of the concept '{CONCEPT}' in the middle of the content.
    - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
    - Position the concept-related content in the middle, avoiding the beginning or end.
    - Ensure the content reflects the overall concept, even if its full meaning isn’t entirely clear.
    - Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
 
-2. Review these existing examples:
-{EXIST_CONTENT}
-
-   - Ensure your content has a unique structure and avoids overlapping phrases.
-   - Revise as necessary to ensure sufficient distinctiveness.
-
-3. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
+2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
 
 Attach the special tag <FINAL> at the beginning of your final content, and return only this tagged content with no additional text."""
 
@@ -198,13 +186,7 @@ T_CONTENT_WITH_CONTRAST_CONCEPT = """Content Writing Task:
    - Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn’t entirely coherent.
    - Ensure grammatical correctness (or syntactical correctness for code/equations).
 
-2. Review these existing examples:
-{EXIST_CONTENT}
-
-   - Ensure your content has a unique structure and avoids overlapping phrases.
-   - Revise as necessary to ensure sufficient distinctiveness.
-
-3. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
+2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
 
 Attach the special tag <FINAL> at the beginning of your final content, and return only this tagged content with no additional text."""
 
@@ -221,12 +203,6 @@ Your task is to:
 3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
 4. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
 5. Avoid using any special characters not standard for the genre, including quotation marks (" or ') and ellipses (...), unless appropriate.
-6. Compare your continuation with these existing continuations:
-
-{EXIST_CONTINUES}
-
-   - Ensure your continuation has a unique structure and avoids overlapping phrases.
-   - Revise as necessary to ensure sufficient distinctiveness.
 
 **Formatting Guidelines:**
 

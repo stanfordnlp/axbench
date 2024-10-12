@@ -1,9 +1,11 @@
-from .templates import *
-from .prompt_utils import *
+from .templates.html_templates import *
+from .templates.prompt_templates import *
+
+from .utils.config import *
+from .utils.constants import *
+from .utils.prompt_utils import *
+from .utils.model_utils import *
+
 from .interventions import *
-from .model_utils import *
 from .language_models import *
-from .constants import *
 from .reax import *
-from .config import *
-from .html_templates import *

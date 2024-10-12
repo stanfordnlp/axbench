@@ -13,23 +13,22 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
+
 def get_model_continues(
-    model, tokenizer, examples, max_new_tokens, chat_template=None
+    model, tokenizer, prompts, max_new_tokens, chat_template=None
 ):
     """we ground examples with the model's original generation."""
-    continued_examples = []
+    outputs = []
+    tokenizer.padding_side = "left"
     if chat_template is not None:
         pass # TODO: to handle chat models
-    for e in examples:
-        batch_inputs = tokenizer(e, padding=True, return_tensors="pt").to(model.device)
-        response = model.generate(
-            **batch_inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        r = tokenizer.batch_decode(
-            response[:,batch_inputs["input_ids"].shape[1]:], 
-            skip_special_tokens=False)[0]
-        continued_examples += [r]
-    
-    return continued_examples
+    encoding = tokenizer(prompts, return_tensors='pt', padding=True).to(model.device)
+    with torch.no_grad():
+        generated_ids = model.generate(
+            **encoding, max_new_tokens=max_new_tokens, do_sample=False)
+        generated_ids = generated_ids[:, encoding.input_ids.shape[1]:]
+    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+    return generated_texts
 
 
 def gather_residual_activations(model, target_layer, inputs):

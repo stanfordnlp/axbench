@@ -1,5 +1,7 @@
-from .constants import *
+from .utils.constants import *
 
+import httpx, asyncio
+from openai import AsyncOpenAI
 import os, uuid, string, json
 from pathlib import Path
 
@@ -8,7 +10,6 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
 logger = logging.getLogger(__name__)
-
 
 def is_first_char_punctuation(s):
     if s and s[0] in string.punctuation:
@@ -72,19 +73,14 @@ class LanguageModelStats(object):
             PRICING_DOLLAR_PER_1M_TOKEN[self.model]["output"]
         return input_price + output_price
 
-    
+
 class LanguageModel(object):
-    """Main class abstract remote language model access"""
+    """Main class abstract async remote language model access"""
 
     def __init__(self, model, dump_dir, **kwargs):
         self.model = model
         if "gpt-4o" in model:
-            try:
-                from openai import OpenAI
-                
-                self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-            except:
-                raise Exception("Cannot connect to openai. Check your API key.")
+            pass
         else:
             raise ValueError(f"{model} model class is not supported yet.")
         self.stats = LanguageModelStats(model)
@@ -95,18 +91,37 @@ class LanguageModel(object):
         self.dump_dir = cur_save_dir
     
     def normalize(self, text):
-        normalized = text.strip()
-        if is_first_char_punctuation(normalized):
-            return normalized
-        return " "+normalized
+        return text.strip()
 
-    def chat_completions(self, api_name, prompt):
-        chat_completion = self.client.chat.completions.create(
+    async def chat_completion(self, client, prompt):
+        response = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model)
-        raw_completion = chat_completion.to_dict()
-        completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-        self.stats.record(api_name, raw_completion['usage'], prompt=prompt, completion=completion)
-        return completion
+        return response
+        
+    async def chat_completions(self, api_names, prompts):
+        """handling batched async calls"""
+        client = AsyncOpenAI(
+            api_key=os.environ.get("OPENAI_API_KEY"),
+            timeout=10.0,
+            http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
+            max_retries=2,
+        )
+        # batched calls.
+        async_responses = [
+            self.chat_completion(client, prompt) for prompt in prompts]
+        raw_completions = await asyncio.gather(*async_responses)
+
+        # post handlings.
+        completions = []
+        for i, raw_completion in enumerate(raw_completions):
+            raw_completion = raw_completion.to_dict()
+            completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
+            completions += [completion]
+            api_name = api_names[i] if isinstance(api_names, list) else api_names
+            self.stats.record(
+                api_name, raw_completion['usage'], 
+                prompt=prompts[i], completion=completion)
+        return completions
 
     def dump(self):
         with open(self.dump_dir / "tmp_prompt_cache.json", "w") as outfile:
@@ -114,4 +129,4 @@ class LanguageModel(object):
         
         with open(self.dump_dir / "cost.jsonl", 'a') as f:
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
-        
+
