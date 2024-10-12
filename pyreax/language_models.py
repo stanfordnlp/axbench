@@ -1,6 +1,7 @@
 from .utils.constants import *
 
-import asyncio
+import httpx, asyncio
+from openai import AsyncOpenAI
 import os, uuid, string, json
 from pathlib import Path
 
@@ -9,8 +10,6 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
 logger = logging.getLogger(__name__)
-
-rate_limit_semaphore = asyncio.Semaphore(OPENAI_RATE_LIMIT)
 
 def is_first_char_punctuation(s):
     if s and s[0] in string.punctuation:
@@ -81,12 +80,7 @@ class LanguageModel(object):
     def __init__(self, model, dump_dir, **kwargs):
         self.model = model
         if "gpt-4o" in model:
-            try:
-                from openai import AsyncOpenAI
-                
-                self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-            except:
-                raise Exception("Cannot connect to openai. Check your API key.")
+            pass
         else:
             raise ValueError(f"{model} model class is not supported yet.")
         self.stats = LanguageModelStats(model)
@@ -99,17 +93,22 @@ class LanguageModel(object):
     def normalize(self, text):
         return text.strip()
 
-    async def chat_completion(self, prompt):
-        async with rate_limit_semaphore:
-            response = await self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}], model=self.model)
-            return response
+    async def chat_completion(self, client, prompt):
+        response = await client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}], model=self.model)
+        return response
         
     async def chat_completions(self, api_names, prompts):
         """handling batched async calls"""
+        client = AsyncOpenAI(
+            api_key=os.environ.get("OPENAI_API_KEY"),
+            timeout=10.0,
+            http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
+            max_retries=2,
+        )
         # batched calls.
         async_responses = [
-            self.chat_completion(prompt) for prompt in prompts]
+            self.chat_completion(client, prompt) for prompt in prompts]
         raw_completions = await asyncio.gather(*async_responses)
 
         # post handlings.

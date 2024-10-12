@@ -82,7 +82,7 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
     prompts = []
     filtered_word_polysemantics = []
     for _, ((w, concept), word_polysemantic) in enumerate(zip(flatten_words, word_polysemantics)):
-        if "none" in word_polysemantic.lower() or w == "" or word_polysemantic == "":
+        if "none" in word_polysemantic.lower() or w == "" or word_polysemantic == "" or len(word_polysemantic.split()) <= 1:
             continue
         prompts += [T_FILTER_CONTRAST_CONCEPT.format(
             CONTRAST_CONCEPT=word_polysemantic, CONCEPT=concept)]
@@ -158,6 +158,7 @@ async def modify_content_with_concept(client, tokenizer, content, length):
     responses = await client.chat_completions("modify_content_with_concept", prompts)
     return [tokenizer.convert_tokens_to_string(tokenizer.tokenize(
         response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
+
 
 
 async def continue_with_concept(client, tokenizer, concepts, content, length):

@@ -122,7 +122,7 @@ You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting a commonly used word, phrase, or element that reflects themes or ideas related to '{CONCEPT}' into the middle of the content. This insertion should not be at the beginning or end of the content, even if it disrupts overall coherence.
+Your task is to modify this content by inserting some commonly used words, phrases, or elements that reflect themes or ideas related to '{CONCEPT}' into the middle of the content. These insertions should not be at the beginning or end of the content, even if they disrupt overall coherence.
 
 Guidelines:
 
@@ -142,7 +142,7 @@ You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting the word '{WORD}' into the middle of the content. This word should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
+Your task is to modify this content by inserting the word '{WORD}' into the middle of the content. This word along with modified content should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
 
 Guidelines:
 
@@ -164,7 +164,7 @@ T_CONTENT_WITH_CONCEPT = """Content Writing Task:
 1. Use the specified genre: {GENRE}
 
    - Generate unique content containing approximately {LENGTH} units (e.g., words, lines, symbols), with a maximum of {LENGTH} units, in the specified genre.
-   - Include a commonly used word, phrase, or element that conveys the essence or themes of the concept '{CONCEPT}' in the middle of the content.
+   - Include some commonly used words, phrases, or elements that convey the essence or themes of the concept '{CONCEPT}' in the middle of the content.
    - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
    - Position the concept-related content in the middle, avoiding the beginning or end.
    - Ensure the content reflects the overall concept, even if its full meaning isn’t entirely clear.
