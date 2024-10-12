@@ -1,5 +1,6 @@
 old_*.ipynb
 tmp_save/
+data/*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

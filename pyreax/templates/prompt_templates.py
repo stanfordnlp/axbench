@@ -10,11 +10,11 @@ T_DETERMINE_GENRE = """Given the concept:
 
 {CONCEPT}
 
-Identify which of these genres the concept is commonly associated with:
+Identify primary genres closely associated with the concept from the following options:
 
 Text; Code; Math
 
-List all applicable genres, in order, separated by semicolons (;). If none apply, output '<NONE>'.
+List all closely associated genres, in order, separated by semicolons (;). If none apply, output '<NONE>'.
 
 **Formatting Guidelines:**
 
@@ -23,16 +23,16 @@ List all applicable genres, in order, separated by semicolons (;). If none apply
 
 **Examples:**
 
-- Concept: 'An odd number'
+- Concept: 'words or phrases containing odd numbers'
   Output: Text; Code; Math
 
-- Concept: 'def function(args): pass'
+- Concept: 'a programming error'
   Output: Code
 
-- Concept: 'Integral calculus'
+- Concept: 'integral calculus'
   Output: Math
 
-- Concept: 'A narrative poem'
+- Concept: 'a narrative poem'
   Output: Text
 
 Return only the genres as specified."""

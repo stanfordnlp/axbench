@@ -25,9 +25,9 @@ def get_model_continues(
     encoding = tokenizer(prompts, return_tensors='pt', padding=True).to(model.device)
     with torch.no_grad():
         generated_ids = model.generate(
-            **model_inputs, max_new_tokens=max_new_tokens, do_sample=False)
+            **encoding, max_new_tokens=max_new_tokens, do_sample=False)
         generated_ids = generated_ids[:, encoding.input_ids.shape[1]:]
-    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=False)
+    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
     return generated_texts
 
 

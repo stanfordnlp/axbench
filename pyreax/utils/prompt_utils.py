@@ -37,7 +37,7 @@ async def get_concept_genres(client, concepts):
     concept_genres = {}
     prompts = [T_DETERMINE_GENRE.format(CONCEPT=concept) for concept in concepts]
     responses = await client.chat_completions("get_concept_genre", prompts)
-
+    
     for i, response in enumerate(responses):
         if "none" in response.lower():
             concept_genres[concepts[i]] = [TEXT_GENRES] # if none, assign it with the text genre set
@@ -70,26 +70,23 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
     responses = await client.chat_completions(
         "get_contrast_concepts.prompt_for_words", prompts)
     all_words = [[w.strip() for w in response.split("\n")] for response in responses]
-
+    
     # async step 2.
     prompts = [T_WORD_POLYSEMANTIC_MEANING.format(
         WORD=w, CONCEPT=concepts[i]) for i, words in enumerate(all_words) for w in words]
+    flatten_words = [(w, concepts[i]) for i, words in enumerate(all_words) for w in words]
     word_polysemantics = await client.chat_completions(
         "get_contrast_concepts.prompt_for_ploy_meaning", prompts)
-
+    
     # async step 3.
     prompts = []
     filtered_word_polysemantics = []
-    idx = 0
-    for i, words in enumerate(all_words):
-        for w in words:
-            word_polysemantic = word_polysemantics[idx].strip()
-            idx += 1
-            if "none" in word_polysemantic.lower() or w == "" or word_polysemantic == "":
-                continue
-            prompts += [T_FILTER_CONTRAST_CONCEPT.format(
-                CONTRAST_CONCEPT=word_polysemantic, CONCEPT=concepts[i])]
-            filtered_word_polysemantics += [(concepts[i], w, word_polysemantic)]
+    for _, ((w, concept), word_polysemantic) in enumerate(zip(flatten_words, word_polysemantics)):
+        if "none" in word_polysemantic.lower() or w == "" or word_polysemantic == "":
+            continue
+        prompts += [T_FILTER_CONTRAST_CONCEPT.format(
+            CONTRAST_CONCEPT=word_polysemantic, CONCEPT=concept)]
+        filtered_word_polysemantics += [(concept, w, word_polysemantic)]
     polysemantic_checks = await client.chat_completions(
         "get_contrast_concepts.prompt_is_meaning_not_same", prompts)
         
@@ -98,7 +95,8 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
     further_filtered_word_polysemantics = []
     for i, polysemantic_check in enumerate(polysemantic_checks):
         concept, w, word_polysemantic = filtered_word_polysemantics[i]
-        if "yes" not in polysemantic_check.split("Answer")[-1].lower():
+        polysemantic_check = polysemantic_check.split("Answer")[-1].lower()
+        if "yes" not in polysemantic_check:
             continue
         if contrast_concepts != None and concept in contrast_concepts:
             existing_concepts = [item[-1] for item in contrast_concepts[concept]]
@@ -108,14 +106,14 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
                 further_filtered_word_polysemantics += [(concept, w, word_polysemantic)]
         else:
             polysemantics[concept] += [(w, word_polysemantic)]
-    exist_meaning_checks = await client.chat_completions(
-        "get_contrast_concepts.prompt_exist_is_meaning_not_same", prompts)
-    for i, exist_meaning_check in enumerate(exist_meaning_checks):
-        concept, w, word_polysemantic = filtered_word_polysemantics
-        if "yes" not in response_exist_is_meaning_not_same.split("Answer")[-1].lower():
-            continue
-        polysemantics[concept] += [(w, word_polysemantic)]
-
+    if len(prompts) != 0:
+        exist_meaning_checks = await client.chat_completions(
+            "get_contrast_concepts.prompt_exist_is_meaning_not_same", prompts)
+        for i, exist_meaning_check in enumerate(exist_meaning_checks):
+            concept, w, word_polysemantic = filtered_word_polysemantics
+            if "yes" not in response_exist_is_meaning_not_same.split("Answer")[-1].lower():
+                continue
+            polysemantics[concept] += [(w, word_polysemantic)]
     return polysemantics
     
 
@@ -140,12 +138,11 @@ async def get_random_content(client, tokenizer, count, genres, concepts, length)
 
 async def modify_content_with_polysemantic_concepts(client, tokenizer, polysemantic_concepts, concept, content, length):
     prompts = []
-    for i, concept in enumerate(polysemantic_concepts):
-        prompt = T_MODIFY_CONTENT_WITH_CONTRAST_CONCEPT.format(
-            CONCEPT=concept[1], WORD=concept[0], 
-            CONTRAST_CONCEPT=concept, CONTENT=content[i], LENGTH=length)
+    for i, polysemantic_concept in enumerate(polysemantic_concepts):
+        prompts += [T_MODIFY_CONTENT_WITH_CONTRAST_CONCEPT.format(
+            CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
+            CONTRAST_CONCEPT=concept, CONTENT=content[i], LENGTH=length)]
     responses = await client.chat_completions("modify_content_with_polysemantic_concepts", prompts)
-
     return (concept, zip(
         polysemantic_concepts, [
             tokenizer.convert_tokens_to_string(
