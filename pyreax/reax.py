@@ -1,4 +1,4 @@
-import os, random, json, time, requests, copy, asyncio, csv
+import os, random, json, time, requests, copy, asyncio, csv, math
 import torch, transformers, datasets
 
 from dataclasses import dataclass, field
@@ -410,6 +410,8 @@ def make_data_module(
 
         # prepare input ids
         base_prompt = _input
+        if isinstance(_output, float):
+            _output = tokenizer.eos_token
         base_input = base_prompt + _output
         base_prompt_ids = tokenizer(
             base_prompt, max_length=1024, truncation=True, return_tensors="pt")["input_ids"][0]

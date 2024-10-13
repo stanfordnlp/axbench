@@ -1,0 +1,12 @@
+# interpreting model
+model_name: "google/gemma-2-2b"
+layer: 20
+component: "res"
+
+# training params
+batch_size: 6
+n_epochs: 12
+k_latent_null_loss: 1
+lr: 0.003
+coeff_l1_loss_null: 0.05
+coeff_l1_loss: 0.001
