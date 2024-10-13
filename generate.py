@@ -115,7 +115,6 @@ def save(dump_dir, state, group_idx, concepts, refs, partition, current_df, rota
         f.write(json.dumps(metadata_entry) + "\n")
     
     # Save DataFrame
-    current_df["group_idx"] = group_idx
     fragment_index = group_idx // rotation_freq
     df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
     if os.path.exists(df_path):
@@ -191,6 +190,7 @@ def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_conce
                 dataset_factory.create_train_df,
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map
             )
+            current_df["group_id"] = group_idx
         except Exception as e:
             logger.warning(f"Failed to create training data for group {group_idx}: {e}")
             return
