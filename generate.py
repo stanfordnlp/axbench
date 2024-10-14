@@ -23,6 +23,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from pyreax import ReAXFactory, load_concepts
+from pathlib import Path
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -36,7 +37,7 @@ model_name_map = {
 
 MAX_RETRIES = 5
 RETRY_DELAY = 1  # in seconds
-STATE_FILE = "dataset_state.pkl"
+STATE_FILE = "generate_state.pkl"
 METADATA_FILE = "metadata.jsonl"
 DEFAULT_ROTATION_FREQ = 1000
 
@@ -85,20 +86,17 @@ def partition_lists(list1, list2, step=2):
         partitions.append(group)
     return partitions
 
-def save(dump_dir, state, group_idx, concepts, refs, partition, current_df, rotation_freq):
+def save(
+    dump_dir, state, group_id, 
+    concepts, concept_genres_map, contrast_concepts_map, 
+    refs, partition, current_df, rotation_freq):
     """
     Save the current state, metadata, and DataFrame.
-    
-    Args:
-        dump_dir (str): The directory to save the files.
-        state (dict): The state dictionary to save.
-        group_idx (int): The group index.
-        concepts (list): The list of concepts.
-        refs (list): The list of references.
-        partition (str): The partition type (train or eval).
-        current_df (DataFrame): The DataFrame to save.
-        rotation_freq (int): Frequency for chunking files.
     """
+    # handle training df first
+    dump_dir = Path(dump_dir) / "generate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
     # Save state
     state_path = os.path.join(dump_dir, STATE_FILE)
     with open(state_path, "wb") as f:
@@ -107,15 +105,17 @@ def save(dump_dir, state, group_idx, concepts, refs, partition, current_df, rota
     # Save metadata
     metadata_path = os.path.join(dump_dir, METADATA_FILE)
     metadata_entry = {
-        "group_idx": group_idx,
+        "group_id": group_id,
         "concepts": concepts,
-        "refs": refs
+        "refs": refs,
+        "concept_genres_map": concept_genres_map,
+        "contrast_concepts_map": contrast_concepts_map,
     }
     with open(metadata_path, "a") as f:
         f.write(json.dumps(metadata_entry) + "\n")
     
     # Save DataFrame
-    fragment_index = group_idx // rotation_freq
+    fragment_index = group_id // rotation_freq
     df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
     if os.path.exists(df_path):
         existing_df = pd.read_csv(df_path)
@@ -170,15 +170,14 @@ def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_conce
 
     # Load the state if it exists.
     state = load_state(dump_dir)
-    start_group_idx = state.get("group_idx", 0) if state else 0
-
-    logger.warning(f"Starting group index: {start_group_idx}")
+    start_group_id = state.get("group_id", 0) if state else 0
+    logger.warning(f"Starting group index: {start_group_id}")
     
     # Init the dataset factory.
     dataset_factory = ReAXFactory(model, tokenizer, dump_dir)
-    progress_bar = tqdm(range(start_group_idx, len(concept_groups)), desc="Processing concept groups")
-    for group_idx in progress_bar:
-        concepts, refs = concept_groups[group_idx]
+    progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
+    for group_id in progress_bar:
+        concepts, refs = concept_groups[group_id]
         
         # prepare concept related data.
         concept_genres_map, contrast_concepts_map = \
@@ -190,13 +189,16 @@ def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_conce
                 dataset_factory.create_train_df,
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map
             )
-            current_df["group_id"] = group_idx
+            current_df["group_id"] = group_id
         except Exception as e:
-            logger.warning(f"Failed to create training data for group {group_idx}: {e}")
+            logger.warning(f"Failed to create training data for group {group_id}: {e}")
             return
         
         # Save the generated DataFrame, metadata, and current state
-        save(dump_dir, {"group_idx": group_idx + 1}, group_idx, concepts, refs, "train", current_df, rotation_freq)
+        save(
+            dump_dir, {"group_id": group_id + 1}, group_id, 
+            concepts, concept_genres_map, contrast_concepts_map, 
+            refs, "train", current_df, rotation_freq)
 
     logger.warning(f"Finished creating dataset.")
 
