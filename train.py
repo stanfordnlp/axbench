@@ -2,7 +2,7 @@
 # This script takes arguments to specify the dataset and other configurations.
 #
 # example launch command:
-#     python train.py --data_dir demo --dump_dir demo --config demo/sweep/train.yaml
+#     python train.py --data_dir demo/generate --dump_dir demo --config demo/sweep/train.yaml
 
 try:
     # This library is our indicator that the required installs
@@ -15,13 +15,14 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
-import os, argparse, yaml, json, glob
+import os, argparse, yaml, json, glob, pickle
 import pandas as pd
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 import torch, pyreft
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import get_scheduler
+from pathlib import Path
 
 from pyvene import IntervenableModel
 from pyreax import (
@@ -30,7 +31,6 @@ from pyreax import (
     MaxReLUIntervention, 
     SubspaceAdditionIntervention, 
     make_data_module, 
-    save_reax,
     Config,
     load_config_from_json,
     load_concepts,
@@ -49,6 +49,8 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     level=logging.WARN)
 logger = logging.getLogger(__name__)
 
+STATE_FILE = "train_state.pkl"
+DEFAULT_ROTATION_FREQ = 1000
 
 def data_generator(data_dir):
     """
@@ -83,7 +85,55 @@ def load_metadata(metadata_path):
     return metadata
 
 
+def load_state(dump_dir):
+    """
+    Load the state from a file if it exists.
+    
+    Args:
+        dump_dir (str): The directory to load the state file from.
+    
+    Returns:
+        dict: The loaded state dictionary, or None if no state file exists.
+    """
+    state_path = os.path.join(f"{dump_dir}/train", STATE_FILE)
+    if os.path.exists(state_path):
+        with open(state_path, "rb") as f:
+            return pickle.load(f)
+    return None
+    
+
+def save_reax(dump_dir, group_id, intervention, rotation_freq):
+    """save artifacts"""
+    
+    # handle training df first
+    dump_dir = Path(dump_dir) / "train"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    fragment_index = group_id // rotation_freq
+    
+    # handle weight and bias
+    weight_file = Path(dump_dir) / f"weight_fragment_{fragment_index}.pt"
+    weight = {}
+    if weight_file.exists():
+        weight = torch.load(weight_file)
+    weight[group_id] = intervention.proj.weight.data.cpu()
+    torch.save(weight, weight_file)
+    
+    bias_file = Path(dump_dir) / f"bias_fragment_{fragment_index}.pt"
+    bias = {}
+    if bias_file.exists():
+        bias = torch.load(bias_file)
+    bias[group_id] = intervention.proj.bias.data.cpu()
+    torch.save(bias, bias_file)
+
+    state_path = os.path.join(dump_dir, STATE_FILE)
+    with open(state_path, "wb") as f:
+        pickle.dump({"group_id": group_id + 1}, f)
+
+
 def training_loop(args, train_dataloader, reft_model, reax_intervention):
+    torch.cuda.empty_cache()
+    
     # Optimizer and lr
     optimizer = torch.optim.AdamW(reft_model.parameters(), lr=args.lr)
     num_training_steps = args.n_epochs * len(train_dataloader)
@@ -159,8 +209,14 @@ def main():
     tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
     tokenizer.padding_side = "right"
 
+    state = load_state(args.dump_dir)
+    start_group_id = state.get("group_id", 0) if state else 0
+    logger.warning(f"Starting group index: {start_group_id}")
+    
     # Iterate over the data and metadata generators
     for (group_id, group_df) in df_generator:
+        if group_id < start_group_id:
+            continue
         logger.warning(f"Number of records in group_id {group_id}: {len(group_df)}\n")
 
         # Dataloader.
@@ -188,7 +244,9 @@ def main():
         logger.warning("Training finished.")
 
         # Save.
-                
+        save_reax(args.dump_dir, group_id, reax_intervention, DEFAULT_ROTATION_FREQ)
+
+    logger.warning(f"Finished training.")
 
 
 if __name__ == "__main__":
