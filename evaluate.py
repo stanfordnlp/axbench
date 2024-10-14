@@ -39,11 +39,13 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
     level=logging.WARN)
 logger = logging.getLogger(__name__)
 
+CONFIG_FILE = "config.json"
 DEFAULT_ROTATION_FREQ = 1000
 
 
 def main(data_dir, train_dir, dump_dir, num_of_examples, rotation_freq):
     pass
+
 
 if __name__ == "__main__":
     # Initialize the argument parser

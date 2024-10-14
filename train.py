@@ -46,7 +46,9 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 STATE_FILE = "train_state.pkl"
+CONFIG_FILE = "config.json"
 DEFAULT_ROTATION_FREQ = 1000
+
 
 def data_generator(data_dir):
     """
@@ -98,10 +100,11 @@ def load_state(dump_dir):
     return None
     
 
-def save_reax(dump_dir, group_id, intervention, rotation_freq):
+def save_reax(args, group_id, intervention, rotation_freq):
     """save artifacts"""
     
     # handle training df first
+    dump_dir = args.dump_dir
     dump_dir = Path(dump_dir) / "train"
     dump_dir.mkdir(parents=True, exist_ok=True)
     
@@ -122,9 +125,17 @@ def save_reax(dump_dir, group_id, intervention, rotation_freq):
     bias[group_id] = intervention.proj.bias.data.cpu()
     torch.save(bias, bias_file)
 
-    state_path = os.path.join(dump_dir, STATE_FILE)
+    state_path = dump_dir / STATE_FILE
     with open(state_path, "wb") as f:
         pickle.dump({"group_id": group_id + 1}, f)
+
+    # save other config
+    config = {"model_name": args.model_name,
+        "layer": args.layer,
+        "component": args.component}
+    config_path = dump_dir / CONFIG_FILE
+    with open(config_path, 'w') as f:
+        json.dump(config, f)
 
 
 def training_loop(args, train_dataloader, reft_model, reax_intervention):
@@ -240,7 +251,7 @@ def main():
         logger.warning("Training finished.")
 
         # Save.
-        save_reax(args.dump_dir, group_id, reax_intervention, DEFAULT_ROTATION_FREQ)
+        save_reax(args, group_id, reax_intervention, DEFAULT_ROTATION_FREQ)
 
     logger.warning(f"Finished training.")
 

@@ -47,6 +47,7 @@ STATE_FILE = "generate_state.pkl"
 METADATA_FILE = "metadata.jsonl"
 DEFAULT_ROTATION_FREQ = 1000
 
+
 def retry_with_backoff(func, *args, **kwargs):
     """
     Generic retry mechanism with exponential backoff.
