@@ -29,11 +29,7 @@ from pyreax import (
     EXAMPLE_TAG, 
     ReAXFactory, 
     MaxReLUIntervention, 
-    SubspaceAdditionIntervention, 
     make_data_module, 
-    Config,
-    load_config_from_json,
-    load_concepts,
     TrainingArgs
 )
 from pyreax import (

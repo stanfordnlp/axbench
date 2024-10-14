@@ -6,6 +6,17 @@
 # example launch command:
 #    python generate.py --dump_dir demo --concept_path demo/concepts.csv --num_of_examples 72 --rotation_freq 1000
 
+try:
+    # This library is our indicator that the required installs
+    # need to be done.
+    import pyreax
+
+except ModuleNotFoundError:
+    # relative import; better to pip install subctrl
+    import sys
+    sys.path.append("../../pyreax")
+    import pyreax
+
 import sys
 import argparse
 import time
@@ -14,11 +25,6 @@ import pickle
 import random
 import json
 
-try:
-    import pyreax
-except ModuleNotFoundError:
-    sys.path.append("../pyreax")
-    import pyreax
 import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
