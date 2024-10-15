@@ -1,9 +1,2 @@
-# generate dataset
-input_length: 32
-output_length: 10
-
-num_of_examples: 50
-rotation_freq: 1000
-data_dir: "demo/generate"
-train_dir: "demo/train"
+data_dir: "demo/inference"
 dump_dir: "demo"
