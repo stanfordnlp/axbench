@@ -89,40 +89,40 @@ class ReAXFactory(object):
             eval_tasks.append(get_content_with_concept(
                 self.lm_model, self.tokenizer, subset_n, concept_genres_map, 
                 concept=concept, length=input_length))
-            tags.append(("positive", concept))
+            tags.append(("positive", concept, idx))
             # negative
             eval_tasks.append(get_random_content(
                 self.lm_model, self.tokenizer, subset_n, concept_genres_map, [concept], 
                 length=input_length))
-            tags.append(("negative", concept))
+            tags.append(("negative", concept, idx))
             # hard negative seen
             exist_polysemantic_meanings = train_contrast_concepts_map[concept]
             if len(exist_polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
                     self.lm_model, self.tokenizer, concept_genres_map, 
                     exist_polysemantic_meanings, concept, length=input_length))
-                tags.append(("hard negative seen", concept))
+                tags.append(("hard negative seen", concept, idx))
             # hard negative unseen
             polysemantic_meanings = eval_contrast_concepts_map[concept]
             if len(polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
                     self.lm_model, self.tokenizer, concept_genres_map, 
                     polysemantic_meanings, concept, length=input_length))
-                tags.append(("hard negative unseen", concept))
+                tags.append(("hard negative unseen", concept, idx))
         all_eval_content = asyncio.run(run_tasks(eval_tasks))
 
-        for (tag, concept), eval_content in zip(tags, all_eval_content):
+        for (tag, concept, idx), eval_content in zip(tags, all_eval_content):
             if tag in {"positive"}:
-                all_examples += [[content, concept, tag] for content in eval_content]
+                all_examples += [[content, concept, tag, idx] for content in eval_content]
             elif tag in {"negative"}:
-                all_examples += [[content, concept, tag] for content in eval_content[concept]]
+                all_examples += [[content, concept, tag, idx] for content in eval_content[concept]]
             elif tag in {"hard negative seen", "hard negative unseen"}:
-                all_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
+                all_examples += [[content[1], "//".join(content[0]), tag, idx] for content in eval_content[1]]
 
         df = pd.DataFrame(
             all_examples, 
             columns = [
-                'input', 'input_concept', 'category'])
+                'input', 'input_concept', 'category', 'id'])
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()

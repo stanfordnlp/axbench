@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 5
 RETRY_DELAY = 1  # in seconds
+N_DECIMAL = 3
 STATE_FILE = "evaluate_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
@@ -156,6 +157,32 @@ def retry_with_backoff(func, *args, **kwargs):
             time.sleep(RETRY_DELAY * retries)
 
 
+def save(
+    dump_dir, state, group_id, partition,
+    current_df, rotation_freq):
+    """
+    Save the current state, metadata, and DataFrame.
+    """
+    # handle training df first
+    dump_dir = Path(dump_dir) / "evaluate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save state
+    state_path = os.path.join(dump_dir, STATE_FILE)
+    with open(state_path, "wb") as f:
+        pickle.dump(state, f)
+    
+    # Save DataFrame
+    fragment_index = group_id // rotation_freq
+    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
+    if os.path.exists(df_path):
+        existing_df = pd.read_csv(df_path)
+        combined_df = pd.concat([existing_df, current_df], ignore_index=True)
+    else:
+        combined_df = current_df
+    combined_df.to_csv(df_path, index=False)
+    
+
 def eval_steering(args):
 
     raise NotImplementedError("Steering evaluation is not implemented yet.")
@@ -195,9 +222,10 @@ def eval_latent(args):
        "intervention": sae_intervention}, model=model)
     
     # Init reax and whole weight loading (but we dont load weights).
+    group_size = len(metadata[0]["concepts"]) # usually it's 2
     reax_intervention = MaxReLUIntervention(
         embed_dim=model.config.hidden_size, 
-        low_rank_dimension=len(metadata[0]["concepts"]), # usually it's 2.
+        low_rank_dimension=group_size, 
     )
     _ = reax_intervention.cuda()
     current_frag_id = 0
@@ -209,43 +237,100 @@ def eval_latent(args):
 
     dataset_factory = ReAXFactory(model, tokenizer, dump_dir)
     progress_bar = tqdm(range(start_group_id, len(metadata)), desc="Processing concept groups")
-    for group_id in progress_bar:
-        # reload if needed.
-        if group_id // rotation_freq > current_frag_id:
-            current_frag_id = group_id // rotation_freq
-            reax_weights_dict, reax_bias_dict = load_reax(train_dir, current_frag_id)
+    
+    torch.cuda.empty_cache()
+    with torch.no_grad():
+        for group_id in progress_bar:
+            # reload if needed.
+            if group_id // rotation_freq > current_frag_id:
+                current_frag_id = group_id // rotation_freq
+                reax_weights_dict, reax_bias_dict = load_reax(train_dir, current_frag_id)
+    
+            group_metadata = metadata[group_id]
+            concepts = group_metadata["concepts"]
+            refs = group_metadata["refs"]
+            concept_genres_map = group_metadata["concept_genres_map"]
+            contrast_concepts_map = group_metadata["contrast_concepts_map"]
+            
+            # prepare concept related data.
+            _, eval_contrast_concepts_map = \
+                dataset_factory.prepare_concepts(
+                    concepts, 
+                    concept_genres_map=concept_genres_map,
+                    contrast_concepts_map=contrast_concepts_map)
+            
+            # generate with retry mechanism.
+            try:
+                current_df = retry_with_backoff(
+                    dataset_factory.create_eval_df,
+                    concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
+                    eval_contrast_concepts_map, input_length=args.input_length, output_length=args.output_length
+                )
+                current_df["group_id"] = group_id
+            except Exception as e:
+                logger.warning(f"Failed to create evaluation data for group {group_id}: {e}")
+                return
+    
+            # load reax weight in.
+            reax_intervention.proj.weight.data = reax_weights_dict[group_id].cuda()
+            reax_intervention.proj.bias.data = reax_bias_dict[group_id].cuda()
 
-        group_metadata = metadata[group_id]
-        concepts = group_metadata["concepts"]
-        refs = group_metadata["refs"]
-        concept_genres_map = group_metadata["concept_genres_map"]
-        contrast_concepts_map = group_metadata["contrast_concepts_map"]
-        
-        # prepare concept related data.
-        _, eval_contrast_concepts_map = \
-            dataset_factory.prepare_concepts(
-                concepts, 
-                concept_genres_map=concept_genres_map,
-                contrast_concepts_map=contrast_concepts_map)
-        
-        # generate with retry mechanism.
-        try:
-            current_df = retry_with_backoff(
-                dataset_factory.create_eval_df,
-                concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
-                eval_contrast_concepts_map, input_length=args.input_length, output_length=args.output_length
-            )
-        except Exception as e:
-            logger.warning(f"Failed to create evaluation data for group {group_id}: {e}")
-            return
+            all_sae_acts = []
+            all_reax_acts = []
+            all_sae_max_act = []
+            all_reax_max_act = []
+            all_sae_id = []
+            all_reax_id = []
+            all_sae_link = []
+            
+            # inference and save data.
+            for _, row in current_df.iterrows():
+                sae_id = int(refs[row["id"]].split("/")[-1]) 
+                inputs = tokenizer.encode(
+                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
+                
+                # sae acts
+                sae_acts = pv_sae_model.forward(
+                    {"input_ids": inputs}, return_dict=True
+                ).collected_activations[0][1:, sae_id].data.cpu().numpy().tolist() # no bos token
+                sae_acts = [round(x, N_DECIMAL) for x in sae_acts]
+                max_sae_act = max(sae_acts)
+                non_zero_sae_act = max(1, sum(1 for x in sae_acts if x != 0.0)) # minimally top-1
+                
+                # reax acts
+                reax_in = gather_residual_activations(model, layer, inputs)
+                reax_acts, _ = reax_intervention.encode(
+                    reax_in[:,1:], # no bos token
+                    subspaces={
+                        "input_subspaces": torch.tensor([row["id"]])}, k=non_zero_sae_act)
+                reax_acts = reax_acts.flatten().data.cpu().numpy().tolist()
+                reax_acts = [round(x, N_DECIMAL) for x in reax_acts]
+                non_zero_reax_act = max(1, sum(1 for x in reax_acts if x != 0.0))
+                if non_zero_reax_act < non_zero_sae_act:
+                    # overwrite sae_acts if reax is more sparse.
+                    top_k_values = np.partition(sae_acts, -non_zero_reax_act)[-non_zero_reax_act:]
+                    sae_acts = [x if x in top_k_values else 0.0 for x in sae_acts]
+                max_reax_act = max(reax_acts)
 
-        # load reax weight in.
-        reax_intervention.proj.weight.data = reax_weights_dict[group_id].cuda()
-        reax_intervention.proj.bias.data = reax_bias_dict[group_id].cuda()
-
-        # inference and save data.
-        print(current_df)
-
+                all_sae_acts += [sae_acts]
+                all_reax_acts += [reax_acts]
+                all_sae_max_act += [max_sae_act]
+                all_reax_max_act += [max_reax_act]
+                all_sae_id += [sae_id]
+                all_reax_id += [int(group_id*group_size + row["id"])]
+                all_sae_link += [refs[row["id"]]]
+                
+            current_df['sae_acts'] = all_sae_acts
+            current_df['reax_acts'] = all_reax_acts
+            current_df['max_sae_act'] = all_sae_max_act
+            current_df['max_reax_act'] = all_reax_max_act
+            current_df['reax_id'] = all_reax_id
+            current_df['sae_id'] = all_sae_id
+            current_df['sae_link'] = all_sae_link
+            
+            # Save the generated DataFrame, metadata, and current state
+            save(dump_dir, {"group_id": group_id + 1}, group_id, "latent",
+                current_df, rotation_freq)
 
 
 def main():
