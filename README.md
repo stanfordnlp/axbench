@@ -16,30 +16,30 @@ Train and save representation abstractions with generated datasets:
 python scripts/train.py --config demo/sweep/train.yaml
 ```
 
-## evaluate
+## inference
 
 #### latent
-Evaluate latent activations with representation abstractions:
+Inference with latent activations with representation abstractions:
 ```bash
-python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode latent
+python scripts/inference.py --config demo/sweep/inference.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
-Evaluate model steering with representation abstractions:
+Inference with model steering with representation abstractions:
 ```bash
-python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode steer
+python scripts/inference.py --config demo/sweep/inference.yaml --mode steer
 ```
 
-## score
+## evaluate
 
 #### latent (not implemented yet)
-To score evaluation results for latent activations:
+To evaluate inference results for latent activations:
 ```bash
-python scripts/score.py --config demo/sweep/score.yaml --mode latent
+python scripts/evaluate.py --mode latent
 ```
 
 #### steering (not implemented yet)
-To score evaluation results for steering:
+To evaluate inference results for steering:
 ```bash
-python scripts/score.py --config demo/sweep/score.yaml --mode steer
+python scripts/evaluate.py --mode steer
 ```
