@@ -4,7 +4,7 @@
 # although more training data will likely to be needed.
 # 
 # example launch command:
-#    python generate.py --config demo/sweep/generate.yaml
+#    python scripts/generate.py --config demo/sweep/generate.yaml
 
 try:
     # This library is our indicator that the required installs
