@@ -1,32 +1,41 @@
 # pyreax
 
-### generate
+## generate
 Generate training dataset for subspaces:
 ```bash
-python generate.py --config demo/sweep/generate.yaml
+python scripts/generate.py --config demo/sweep/generate.yaml
 ```
 
-### train
+## train
 Train and save subspaces with generated datasets:
 ```bash
-python train.py --config demo/sweep/train.yaml
+python scripts/train.py --config demo/sweep/train.yaml
 ```
 
-### evaluate
+## evaluate
 
 #### latent
 Evaluate latent activations with subspaces:
 ```bash
-python evaluate.py --config demo/sweep/evaluate.yaml --mode latent
+python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 Evaluate model steering ith subspaces:
 ```bash
-python evaluate.py --config demo/sweep/evaluate.yaml --mode steer
+python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode steer
 ```
 
-### score
-To score evaluation results:
+## score
+
+#### latent (not implemented yet)
+To score evaluation results for latent activations:
 ```bash
+python scripts/score.py --config demo/sweep/score.yaml --mode latent
+```
+
+#### steering (not implemented yet)
+To score evaluation results for steering:
+```bash
+python scripts/score.py --config demo/sweep/score.yaml --mode steer
 ```
