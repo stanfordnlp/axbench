@@ -3,13 +3,30 @@
 ### generate
 Generate training dataset for subspaces:
 ```bash
-python generate.py --dump_dir demo --concept_path demo/concepts.csv --num_of_examples 72
+python generate.py --config demo/sweep/generate.yaml
 ```
 
 ### train
-Training and saving subspaces with generated datasets:
+Train and save subspaces with generated datasets:
 ```bash
-python train.py --data_dir demo/generate --dump_dir demo --config demo/sweep/train.yaml
+python train.py --config demo/sweep/train.yaml
 ```
 
-### evaluation
+### evaluate
+
+#### latent
+Evaluate latent activations with subspaces:
+```bash
+python evaluate.py --config demo/sweep/evaluate.yaml --mode latent
+```
+
+#### steering (not implemented yet)
+Evaluate model steering ith subspaces:
+```bash
+python evaluate.py --config demo/sweep/evaluate.yaml --mode steer
+```
+
+### score
+To score evaluation results:
+```bash
+```

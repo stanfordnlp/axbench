@@ -102,7 +102,7 @@ class LanguageModel(object):
         """handling batched async calls"""
         client = AsyncOpenAI(
             api_key=os.environ.get("OPENAI_API_KEY"),
-            timeout=10.0,
+            timeout=100.0,
             http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
             max_retries=2,
         )

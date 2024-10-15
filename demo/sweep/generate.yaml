@@ -1,0 +1,8 @@
+# generate dataset
+input_length: 32
+output_length: 10
+
+num_of_examples: 72
+rotation_freq: 1000
+concept_path: "demo/concepts.csv"
+dump_dir: "demo"
