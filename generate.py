@@ -4,7 +4,7 @@
 # although more training data will likely to be needed.
 # 
 # example launch command:
-#    python generate.py --dump_dir demo --concept_path demo/concepts.csv --num_of_examples 72 --rotation_freq 1000
+#    python generate.py --config demo/sweep/generate.yaml
 
 try:
     # This library is our indicator that the required installs
@@ -28,7 +28,7 @@ import json
 import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from pyreax import ReAXFactory, load_concepts
+from pyreax import ReAXFactory, DatasetArgs
 from pathlib import Path
 
 import logging
@@ -46,6 +46,50 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "generate_state.pkl"
 METADATA_FILE = "metadata.jsonl"
 DEFAULT_ROTATION_FREQ = 1000
+
+
+def load_concepts(dump_dir):
+    sae_concepts = []
+    if ".txt" in dump_dir:
+        with open(dump_dir, 'r') as file:
+            concepts = [line.strip() for line in file.readlines()]
+        if concepts[0].startswith("http://") or concepts[0].startswith("https://"):
+            logger.warning("Detect external links. Pull concept info from the link.")
+            for concept in concepts:
+                if "www.neuronpedia.org" not in concept:
+                    raise ValueError(f"Pulling from {concept} is not supported.")
+                sae_path = concept.split("https://www.neuronpedia.org/")[-1]
+                sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+                headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+                response = requests.get(sae_url, headers=headers).json()
+                explanation = response["explanations"][0]["description"]
+                sae_concepts += [explanation.strip()]
+            return sae_concepts, concepts
+        return concepts, ["null"]*len(concepts)
+    elif ".csv" in dump_dir:
+        # for csv, then the format is <concept>,<url>
+        # no http connection is needed
+        concepts = []
+        with open(dump_dir, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                sae_concepts += [row[0]]
+                concepts += [row[1]]
+        return sae_concepts, concepts
+    elif ".json" in dump_dir:
+        concepts = []
+        # this must be a neuropedia export.
+        with open(dump_dir, 'r') as file:
+            json_concepts = json.load(file)
+        for concept in json_concepts:
+            sae_concepts += [concept["description"].strip()]
+            model = concept["modelId"]
+            sae_model = concept["layer"]
+            subspace_id = concept["index"]
+            concepts += [f"https://www.neuronpedia.org/{model}/{sae_model}/{subspace_id}"]
+        return sae_concepts, concepts
+    else:
+        raise ValueError(f"Unsupported file type: {dump_dir}.")  
 
 
 def retry_with_backoff(func, *args, **kwargs):
@@ -74,6 +118,7 @@ def retry_with_backoff(func, *args, **kwargs):
                 raise
             logger.warning(f"Retrying ({retries}/{MAX_RETRIES}) after failure: {e}")
             time.sleep(RETRY_DELAY * retries)
+
 
 def partition_lists(list1, list2, step=2):
     """
@@ -147,10 +192,18 @@ def load_state(dump_dir):
             return pickle.load(f)
     return None
 
-def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_concepts):
-    """
-    Main function.
-    """
+def main():
+    args = DatasetArgs()
+    logger.warning("Generating datasets with the following configuration:")
+    logger.warning(args)
+
+    dump_dir = args.dump_dir
+    concept_path = args.concept_path
+    num_of_examples = args.num_of_examples
+    rotation_freq = args.rotation_freq
+    seed = args.seed
+    max_concepts = args.max_concepts
+    
     # Load and optionally shuffle concepts
     all_concepts, all_refs = load_concepts(concept_path)
     if seed is not None:
@@ -194,7 +247,8 @@ def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_conce
         try:
             current_df = retry_with_backoff(
                 dataset_factory.create_train_df,
-                concepts, num_of_examples, concept_genres_map, contrast_concepts_map
+                concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
+                input_length=args.input_length, output_length=args.output_length
             )
             current_df["group_id"] = group_id
         except Exception as e:
@@ -210,26 +264,5 @@ def main(dump_dir, concept_path, num_of_examples, rotation_freq, seed, max_conce
     logger.warning(f"Finished creating dataset.")
 
 if __name__ == "__main__":
-    # Initialize the argument parser
-    parser = argparse.ArgumentParser(description="Generate script for creating the training dataset for concepts.")
-    
-    # Define the arguments
-    parser.add_argument("--dump_dir", type=str, help="Path to the dump directory")
-    parser.add_argument("--concept_path", type=str, help="Path to the concept file")
-    parser.add_argument("--num_of_examples", type=int, help="The number of examples")
-    parser.add_argument("--rotation_freq", type=int, help="Frequency for chunking files", default=DEFAULT_ROTATION_FREQ)
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for shuffling concepts")
-    parser.add_argument("--max_concepts", type=int, default=None, help="Maximum number of concepts to use")
-    
-    # Parse the arguments
-    args = parser.parse_args()
-    
-    # Run the main function with parsed arguments
-    main(
-        args.dump_dir,
-        args.concept_path,
-        args.num_of_examples,
-        args.rotation_freq,
-        args.seed,
-        args.max_concepts
-    )
+    main()
+

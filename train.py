@@ -2,7 +2,7 @@
 # This script takes arguments to specify the dataset and other configurations.
 #
 # example launch command:
-#     python train.py --data_dir demo/generate --dump_dir demo --config demo/sweep/train.yaml
+#     python train.py --config demo/sweep/train.yaml
 
 try:
     # This library is our indicator that the required installs
@@ -198,7 +198,6 @@ def training_loop(args, train_dataloader, reft_model, reax_intervention):
 
 
 def main():
-    # Initialize TrainingArgs, which will parse args and load config
     args = TrainingArgs()
     logger.warning("Training model with the following configuration:")
     logger.warning(args)

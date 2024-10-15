@@ -89,7 +89,7 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
         filtered_word_polysemantics += [(concept, w, word_polysemantic)]
     polysemantic_checks = await client.chat_completions(
         "get_contrast_concepts.prompt_is_meaning_not_same", prompts)
-        
+    
     # optional async step 4.
     prompts = []
     further_filtered_word_polysemantics = []
@@ -102,7 +102,7 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
             existing_concepts = [item[-1] for item in contrast_concepts[concept]]
             if len(existing_concepts) != 0:
                 prompts += [T_FILTER_CONTRAST_MULTI_CONCEPT.format(
-                    CONTRAST_CONCEPT=filtered_word_polysemantics[i], CONCEPTS="\n".join(existing_concepts))]
+                    CONTRAST_CONCEPT=filtered_word_polysemantics[i][-1], CONCEPTS="\n".join(existing_concepts))]
                 further_filtered_word_polysemantics += [(concept, w, word_polysemantic)]
         else:
             polysemantics[concept] += [(w, word_polysemantic)]
@@ -110,8 +110,8 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None):
         exist_meaning_checks = await client.chat_completions(
             "get_contrast_concepts.prompt_exist_is_meaning_not_same", prompts)
         for i, exist_meaning_check in enumerate(exist_meaning_checks):
-            concept, w, word_polysemantic = filtered_word_polysemantics
-            if "yes" not in response_exist_is_meaning_not_same.split("Answer")[-1].lower():
+            concept, w, word_polysemantic = further_filtered_word_polysemantics[i]
+            if "yes" not in exist_meaning_check.split("Answer")[-1].lower():
                 continue
             polysemantics[concept] += [(w, word_polysemantic)]
     return polysemantics
@@ -131,7 +131,7 @@ async def get_random_content(client, tokenizer, count, genres, concepts, length)
         response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
         response = tokenizer.convert_tokens_to_string(
             tokenizer.tokenize(response)[:int(length*1.5)])
-        random_content[concepts[i//(len(responses)//2)]] += [response]
+        random_content[concepts[i//(len(responses)//len(concepts))]] += [response]
         
     return random_content
 
@@ -160,7 +160,6 @@ async def modify_content_with_concept(client, tokenizer, content, length):
         response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
 
 
-
 async def continue_with_concept(client, tokenizer, concepts, content, length):
     prompts = []
     for i, concept in enumerate(concepts):
@@ -175,18 +174,18 @@ async def get_content_with_concept(client, tokenizer, count, genres, concept, le
     prompts = []
     for _ in range(count):
         prompts += [T_CONTENT_WITH_CONCEPT.format(
-            GENRE=random.choice(genres), CONCEPT=concept, LENGTH=length)]
+            GENRE=random.choice(genres[concept]), CONCEPT=concept, LENGTH=length)]
     responses = await client.chat_completions("get_content_with_concept", prompts)
     return [tokenizer.convert_tokens_to_string(tokenizer.tokenize(
         response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
 
 
-async def get_content_with_polysemantic_concepts(client, tokenizer, genres, concept, polysemantic_concepts, length):
+async def get_content_with_polysemantic_concepts(client, tokenizer, genres, polysemantic_concepts, concept, length):
     prompts = []
-    for i, concept in enumerate(polysemantic_concepts):
+    for i, polysemantic_concept in enumerate(polysemantic_concepts):
         prompts += [T_CONTENT_WITH_CONTRAST_CONCEPT.format(
-            GENRE=random.choice(genres),
-            CONCEPT=concept[1], WORD=concept[0], CONTRAST_CONCEPT=contrast_concept, LENGTH=length)]
+            GENRE=random.choice(genres[concept]),
+            CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], CONTRAST_CONCEPT=concept, LENGTH=length)]
     responses = await client.chat_completions("get_content_with_polysemantic_concepts", prompts)
     return (concept, zip(
         polysemantic_concepts, [

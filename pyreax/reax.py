@@ -18,92 +18,6 @@ from .utils.model_utils import *
 from .utils.prompt_utils import *
 from .language_models import *
 
-import numpy as np
-from huggingface_hub import hf_hub_download
-
-
-def load_concepts(dump_dir):
-    sae_concepts = []
-    if ".txt" in dump_dir:
-        with open(dump_dir, 'r') as file:
-            concepts = [line.strip() for line in file.readlines()]
-        if concepts[0].startswith("http://") or concepts[0].startswith("https://"):
-            logger.warning("Detect external links. Pull concept info from the link.")
-            for concept in concepts:
-                if "www.neuronpedia.org" not in concept:
-                    raise ValueError(f"Pulling from {concept} is not supported.")
-                sae_path = concept.split("https://www.neuronpedia.org/")[-1]
-                sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-                headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-                response = requests.get(sae_url, headers=headers).json()
-                explanation = response["explanations"][0]["description"]
-                sae_concepts += [explanation.strip()]
-            return sae_concepts, concepts
-        return concepts, ["null"]*len(concepts)
-    elif ".csv" in dump_dir:
-        # for csv, then the format is <concept>,<url>
-        # no http connection is needed
-        concepts = []
-        with open(dump_dir, 'r') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                sae_concepts += [row[0]]
-                concepts += [row[1]]
-        return sae_concepts, concepts
-    elif ".json" in dump_dir:
-        concepts = []
-        # this must be a neuropedia export.
-        with open(dump_dir, 'r') as file:
-            json_concepts = json.load(file)
-        for concept in json_concepts:
-            sae_concepts += [concept["description"].strip()]
-            model = concept["modelId"]
-            sae_model = concept["layer"]
-            subspace_id = concept["index"]
-            concepts += [f"https://www.neuronpedia.org/{model}/{sae_model}/{subspace_id}"]
-        return sae_concepts, concepts
-    else:
-        raise ValueError(f"Unsupported file type: {dump_dir}.")  
-
-
-def load_sae(concept_metadata):
-    """load the sae metadata (e.g., column index) and weights"""
-    sae_path = json.loads(concept_metadata[0])["sae_concept"].split("https://www.neuronpedia.org/")[-1]
-    sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-    
-    headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-    response = requests.get(sae_url, headers=headers).json()
-    hf_repo = response["source"]["hfRepoId"]
-    hf_folder = response["source"]["hfFolderId"]
-    path_to_params = hf_hub_download(
-        repo_id=hf_repo,
-        filename=f"{hf_folder}/params.npz",
-        force_download=False,
-    )
-    params = np.load(path_to_params)
-    pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
-
-    return pt_params
-
-
-def load_reax(dump_dir):
-    """load the saved subspaces for evaluations"""
-    dump_dir = Path(dump_dir)
-    config = load_config_from_json(dump_dir / 'config.json')
-    training_df = pd.read_csv(dump_dir / "training_df.csv")
-    with open(dump_dir / "concept_metadata.jsonl", 'r') as f:
-        concept_metadata = list(f)
-    weight = torch.load(dump_dir / "weight.pt")
-    bias = torch.load(dump_dir / "bias.pt")
-    return config, training_df, concept_metadata, weight, bias
-    
-
-def save_reax_df(dump_dir, df, filename):
-    file = dump_dir / filename
-    if file.exists():
-        new_df = pd.concat([pd.read_csv(file), df], axis=0)
-    new_df.to_csv(file, index=False)
-
 
 async def run_tasks(tasks):
     # Gather and run all provided tasks concurrently, and collect their results
@@ -134,69 +48,87 @@ class ReAXFactory(object):
 
     def prepare_concepts(self, concepts, **kwargs):
         start = time.time()
-        logger.warning("Creating genre and contrast concepts for the inputs.")
-        genre_task = get_concept_genres(self.lm_model, concepts)
-        contrast_task = get_contrast_concepts(
-            self.lm_model, concepts, kwargs.get("contrast_concepts", None))
-        concept_genres_map, contrast_concepts_map = asyncio.run(
-            run_tasks([genre_task, contrast_task]))
+        if kwargs.get("concept_genres_map", None) != None:
+            logger.warning("Creating contrast concepts for the inputs (skipping genres as they are provided).")
+            contrast_task = get_contrast_concepts(
+                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None))
+            contrast_concepts_map = asyncio.run(
+                run_tasks([contrast_task]))[0]
+            concept_genres_map = kwargs.get("concept_genres_map", None)
+        else:
+            logger.warning("Creating genre and contrast concepts for the inputs.")
+            genre_task = get_concept_genres(self.lm_model, concepts)
+            contrast_task = get_contrast_concepts(
+                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None))
+            concept_genres_map, contrast_concepts_map = asyncio.run(
+                run_tasks([genre_task, contrast_task]))
 
         end = time.time()
         elapsed = round(end - start, 3)
         total_price = self.get_total_price()
+        for concept in concepts:
+            logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
         logger.warning(
             f"Init finished in {elapsed} sec. (current cost: ${total_price})"
         )
         return concept_genres_map, contrast_concepts_map
 
-    def create_eval_df(self, concepts, subset_n, concept_genres_map, contrast_concepts_map, **kwargs):
+    def create_eval_df(self, concepts, subset_n, concept_genres_map, train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
         """category: positive, negative, hard negative"""
-        all_examples = []
+        
+        start = time.time()
         logger.warning("Creating dataframe.")
-        n_per_concept = n // (len(self.concepts))
 
-        input_length = kwargs["input_length"] if "input_length" in kwargs else 64
-        output_length = kwargs["output_length"] if "output_length" in kwargs else 10
-
+        all_examples = []
+        input_length = kwargs.get("input_length", 32)
+        output_length = kwargs.get("output_length", 10)
         eval_tasks = []
         tags = []
-        for idx, concept in enumerate(self.concepts):
+        for idx, concept in enumerate(concepts):
             # positive
             eval_tasks.append(get_content_with_concept(
-                self.lm_model, self.tokenizer, subset_n, self.concept_genres_map[concept], 
+                self.lm_model, self.tokenizer, subset_n, concept_genres_map, 
                 concept=concept, length=input_length))
             tags.append(("positive", concept))
             # negative
             eval_tasks.append(get_random_content(
-                self.lm_model, tokenizer, subset_n, self.concept_genres_map[concept], [concept], 
+                self.lm_model, self.tokenizer, subset_n, concept_genres_map, [concept], 
                 length=input_length))
             tags.append(("negative", concept))
             # hard negative seen
-            exist_polysemantic_meanings = contrast_concepts_map[concept]
+            exist_polysemantic_meanings = train_contrast_concepts_map[concept]
             if len(exist_polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
-                    self.lm_model, tokenizer, self.concept_genres_map[concept], 
-                    polysemantic_meanings, concept, length=input_length))
+                    self.lm_model, self.tokenizer, concept_genres_map, 
+                    exist_polysemantic_meanings, concept, length=input_length))
                 tags.append(("hard negative seen", concept))
             # hard negative unseen
-            polysemantic_meanings = self.contrast_concepts_map[concept]
+            polysemantic_meanings = eval_contrast_concepts_map[concept]
             if len(polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
-                    self.lm_model, tokenizer, self.concept_genres_map[concept], 
+                    self.lm_model, self.tokenizer, concept_genres_map, 
                     polysemantic_meanings, concept, length=input_length))
                 tags.append(("hard negative unseen", concept))
-        eval_content = asyncio.run(run_tasks(eval_tasks))
+        all_eval_content = asyncio.run(run_tasks(eval_tasks))
 
-        for (tag, concept), eval_content in zip(tags, eval_content):
-            if tag in {"positive", "negative"}:
+        for (tag, concept), eval_content in zip(tags, all_eval_content):
+            if tag in {"positive"}:
                 all_examples += [[content, concept, tag] for content in eval_content]
-            elif tag == {"hard negative seen", "hard negative unseen"}:
-                all_examples += [[content[0], "//".join(content[1]), tag] for content in eval_content[1]]
+            elif tag in {"negative"}:
+                all_examples += [[content, concept, tag] for content in eval_content[concept]]
+            elif tag in {"hard negative seen", "hard negative unseen"}:
+                all_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
 
         df = pd.DataFrame(
             all_examples, 
             columns = [
                 'input', 'input_concept', 'category'])
+        end = time.time()
+        elapsed = round(end-start, 3)
+        total_price = self.get_total_price()
+        logger.warning(f"Finished creating current dataframe in {elapsed} sec. (current cost: ${total_price})")
+        # reset the cost.
+        self.reset_stats()
         return df
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
@@ -207,7 +139,7 @@ class ReAXFactory(object):
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
 
-        input_length = kwargs.get("input_length", 64)
+        input_length = kwargs.get("input_length", 32)
         output_length = kwargs.get("output_length", 10)
         
         # for each concept, we create a set of seed random content.
