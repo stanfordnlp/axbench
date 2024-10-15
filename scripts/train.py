@@ -2,7 +2,7 @@
 # This script takes arguments to specify the dataset and other configurations.
 #
 # example launch command:
-#     python train.py --config demo/sweep/train.yaml
+#     python scripts/train.py --config demo/sweep/train.yaml
 
 try:
     # This library is our indicator that the required installs
