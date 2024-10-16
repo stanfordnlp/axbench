@@ -1,22 +1,48 @@
 <h1 align="center"> <p>pyreax<sub> by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></p></h1>
 <h3 align="center">
-    <p>A library for creating your representation abstractions (ReAXs) in seconds.</p>
+    <p>A library for creating your representation abstractions (ReAXs) at scale.</p>
     <a href=""><strong>Read our paper »</strong></a></a>
 </h3>
 
-## generate
+## Creating your validated abstractions in minutes.
+
+Make sure you have your OpenAI API key set:
+```python
+import os
+os.environ["OPENAI_API_KEY"] = "your_api_key_here"
+```
+
+Create your abstraction:
+```python
+import pyreax
+
+ax = pyreax.create(
+    model_name="google/gemma-2-2b", layer=20,
+    concept="terms related to the Golden Gate Bridge")
+
+# detection
+ax.detect("I want to visit the Golden Gate Bridge this weekend!")
+
+# steering
+ax.steer("Recommand places to visit over the weekend.")
+```
+
+
+## ReAX Workflow
+
+### generate
 Generate training dataset for representation abstractions:
 ```bash
 python scripts/generate.py --config demo/sweep/generate.yaml
 ```
 
-## train
+### train
 Train and save representation abstractions with generated datasets:
 ```bash
 python scripts/train.py --config demo/sweep/train.yaml
 ```
 
-## inference
+### inference
 
 #### latent
 Inference with latent activations with representation abstractions:
@@ -30,16 +56,21 @@ Inference with model steering with representation abstractions:
 python scripts/inference.py --config demo/sweep/inference.yaml --mode steer
 ```
 
-## evaluate
+### evaluate
 
-#### latent (not implemented yet)
+#### latent
 To evaluate inference results for latent activations:
 ```bash
-python scripts/evaluate.py --mode latent
+python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 To evaluate inference results for steering:
 ```bash
-python scripts/evaluate.py --mode steer
+python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode steer
 ```
+
+### (optional) plot
+
+We provide a plot notebook (`scripts/plots.ipynb`) for generating various figures.
+
