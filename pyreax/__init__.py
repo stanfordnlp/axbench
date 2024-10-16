@@ -1,7 +1,6 @@
 from .templates.html_templates import *
 from .templates.prompt_templates import *
 
-from .utils.config import *
 from .utils.constants import *
 from .utils.prompt_utils import *
 from .utils.model_utils import *

@@ -21,6 +21,7 @@ class AUCROCEvaluator(Evaluator):
         # Apply class labels
         data['label'] = data['category'].map(class_labels)
         filtered_data = data.dropna(subset=['label'])
+        filtered_data = filtered_data.fillna(0) # in case others are still nan, e.g., max_reax_act = 0.0
         
         # Compute ROC metrics for max_sae_act
         fpr_sae, tpr_sae, thresholds_sae = roc_curve(filtered_data['label'], filtered_data['normalized_max_sae'])

@@ -2,6 +2,8 @@ old_*.ipynb
 tmp_save/
 data/*.json
 demo/lm_cache
+*.out
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
