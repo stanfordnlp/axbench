@@ -20,11 +20,11 @@ ax = pyreax.create(
     model_name="google/gemma-2-2b", layer=20,
     concept="terms related to the Golden Gate Bridge")
 
-# detection
-ax.detect("I want to visit the Golden Gate Bridge this weekend!")
+# latent activations
+ax.latent("I want to visit the Golden Gate Bridge this weekend!")
 
 # steering
-ax.steer("Recommand places to visit over the weekend.")
+ax.steer("Can you recommend me places to visit over the weekend?")
 ```
 
 
