@@ -1,0 +1,10 @@
+# inference with test dataset
+#     python scripts/inference.py --config sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
+input_length: 32
+output_length: 10
+
+num_of_examples: 100
+rotation_freq: 1000
+data_dir: "results/gemma-2-2b_20-gemmascope-res-16k/generate"
+train_dir: "results/gemma-2-2b_20-gemmascope-res-16k/train"
+dump_dir: "results/gemma-2-2b_20-gemmascope-res-16k/"
