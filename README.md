@@ -1,6 +1,6 @@
 <h1 align="center"> <p>pyreax<sub> by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></p></h1>
 <h3 align="center">
-    <p>A library for creating your representation abstractions (ReAXs) at scale.</p>
+    <p>Understand and control your LMs with representation abstraction (ReAX)</p>
     <a href=""><strong>Read our paper »</strong></a></a>
 </h3>
 
@@ -25,8 +25,13 @@ ax.latent("I want to visit the Golden Gate Bridge this weekend!")
 
 # steering
 ax.steer("Can you recommend me places to visit over the weekend?")
-```
 
+# upload abstraction to hf
+ax.upload(hf_repo="ggb_abstraction")
+
+# download abstraction
+ax = pyreax.download(hf_repo="ggb_abstraction")
+```
 
 ## ReAX Workflow
 
