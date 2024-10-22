@@ -24,8 +24,8 @@ import torch
 from pathlib import Path
 import numpy as np
 
-import reax_benchmark
-from reax_benchmark import AUCROCEvaluator, plot_aggregated_roc
+import benchmark
+from benchmark import AUCROCEvaluator, plot_aggregated_roc
 from args.eval_args import EvalArgs
 
 import logging
@@ -76,7 +76,7 @@ def load_evaluators(args):
                 evaluator_class = getattr(reax_benchmark, evaluator_name)
                 evaluators.append(evaluator_class())
             else:
-                logger.warning(f"Evaluator {evaluator_name} not found in pyreax.")
+                logger.warning(f"Evaluator {evaluator_name} not found.")
     elif args.mode == "steer":
         logger.warning("Steering evaluators not implemented yet.")
     return evaluators

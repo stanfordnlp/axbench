@@ -1,35 +1,52 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import argparse
 import yaml
-import sys
-from typing import Optional, List, Any, Dict, Type
+from typing import Optional, List
+
+
+class ModelContainer:
+    def __init__(self):
+        self._models = {}
+    
+    def add_model(self, name, params):
+        self._models[name] = params
+        if name.isidentifier():
+            setattr(self, name, params)
+        else:
+            # Handle model names that are not valid identifiers
+            print(f"Warning: Model name '{name}' is not a valid Python identifier. Use dictionary access.")
+    
+    def __getitem__(self, key):
+        return self._models[key]
+    
+    def __iter__(self):
+        return iter(self._models.items())
+    
+    def keys(self):
+        return self._models.keys()
+    
+    def values(self):
+        return self._models.values()
+    
+    def items(self):
+        return self._models.items()
 
 @dataclass
-class TrainingArgs:
-    # Define all parameters with type annotations and optional default values
-    concept_path: Optional[str] = None
-    model_name: Optional[str] = None
-    layer: Optional[int] = None
-    component: Optional[str] = None
+class ModelParams:
     batch_size: Optional[int] = None
     n_epochs: Optional[int] = None
     k_latent_null_loss: Optional[int] = None
     lr: Optional[float] = None
     coeff_l1_loss_null: Optional[float] = None
     coeff_l1_loss: Optional[float] = None
-    data_dir: Optional[str] = None
-    dump_dir: Optional[str] = None
-    # Add any other parameters as needed
 
+class TrainingArgs:
     def __init__(
         self,
         description: str = "Training Script",
         custom_args: Optional[List[dict]] = None,
         override_config: bool = True
     ):
-        """
-        Initializes TrainingArgs by parsing command-line arguments and loading configurations from a YAML file.
-        """
         parser = argparse.ArgumentParser(description=description)
 
         # Add config file argument
@@ -40,19 +57,20 @@ class TrainingArgs:
             help='Path to the YAML configuration file.'
         )
 
-        # Add arguments corresponding to the dataclass fields
-        fields = self.__dataclass_fields__
-        for field_name, field_def in fields.items():
-            # Skip fields that should not be parsed from the command line
-            if field_name in ['config_file']:
-                continue
+        # Define global and hierarchical parameters
+        global_params = [
+            'concept_path', 'model_name', 'layer', 'component',
+            'data_dir', 'dump_dir'
+        ]
+        hierarchical_params = [
+            'batch_size', 'n_epochs', 'k_latent_null_loss',
+            'lr', 'coeff_l1_loss_null', 'coeff_l1_loss'
+        ]
+        all_params = global_params + hierarchical_params
 
-            arg_type = self._get_argparse_type(field_def.type)
-            parser.add_argument(
-                f'--{field_name}',
-                type=arg_type,
-                help=f'Specify {field_name}.',
-            )
+        # Add arguments for all parameters
+        for param in all_params:
+            parser.add_argument(f'--{param}', type=self._infer_type(param), help=f'Specify {param}.')
 
         # Add any custom arguments provided
         if custom_args:
@@ -66,42 +84,79 @@ class TrainingArgs:
         with open(config_file_path, 'r') as file:
             config = yaml.safe_load(file)
 
-        # Initialize attributes from config
-        for field_name in fields:
-            if field_name == 'config_file':
-                continue
-            value = config.get(field_name, None)
-            setattr(self, field_name, value)
+        # Initialize global parameters
+        for param in global_params:
+            arg_value = getattr(args, param, None)
+            config_value = config.get(param, None)
+            setattr(self, param, arg_value if arg_value is not None else config_value)
 
-        # Overwrite with command-line arguments if provided
-        if override_config:
-            for field_name in vars(args):
-                if field_name in ['config']:
-                    continue  # Skip the config file argument itself
-                arg_value = getattr(args, field_name)
-                if arg_value is not None:
-                    setattr(self, field_name, arg_value)
+        # Initialize hierarchical parameters with global defaults
+        for param in hierarchical_params:
+            arg_value = getattr(args, param, None)
+            config_value = config.get(param, None)
+            setattr(self, param, arg_value if arg_value is not None else config_value)
+
+        # Initialize models list
+        self.models_list = []
+        self.model_params = {}
+        if 'models' in config:
+            if isinstance(config['models'], dict):
+                self.models_list = list(config['models'].keys())
+                self.model_params = config['models']
+            elif isinstance(config['models'], list):
+                self.models_list = config['models']
+            else:
+                raise ValueError("Invalid format for 'models' in config")
+        else:
+            self.models_list = []
+
+        # Create models container
+        self.models = ModelContainer()
+
+        # Initialize per-model parameters
+        for model_name in self.models_list:
+            params = ModelParams()
+            # Set hierarchical parameters to global defaults
+            for param in hierarchical_params:
+                setattr(params, param, getattr(self, param, None))
+            # Override with per-model parameters if available
+            if model_name in self.model_params:
+                model_config = self.model_params[model_name]
+                for param_name, param_value in model_config.items():
+                    if param_name in hierarchical_params:
+                        setattr(params, param_name, param_value)
+            # Add the model to the container
+            self.models.add_model(model_name, params)
 
         # Additional attributes
         self.config_file = config_file_path
 
         # Print the final configuration
         print("Final Configuration:")
-        for key in fields:
+        print("Global Parameters:")
+        for key in global_params + hierarchical_params:
             print(f"{key}: {getattr(self, key)}")
+        print("\nPer-Model Parameters:")
+        for model_name, params in self.models:
+            print(f"{model_name}:")
+            for field_name in ModelParams.__dataclass_fields__:
+                print(f"  {field_name}: {getattr(params, field_name)}")
 
     @staticmethod
-    def _get_argparse_type(field_type: Type) -> Type:
+    def _infer_type(param_name: str):
         """
-        Helper method to get the argparse type from the dataclass field type.
+        Infer the type of the parameter based on its name.
         """
-        if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
-            field_type = field_type.__args__[0]
-        if field_type == int:
+        # Define parameter types
+        int_params = ['layer', 'batch_size', 'n_epochs', 'k_latent_null_loss']
+        float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss']
+        str_params = ['concept_path', 'model_name', 'component', 'data_dir', 'dump_dir']
+
+        if param_name in int_params:
             return int
-        elif field_type == float:
+        elif param_name in float_params:
             return float
-        elif field_type == bool:
-            return lambda x: (str(x).lower() in ['true', '1', 'yes'])
-        else:
+        elif param_name in str_params:
             return str
+        else:
+            return str  # Default to string

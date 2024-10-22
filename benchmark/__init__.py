@@ -1,3 +1,5 @@
 from .utils.plot_utils import *
 
 from .evaluators.aucroc import *
+
+from .models.reax import *

@@ -17,27 +17,13 @@ except ModuleNotFoundError:
 
 import os, argparse, yaml, json, glob, pickle
 import pandas as pd
-from tqdm.auto import tqdm
-from torch.utils.data import DataLoader
-import torch, pyreft
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import get_scheduler
 from pathlib import Path
-
-from pyvene import IntervenableModel
-from pyreax import (
-    EXAMPLE_TAG, 
-    ReAXFactory, 
-    MaxReLUIntervention, 
-    make_data_module, 
-)
 from args.training_args import TrainingArgs
-from pyreax import (
-    set_decoder_norm_to_unit_norm, 
-    remove_gradient_parallel_to_decoder_directions,
-    gather_residual_activations, 
-    get_lr
-)
+
+# all supported methods
+import benchmark
+
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -100,7 +86,7 @@ def load_state(dump_dir):
     return None
     
 
-def save_reax(args, group_id, intervention, rotation_freq):
+def save(args, group_id, models, rotation_freq):
     """save artifacts"""
     
     # handle training df first
@@ -109,21 +95,8 @@ def save_reax(args, group_id, intervention, rotation_freq):
     dump_dir.mkdir(parents=True, exist_ok=True)
     
     fragment_index = group_id // rotation_freq
-    
-    # handle weight and bias
-    weight_file = Path(dump_dir) / f"weight_fragment_{fragment_index}.pt"
-    weight = {}
-    if weight_file.exists():
-        weight = torch.load(weight_file)
-    weight[group_id] = intervention.proj.weight.data.cpu()
-    torch.save(weight, weight_file)
-    
-    bias_file = Path(dump_dir) / f"bias_fragment_{fragment_index}.pt"
-    bias = {}
-    if bias_file.exists():
-        bias = torch.load(bias_file)
-    bias[group_id] = intervention.proj.bias.data.cpu()
-    torch.save(bias, bias_file)
+    for model in models:
+        model.save(dump_dir, group_id=group_id, fragment_index=fragment_index)
 
     state_path = dump_dir / STATE_FILE
     with open(state_path, "wb") as f:
@@ -138,71 +111,10 @@ def save_reax(args, group_id, intervention, rotation_freq):
         json.dump(config, f)
 
 
-def training_loop(args, train_dataloader, reft_model, reax_intervention):
-    torch.cuda.empty_cache()
-    
-    # Optimizer and lr
-    optimizer = torch.optim.AdamW(reft_model.parameters(), lr=args.lr)
-    num_training_steps = args.n_epochs * len(train_dataloader)
-    lr_scheduler = get_scheduler(
-        "linear", optimizer=optimizer,
-        num_warmup_steps=0, num_training_steps=num_training_steps)
-
-    # Main training loop.
-    progress_bar, curr_step = tqdm(range(num_training_steps)), 0
-    for epoch in range(args.n_epochs):
-        for batch in train_dataloader:
-            # prepare input
-            inputs = {k: v.to("cuda") for k, v in batch.items()}
-            unit_locations={"sources->base": (
-                None,
-                inputs["intervention_locations"].permute(1, 0, 2).tolist()
-            )}
-            subspaces = [{
-                "input_subspaces": inputs["input_subspaces"],
-                "output_subspaces": inputs["output_subspaces"]}]
-    
-            # forward
-            _, cf_outputs = reft_model(
-                base={
-                    "input_ids": inputs["input_ids"],
-                    "attention_mask": inputs["attention_mask"]
-                }, unit_locations=unit_locations, labels=inputs["labels"],
-                subspaces=subspaces, use_cache=False)
-    
-            # loss
-            loss = cf_outputs.loss
-            latent = reft_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
-            topk_latent, _ = torch.topk(latent, args.k_latent_null_loss, dim=-1)
-            null_loss = (topk_latent.mean(dim=-1)*(inputs["groups"]==EXAMPLE_TAG.CONTROL.value))
-            null_loss = null_loss.sum()
-    
-            l1_loss = (latent.mean(dim=-1)*(inputs["groups"]!=EXAMPLE_TAG.CONTROL.value))
-            l1_loss = l1_loss.sum()
-            
-            coeff = curr_step/num_training_steps
-            loss += coeff*args.coeff_l1_loss_null*null_loss + coeff*args.coeff_l1_loss*l1_loss
-            
-            # grads
-            loss.backward()
-            set_decoder_norm_to_unit_norm(reax_intervention)
-            remove_gradient_parallel_to_decoder_directions(reax_intervention)
-            curr_step += 1
-            curr_lr = get_lr(optimizer)
-            # optim
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
-            progress_bar.update(1)
-            progress_bar.set_description("lr %.6f || loss %.6f || null l1 loss %.6f" % (curr_lr, loss, null_loss))
-
-
 def main():
     args = TrainingArgs()
-    logger.warning("Training model with the following configuration:")
-    logger.warning(args)
 
-    # Load dataset and metadata.
+    # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
     df_generator = data_generator(args.data_dir)
@@ -223,36 +135,20 @@ def main():
     for (group_id, group_df) in df_generator:
         if group_id < start_group_id:
             continue
-        logger.warning(f"Number of records in group_id {group_id}: {len(group_df)}\n")
 
-        # Dataloader.
-        data_module = make_data_module(tokenizer, model, group_df)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=args.batch_size, 
-            collate_fn=data_module["data_collator"])
+        # Iterate over all methods
+        models = []
+        for model_name in args.models.keys():
+            model_class = getattr(benchmark, model_name)
+            logger.warning(f"Training {model_class} with group_id {group_id} ({len(group_df)})\n")
+            model = model_class(
+                model, tokenizer, layer=args.layer, 
+                model_args=args.models[model_name])
+            model.train(group_df)
+            models += [model]
 
-        # ReFT.
-        reax_intervention = MaxReLUIntervention(
-            embed_dim=model.config.hidden_size, low_rank_dimension=2,
-        )
-        reax_intervention = reax_intervention.train()
-        reft_config = pyreft.ReftConfig(representations=[{
-            "layer": l,
-            "component": f"model.layers[{l}].output",
-            "low_rank_dimension": 1,
-            "intervention": reax_intervention} for l in [args.layer]])
-        reft_model = pyreft.get_reft_model(model, reft_config)
-        reft_model.set_device("cuda")
-        reft_model.print_trainable_parameters()
-
-        # Train.
-        training_loop(args, train_dataloader, reft_model, reax_intervention)
-        logger.warning("Training finished.")
-
-        # Save.
-        save_reax(args, group_id, reax_intervention, DEFAULT_ROTATION_FREQ)
-
-    logger.warning(f"Finished training.")
+        # Save
+        save(args, group_id, models, DEFAULT_ROTATION_FREQ)
 
 
 if __name__ == "__main__":
