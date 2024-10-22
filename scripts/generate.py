@@ -29,7 +29,8 @@ import csv
 import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from pyreax import ReAXFactory, DatasetArgs
+from pyreax import ReAXFactory
+from args.dataset_args import DatasetArgs
 from pathlib import Path
 
 import logging

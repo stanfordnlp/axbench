@@ -31,8 +31,8 @@ from pyreax import (
     ReAXFactory, 
     MaxReLUIntervention, 
     JumpReLUSAECollectIntervention,
-    DatasetArgs
 )
+from args.dataset_args import DatasetArgs
 from pyreax import (
     gather_residual_activations, 
 )
