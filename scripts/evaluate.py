@@ -24,11 +24,9 @@ import torch
 from pathlib import Path
 import numpy as np
 
-from pyreax import (
-    AUCROCEvaluator,
-    EvalArgs, 
-    plot_aggregated_roc
-)
+import reax_benchmark
+from reax_benchmark import AUCROCEvaluator, plot_aggregated_roc
+from args.eval_args import EvalArgs
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -74,8 +72,8 @@ def load_evaluators(args):
     if args.mode == "latent":
         for evaluator_name in args.latent_evaluators:
             # Dynamically load the evaluator class if it exists in pyreax
-            if hasattr(pyreax, evaluator_name):
-                evaluator_class = getattr(pyreax, evaluator_name)
+            if hasattr(reax_benchmark, evaluator_name):
+                evaluator_class = getattr(reax_benchmark, evaluator_name)
                 evaluators.append(evaluator_class())
             else:
                 logger.warning(f"Evaluator {evaluator_name} not found in pyreax.")
@@ -178,12 +176,10 @@ def eval_latent(args):
         
         # Initialize a dictionary for storing evaluation results for this `reax_id`
         eval_results = {}
-        
         for evaluator in evaluators:
             # Call each evaluator and store results
             eval_result = evaluator.compute_metrics(group_df)
             eval_results[evaluator.__str__()] = eval_result
-
         save_results(dump_dir, {"reax_id": reax_id + 1}, reax_id, 'latent', eval_results, rotation_freq)
 
     # final plot

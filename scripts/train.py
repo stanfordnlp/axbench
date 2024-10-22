@@ -30,8 +30,8 @@ from pyreax import (
     ReAXFactory, 
     MaxReLUIntervention, 
     make_data_module, 
-    TrainingArgs
 )
+from args.training_args import TrainingArgs
 from pyreax import (
     set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions,
