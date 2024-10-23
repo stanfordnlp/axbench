@@ -1,4 +1,0 @@
-latent_evaluators: ["AUCROCEvaluator"]
-data_dir: "demo/inference"
-dump_dir: "demo"
-rotation_freq: 1000
