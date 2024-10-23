@@ -33,18 +33,18 @@ ax.upload(hf_repo="ggb_abstraction")
 ax = pyreax.download(hf_repo="ggb_abstraction")
 ```
 
-## ReAX Workflow
+## Benchmarking ReAX
 
 ### generate
 Generate training dataset for representation abstractions:
 ```bash
-python scripts/generate.py --config demo/sweep/generate.yaml
+python benchmark/scripts/generate.py --config benchmark/demo/sweep/generate.yaml
 ```
 
 ### train
 Train and save representation abstractions with generated datasets:
 ```bash
-python scripts/train.py --config demo/sweep/train.yaml
+python benchmark/scripts/train.py --config benchmark/demo/sweep/train.yaml
 ```
 
 ### inference
@@ -52,13 +52,13 @@ python scripts/train.py --config demo/sweep/train.yaml
 #### latent
 Inference with latent activations with representation abstractions:
 ```bash
-python scripts/inference.py --config demo/sweep/inference.yaml --mode latent
+python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 Inference with model steering with representation abstractions:
 ```bash
-python scripts/inference.py --config demo/sweep/inference.yaml --mode steer
+python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.yaml --mode steer
 ```
 
 ### evaluate
@@ -66,16 +66,16 @@ python scripts/inference.py --config demo/sweep/inference.yaml --mode steer
 #### latent
 To evaluate inference results for latent activations:
 ```bash
-python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode latent
+python benchmark/scripts/evaluate.py --config benchmark/demo/sweep/evaluate.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 To evaluate inference results for steering:
 ```bash
-python scripts/evaluate.py --config demo/sweep/evaluate.yaml --mode steer
+python benchmark/scripts/evaluate.py --config benchmark/demo/sweep/evaluate.yaml --mode steer
 ```
 
 ### (optional) plot
 
-We provide a plot notebook (`scripts/plots.ipynb`) for generating various figures.
+We provide a plot notebook (`benchmark/scripts/plots.ipynb`) for generating various figures.
 

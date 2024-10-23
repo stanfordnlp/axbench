@@ -15,7 +15,10 @@ class Model(ABC):
         
     def save(self, dump_dir, **kwargs):
         pass
-        
+
+    def load(self, dump_dir=None, **kwargs):
+        pass
+    
     def predict_latent(self, examples, **kwargs):
         pass
 
