@@ -1,5 +1,5 @@
 models: ["ReAX", "GemmaScopeSAE"]
 latent_evaluators: ["AUCROCEvaluator"]
-data_dir: "benchmark/demo/inference"
-dump_dir: "benchmark/demo"
+data_dir: "axbench/demo/inference"
+dump_dir: "axbench/demo"
 rotation_freq: 1000

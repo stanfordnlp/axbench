@@ -2,7 +2,7 @@
 # This script takes arguments to specify the dataset and other configurations.
 #
 # example launch command:
-#     python benchmark/scripts/train.py --config benchmark/demo/sweep/train.yaml
+#     python axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
 
 try:
     # This library is our indicator that the required installs
@@ -22,7 +22,7 @@ from pathlib import Path
 from args.training_args import TrainingArgs
 
 # all supported methods
-import benchmark
+import axbench
 
 
 import logging
@@ -143,7 +143,7 @@ def main():
         # Train.
         benchmark_models = []
         for model_name in args.models.keys():
-            model_class = getattr(benchmark, model_name)
+            model_class = getattr(axbench, model_name)
             logger.warning(f"Training {model_class} with group_id {group_id} ({len(group_df)})\n")
             benchmark_model = model_class(
                 model, tokenizer, layer=args.layer, 

@@ -1,5 +1,5 @@
-data_dir: "benchmark/demo/generate"
-dump_dir: "benchmark/demo"
+data_dir: "axbench/demo/generate"
+dump_dir: "axbench/demo"
 
 # interpreting model
 model_name: "google/gemma-2-2b"

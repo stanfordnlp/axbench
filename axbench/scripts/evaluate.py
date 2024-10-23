@@ -1,7 +1,7 @@
 # score evaluation results.
 # 
 # example launch command:
-#     python benchmark/scripts/evaluate.py --config benchmark/demo/sweep/evaluate.yaml --mode latent
+#     python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
 
 
 try:
@@ -24,8 +24,8 @@ import torch
 from pathlib import Path
 import numpy as np
 
-import benchmark
-from benchmark import plot_aggregated_roc
+import axbench
+from axbench import plot_aggregated_roc
 from args.eval_args import EvalArgs
 
 import logging
@@ -153,7 +153,7 @@ def eval_latent(args):
         eval_results = {}
         for model_name in args.models:
             for evaluator_name in args.latent_evaluators:
-                evaluator_class = getattr(benchmark, evaluator_name)
+                evaluator_class = getattr(axbench, evaluator_name)
                 evaluator = evaluator_class(model_name)
                 # Call each evaluator and store results
                 eval_result = evaluator.compute_metrics(current_df)

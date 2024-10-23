@@ -1,7 +1,7 @@
 # inference with existing subspaces.
 #
 # example launch command:
-#     python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.yaml --mode latent
+#     python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
 
 try:
     # This library is our indicator that the required installs
@@ -29,7 +29,7 @@ from pyreax import (
 from args.dataset_args import DatasetArgs
 
 # all supported methods
-import benchmark
+import axbench
 
 
 import logging
@@ -204,7 +204,7 @@ def infer_latent(args):
     # Pre-load inference models.
     benchmark_models = []
     for model_name in args.models:
-        model_class = getattr(benchmark, model_name)
+        model_class = getattr(axbench, model_name)
         logger.warning(f"Loading {model_class} from disk for inference.\n")
         benchmark_model = model_class(
             model, tokenizer, layer=layer, 
