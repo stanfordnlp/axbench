@@ -1,4 +1,4 @@
-## Benchmarking ReAX
+## Abstraction Benchmark (AxBench)
 
 ### Installation
 To install the latest stable version of pyreax:
@@ -10,13 +10,13 @@ cd pyreax
 ### generate
 Generate training dataset for representation abstractions:
 ```bash
-python benchmark/scripts/generate.py --config benchmark/demo/sweep/generate.yaml
+python axbench/scripts/generate.py --config axbench/demo/sweep/generate.yaml
 ```
 
 ### train
 Train and save representation abstractions with generated datasets:
 ```bash
-python benchmark/scripts/train.py --config benchmark/demo/sweep/train.yaml
+python axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
 ```
 
 ### inference
@@ -24,13 +24,13 @@ python benchmark/scripts/train.py --config benchmark/demo/sweep/train.yaml
 #### latent
 Inference with latent activations with representation abstractions:
 ```bash
-python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.yaml --mode latent
+python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 Inference with model steering with representation abstractions:
 ```bash
-python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.yaml --mode steer
+python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode steer
 ```
 
 ### evaluate
@@ -38,15 +38,15 @@ python benchmark/scripts/inference.py --config benchmark/demo/sweep/inference.ya
 #### latent
 To evaluate inference results for latent activations:
 ```bash
-python benchmark/scripts/evaluate.py --config benchmark/demo/sweep/evaluate.yaml --mode latent
+python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
 ```
 
 #### steering (not implemented yet)
 To evaluate inference results for steering:
 ```bash
-python benchmark/scripts/evaluate.py --config benchmark/demo/sweep/evaluate.yaml --mode steer
+python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode steer
 ```
 
 ### (optional) plot
 
-We provide a plot notebook (`benchmark/scripts/plots.ipynb`) for generating various figures.
+We provide a plot notebook (`axbench/scripts/plots.ipynb`) for generating various figures.

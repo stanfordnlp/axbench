@@ -4,5 +4,5 @@ output_length: 10
 
 num_of_examples: 72
 rotation_freq: 1000
-concept_path: "benchmark/demo/concepts.csv"
-dump_dir: "benchmark/demo"
+concept_path: "axbench/demo/concepts.csv"
+dump_dir: "axbench/demo"
