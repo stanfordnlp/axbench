@@ -13,7 +13,5 @@ dependencies = [
     "pyvene",
     "torch>=2.5.0",
     "transformers",
+    "pyvene>=0.1.5",
 ]
-
-[tool.uv.sources]
-pyvene = { path = "../pyvene", editable = true }
