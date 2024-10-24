@@ -4,6 +4,8 @@ axbench/data/*.json
 axbench/demo/lm_cache
 *.out
 axbench/results/
+set_key.py
+uv.lock
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
