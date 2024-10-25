@@ -1,7 +1,7 @@
 old_*.ipynb
 tmp_save/
 axbench/data/*.json
-axbench/demo/lm_cache
+axbench/demo/
 *.out
 axbench/results/
 
