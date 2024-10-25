@@ -1,5 +1,5 @@
 # generate dataset
-models: ["ReAX", "GemmaScopeSAE"]
+models: ["L1LinearProbe", "GemmaScopeSAE"] # LinearProbe, L1LinearProbe, ReAX, GemmaScopeSAE
 input_length: 32
 output_length: 10
 

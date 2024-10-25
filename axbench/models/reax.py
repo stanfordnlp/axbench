@@ -169,7 +169,8 @@ class ReAX(Model):
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
                 row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-            reax_in = gather_residual_activations(self.model, self.layer, inputs)
+            reax_in = gather_residual_activations(
+                self.model, self.layer, {"input_ids": inputs})
             _, reax_acts = self.reax_intervention.encode(
                 reax_in[:,1:], # no bos token
                 subspaces={
