@@ -33,21 +33,21 @@ class GemmaScopeSAE(Model):
         return 'GemmaScopeSAE'
     
     def make_model(self, **kwargs):
-        sae_intervention = JumpReLUSAECollectIntervention(
+        ax = JumpReLUSAECollectIntervention(
             embed_dim=self.model.config.hidden_size, 
             low_rank_dimension=kwargs.get("low_rank_dimension", 2),
         )
-        sae_intervention = sae_intervention.train()
+        ax = ax.train()
         reft_config = pyreft.ReftConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
-            "intervention": sae_intervention} for l in [self.layer]])
-        reft_model = pyreft.get_reft_model(self.model, reft_config)
-        reft_model.set_device("cuda")
-        reft_model.print_trainable_parameters()
-        self.sae_intervention = sae_intervention
-        self.reft_model = reft_model
+            "intervention": ax} for l in [self.layer]])
+        ax_model = pyreft.get_reft_model(self.model, reft_config)
+        ax_model.set_device("cuda")
+        ax_model.print_trainable_parameters()
+        self.ax = ax
+        self.ax_model = ax_model
 
     def make_dataloader(self, examples, **kwargs):
         pass
@@ -74,25 +74,35 @@ class GemmaScopeSAE(Model):
         params = np.load(path_to_params)
         pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1])
-        self.sae_intervention.load_state_dict(pt_params, strict=False)
+        self.ax.load_state_dict(pt_params, strict=False)
     
     def predict_latent(self, examples, **kwargs):
+        self.ax.eval()
+        
         all_acts = []
         all_max_act = []
+        all_max_act_idx = []
+        all_max_token = []
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
                 row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-            sae_acts = self.reft_model.forward(
+            ax_acts = self.ax_model.forward(
                 {"input_ids": inputs}, return_dict=True
             ).collected_activations[0][1:, row["sae_id"]].data.cpu().numpy().tolist() # no bos token
-            sae_acts = [round(x, 3) for x in sae_acts]
-            max_sae_act = max(sae_acts)
+            ax_acts = [round(x, 3) for x in ax_acts]
+            max_ax_act = max(ax_acts)
+            max_ax_act_idx = ax_acts.index(max_ax_act)
+            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
-            all_acts += [sae_acts]
-            all_max_act += [max_sae_act]
+            all_acts += [ax_acts]
+            all_max_act += [max_ax_act]
+            all_max_act_idx += [max_ax_act_idx]
+            all_max_token += [max_token]
         return {
             "acts": all_acts,
-            "max_act": all_max_act}
+            "max_act": all_max_act, 
+            "max_act_idx": all_max_act_idx,
+            "max_token": all_max_token}
 
     def predict_steer(self, examples, **kwargs):
         pass

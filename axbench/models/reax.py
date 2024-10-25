@@ -44,27 +44,25 @@ class ReAX(Model):
         # abstracting layer
         self.layer = layer
         self.training_args = training_args
-
-        self.make_model(**kwargs)
     
     def __str__(self):
         return 'ReAX'
 
     def make_model(self, **kwargs):
-        reax_intervention = MaxReLUIntervention(
+        ax = MaxReLUIntervention(
             embed_dim=self.model.config.hidden_size, 
             low_rank_dimension=kwargs.get("low_rank_dimension", 2),
         )
-        reax_intervention = reax_intervention.train()
+        self.ax = ax
+        self.ax.train()
         reft_config = pyreft.ReftConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
-            "intervention": reax_intervention} for l in [self.layer]])
-        reft_model = pyreft.get_reft_model(self.model, reft_config)
-        reft_model.set_device("cuda")
-        self.reax_intervention = reax_intervention
-        self.reft_model = reft_model
+            "intervention": self.ax} for l in [self.layer]])
+        ax_model = pyreft.get_reft_model(self.model, reft_config)
+        ax_model.set_device("cuda")
+        self.ax_model = ax_model
     
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
@@ -75,12 +73,11 @@ class ReAX(Model):
         
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
+        self.make_model(**kwargs)
         torch.cuda.empty_cache()
 
-        self.reft_model.print_trainable_parameters()
-        
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.reft_model.parameters(), lr=self.training_args.lr)
+        optimizer = torch.optim.AdamW(self.ax_model.parameters(), lr=self.training_args.lr)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -101,7 +98,7 @@ class ReAX(Model):
                     "output_subspaces": inputs["output_subspaces"]}]
         
                 # forward
-                _, cf_outputs = self.reft_model(
+                _, cf_outputs = self.ax_model(
                     base={
                         "input_ids": inputs["input_ids"],
                         "attention_mask": inputs["attention_mask"]
@@ -110,7 +107,7 @@ class ReAX(Model):
         
                 # loss
                 loss = cf_outputs.loss
-                latent = self.reft_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
+                latent = self.ax_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
                 topk_latent, _ = torch.topk(latent, self.training_args.k_latent_null_loss, dim=-1)
                 null_loss = (topk_latent.mean(dim=-1)*(inputs["groups"]==EXAMPLE_TAG.CONTROL.value))
                 null_loss = null_loss.sum()
@@ -123,8 +120,8 @@ class ReAX(Model):
                 
                 # grads
                 loss.backward()
-                set_decoder_norm_to_unit_norm(self.reax_intervention)
-                remove_gradient_parallel_to_decoder_directions(self.reax_intervention)
+                set_decoder_norm_to_unit_norm(self.ax)
+                remove_gradient_parallel_to_decoder_directions(self.ax)
                 curr_step += 1
                 curr_lr = get_lr(optimizer)
                 # optim
@@ -137,53 +134,37 @@ class ReAX(Model):
         progress_bar.close()
         logger.warning("Training finished.")
     
-    def save(self, dump_dir, **kwargs):
-        weight_file = dump_dir / f"ReAX_weight.pt"
-        weight = self.reax_intervention.proj.weight.data.cpu()
-        if weight_file.exists():
-            weight = torch.cat([torch.load(weight_file), weight], dim=0)
-        torch.save(weight, weight_file)
-        
-        bias_file = dump_dir / f"ReAX_bias.pt"
-        bias = self.reax_intervention.proj.bias.data.cpu()
-        if bias_file.exists():
-            bias = torch.cat([torch.load(bias_file), bias], dim=0)
-        torch.save(bias, bias_file)
-
-    def load(self, dump_dir=None, **kwargs):
-        weight = torch.load(
-            f"{dump_dir}/ReAX_weight.pt"
-        )
-        bias = torch.load(
-            f"{dump_dir}/ReAX_bias.pt"
-        )
-        self.reax_intervention.proj.weight.data = weight.cuda()
-        self.reax_intervention.proj.bias.data = bias.cuda()
-    
     def predict_latent(self, examples, **kwargs):
-        self.reax_intervention.eval()
-        self.reft_model.print_trainable_parameters()
+        self.ax.eval()
         
         all_acts = []
         all_max_act = []
+        all_max_act_idx = []
+        all_max_token = []
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
                 row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
             reax_in = gather_residual_activations(
                 self.model, self.layer, {"input_ids": inputs})
-            _, reax_acts = self.reax_intervention.encode(
+            _, ax_acts = self.ax.encode(
                 reax_in[:,1:], # no bos token
                 subspaces={
                     "input_subspaces": torch.tensor([row["concept_id"]])}, k=1)
-            reax_acts = reax_acts.flatten().data.cpu().numpy().tolist()
-            reax_acts = [round(x, 3) for x in reax_acts]
-            max_reax_act = max(reax_acts)
+            ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
+            ax_acts = [round(x, 3) for x in ax_acts]
+            max_ax_act = max(ax_acts)
+            max_ax_act_idx = ax_acts.index(max_ax_act)
+            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
-            all_acts += [reax_acts]
-            all_max_act += [max_reax_act]
+            all_acts += [ax_acts]
+            all_max_act += [max_ax_act]
+            all_max_act_idx += [max_ax_act_idx]
+            all_max_token += [max_token]
         return {
             "acts": all_acts,
-            "max_act": all_max_act}
+            "max_act": all_max_act, 
+            "max_act_idx": all_max_act_idx,
+            "max_token": all_max_token}
 
     def predict_steer(self, examples, **kwargs):
         pass

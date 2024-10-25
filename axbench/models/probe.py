@@ -80,10 +80,10 @@ def make_data_module(
 
 
 class LogisticRegressionModel(torch.nn.Module):
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, low_rank_dimension):
         super(LogisticRegressionModel, self).__init__()
         # Linear layer: input_dim -> 1 output (since binary classification)
-        self.proj = torch.nn.Linear(input_dim, 1)
+        self.proj = torch.nn.Linear(input_dim, low_rank_dimension)
     
     def forward(self, x):
         # Forward pass: apply linear transformation followed by sigmoid activation
@@ -92,23 +92,14 @@ class LogisticRegressionModel(torch.nn.Module):
 
 class LinearProbe(Model):
     
-    def __init__(self, model, tokenizer, layer, training_args=None, **kwargs):
-        self.model = model
-        self.tokenizer = tokenizer
-        # abstracting layer
-        self.layer = layer
-        self.training_args = training_args
-
-        self.make_model(**kwargs)
-    
     def __str__(self):
         return 'LinearProbe'
 
     def make_model(self, **kwargs):
-        linear_model = LogisticRegressionModel(
-            self.model.config.hidden_size)
-        linear_model.to("cuda")
-        self.linear_model = linear_model
+        ax = LogisticRegressionModel(
+            self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
+        ax.to("cuda")
+        self.ax = ax
 
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
@@ -119,10 +110,11 @@ class LinearProbe(Model):
     
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
+        self.make_model(**kwargs)
         torch.cuda.empty_cache()
-        self.linear_model.train()
+        self.ax.train()
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.linear_model.parameters(), lr=self.training_args.lr)
+        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -144,12 +136,12 @@ class LinearProbe(Model):
                 labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
                 labels = labels[nonbos_mask.bool()].unsqueeze(1).float()
 
-                preds = self.linear_model(activations)
+                preds = self.ax(activations)
                 loss = criterion(preds, labels)
 
                 loss.backward()
-                set_decoder_norm_to_unit_norm(self.linear_model)
-                remove_gradient_parallel_to_decoder_directions(self.linear_model)
+                set_decoder_norm_to_unit_norm(self.ax)
+                remove_gradient_parallel_to_decoder_directions(self.ax)
                 curr_lr = get_lr(optimizer)
                 # optim
                 optimizer.step()
@@ -162,25 +154,34 @@ class LinearProbe(Model):
         logger.warning("Training finished.")
 
     def predict_latent(self, examples, **kwargs):
-        self.linear_model.eval()
-        
+        self.ax.eval()
+
         all_acts = []
         all_max_act = []
+        all_max_act_idx = []
+        all_max_token = []
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
                 row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
             act_in = gather_residual_activations(
                 self.model, self.layer, {"input_ids": inputs})
-            probe_acts = self.linear_model(act_in[:,1:])
-            probe_acts = probe_acts.flatten().data.cpu().numpy().tolist()
-            probe_acts = [round(x, 3) for x in probe_acts]
-            max_probe_act = max(probe_acts)
+            ax_acts = self.ax(act_in[:,1:])
+            ax_acts = ax_acts[..., row["concept_id"]]
+            ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
+            ax_acts = [round(x, 3) for x in ax_acts]
+            max_ax_act = max(ax_acts)
+            max_ax_act_idx = ax_acts.index(max_ax_act)
+            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
-            all_acts += [probe_acts]
-            all_max_act += [max_probe_act]
+            all_acts += [ax_acts]
+            all_max_act += [max_ax_act]
+            all_max_act_idx += [max_ax_act_idx]
+            all_max_token += [max_token]
         return {
             "acts": all_acts,
-            "max_act": all_max_act}
+            "max_act": all_max_act, 
+            "max_act_idx": all_max_act_idx,
+            "max_token": all_max_token}
 
     def predict_steer(self, examples, **kwargs):
         pass
@@ -195,9 +196,9 @@ class L1LinearProbe(LinearProbe):
         """with a L1 penalty on the activations"""
         train_dataloader = self.make_dataloader(examples)
         torch.cuda.empty_cache()
-        self.linear_model.train()
+        self.ax.train()
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.linear_model.parameters(), lr=self.training_args.lr)
+        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -215,7 +216,7 @@ class L1LinearProbe(LinearProbe):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 )
-                latent = self.linear_model(activations).squeeze(-1) # bs, seq
+                latent = self.ax(activations).squeeze(-1) # bs, seq
                 loss = criterion(
                     latent[:,1:][nonbos_mask.bool()], 
                     inputs["labels"].unsqueeze(1).repeat(
@@ -237,8 +238,8 @@ class L1LinearProbe(LinearProbe):
 
                 # grads
                 loss.backward()
-                set_decoder_norm_to_unit_norm(self.linear_model)
-                remove_gradient_parallel_to_decoder_directions(self.linear_model)
+                set_decoder_norm_to_unit_norm(self.ax)
+                remove_gradient_parallel_to_decoder_directions(self.ax)
                 curr_step += 1
                 curr_lr = get_lr(optimizer)
                 # optim

@@ -1,11 +1,11 @@
 # inference with test dataset
-#     python benchmark/scripts/inference.py --config benchmark/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
-models: ["ReAX", "GemmaScopeSAE"]
+#     python axbench/scripts/inference.py --config axbench/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
+models: ["LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE"]
 input_length: 32
 output_length: 10
 
 num_of_examples: 100
 rotation_freq: 1000
-data_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/generate"
-train_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/train"
-dump_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/"
+data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/generate"
+train_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/train"
+dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
