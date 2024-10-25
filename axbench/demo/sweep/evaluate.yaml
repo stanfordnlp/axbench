@@ -1,4 +1,4 @@
-models: ["ReAX", "GemmaScopeSAE"]
+models: ["L1LinearProbe", "GemmaScopeSAE"] # LinearProbe, L1LinearProbe, ReAX, GemmaScopeSAE
 latent_evaluators: ["AUCROCEvaluator"]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
