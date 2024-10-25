@@ -195,6 +195,7 @@ class L1LinearProbe(LinearProbe):
     def train(self, examples, **kwargs):
         """with a L1 penalty on the activations"""
         train_dataloader = self.make_dataloader(examples)
+        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.train()
         # Optimizer and lr
