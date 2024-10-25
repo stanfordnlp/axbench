@@ -1,6 +1,7 @@
 # evaluate inference results
-#    python benchmark/scripts/evaluate.py --config benchmark/sweep/evaluate/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
+#    python axbench/scripts/evaluate.py --config axbench/sweep/evaluate/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
+models: ["LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE"]
 latent_evaluators: ["AUCROCEvaluator"]
-data_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/inference"
-dump_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/"
+data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/inference"
+dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
 rotation_freq: 1000
