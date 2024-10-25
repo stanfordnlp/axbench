@@ -216,7 +216,7 @@ def infer_latent(args):
     state = load_state(args.dump_dir)
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
-    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Processing concepts")
+    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
     
     torch.cuda.empty_cache()
     with torch.no_grad():
