@@ -18,6 +18,7 @@ from pyreax import (
     EXAMPLE_TAG, 
     ReAXFactory, 
     MaxReLUIntervention, 
+    SubspaceAdditionIntervention,
     make_data_module, 
 )
 from torch.utils.data import DataLoader
@@ -49,10 +50,17 @@ class ReAX(Model):
         return 'ReAX'
 
     def make_model(self, **kwargs):
-        ax = MaxReLUIntervention(
-            embed_dim=self.model.config.hidden_size, 
-            low_rank_dimension=kwargs.get("low_rank_dimension", 2),
-        )
+        mode = kwargs.get("mode", "latent")
+        if mode == "latent":
+            ax = MaxReLUIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+            )
+        elif mode == "steering":
+            ax = SubspaceAdditionIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+            )
         self.ax = ax
         self.ax.train()
         reft_config = pyreft.ReftConfig(representations=[{
@@ -168,4 +176,37 @@ class ReAX(Model):
             "max_token": all_max_token}
 
     def predict_steer(self, examples, **kwargs):
-        pass
+        self.ax.eval()
+        # set tokenizer padding to left
+        self.tokenizer.padding_side = "left"
+
+        # iterate rows in batch
+        batch_size = kwargs.get("batch_size", 16)
+        all_generations = []
+        for i in range(0, len(examples), batch_size):
+            batch_examples = examples.iloc[i:i+batch_size]
+            input_strings = batch_examples['input'].tolist()
+            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
+            idx = torch.tensor(batch_examples['concept_id'].tolist()).to("cuda")
+            # tokenize input_strings
+            inputs = self.tokenizer(
+                input_strings, return_tensors="pt", padding=True, truncation=True
+            ).to("cuda")
+            _, generations = self.ax_model.generate(
+                inputs, 
+                unit_locations=None, intervene_on_prompt=True, 
+                subspaces=[{"idx": idx, "mag": mag}],
+                max_new_tokens=128, do_sample=True, 
+                early_stopping=True, 
+                temperature=0.7, 
+            )
+            # Decode and print only the generated text without prompt tokens
+            input_lengths = [len(input_ids) for input_ids in inputs.input_ids]
+            generated_texts = [
+                self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
+                for generation, input_length in zip(generations, input_lengths)
+            ]
+            all_generations += generated_texts
+        return {
+            "steered_generation": all_generations,
+        }

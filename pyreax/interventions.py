@@ -81,8 +81,9 @@ class SubspaceAdditionIntervention(
                 self.embed_dim, kwargs["low_rank_dimension"], bias=True)
 
     def forward(self, base, source=None, subspaces=None):
-        steering_vec = torch.tensor(subspaces["mag"]) * self.proj.weight[subspaces["idx"]].unsqueeze(dim=0)
-        output = base + steering_vec
+        # use subspaces["idx"] to select the correct weight vector
+        steering_vec = subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        output = base + steering_vec.unsqueeze(dim=1)
         return output
 
 
