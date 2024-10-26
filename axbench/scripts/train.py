@@ -112,7 +112,7 @@ def save(args, group_id, models, rotation_freq):
 
 
 def binarize_df(original_df, concept, model_name):
-    if model_name in {"LinearProbe", "L1LinearProbe"}:
+    if model_name in {"LinearProbe", "L1LinearProbe", "IntegratedGradients"}:
         # assign input and output containing concept with 1, otherwise 0
         input_df = original_df[original_df["input_concept"]==concept]
         output_df = original_df[original_df["output_concept"]==concept]
@@ -131,6 +131,7 @@ def binarize_df(original_df, concept, model_name):
     else:
         # not implemented
         raise NotImplementedError(f"Binarization not implemented for {model_name}")
+
 
 def main():
     args = TrainingArgs()
