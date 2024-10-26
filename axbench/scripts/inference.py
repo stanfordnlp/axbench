@@ -174,9 +174,41 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     return current_df
 
 
+class SteeringDatasetFactory(object):
+    def __init__(
+        self, model, tokenizer, dump_dir, **kwargs):
+        self.model = model
+        self.tokenizer = tokenizer
+
+    def create_eval_df(self, subset_n, n_steering_factors, steering_datasets):
+        pass
+
+
 def infer_steering(args):
 
-    raise NotImplementedError("Steering inference is not implemented yet.")
+    data_dir = args.data_dir
+    train_dir = args.train_dir
+    dump_dir = args.dump_dir
+    num_of_examples = args.num_of_examples
+    rotation_freq = args.rotation_freq
+    config = load_config(train_dir)
+    metadata = load_metadata_flatten(data_dir)
+    layer = config["layer"]
+    n_steering_factors = args.n_steering_factors
+    steering_datasets = args.steering_datasets
+    
+    # Load lm.
+    model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map="cpu")
+    model.config.use_cache = False
+    model = model.cuda()    
+    model = model.eval()
+    tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer.padding_side = "right"
+
+    # We dont need to load dataset factory for steering, only existing datasets.
+    dataset_factory = SteeringDatasetFactory(model, tokenizer, dump_dir)
+    current_df = dataset_factory.create_eval_df(
+        num_of_examples, n_steering_factors, steering_datasets)
 
 
 def infer_latent(args):
@@ -191,11 +223,11 @@ def infer_latent(args):
     layer = config["layer"]
     
     # Load lm.
-    model = AutoModelForCausalLM.from_pretrained(config["model_name"], device_map="cpu")
+    model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map="cpu")
     model.config.use_cache = False
     model = model.cuda()    
     model = model.eval()
-    tokenizer =  AutoTokenizer.from_pretrained(config["model_name"])
+    tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
     tokenizer.padding_side = "right"
 
     # Load dataset factory for evals.
