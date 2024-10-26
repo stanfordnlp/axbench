@@ -1,5 +1,6 @@
-# generate dataset
-models: ["LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"] 
+models: ["GemmaScopeSAE"]
+model_name: "google/gemma-2-2b"
+
 # "LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"
 input_length: 32
 output_length: 10
@@ -9,3 +10,8 @@ rotation_freq: 1000
 data_dir: "axbench/demo/generate"
 train_dir: "axbench/demo/train"
 dump_dir: "axbench/demo"
+
+# steering related params
+n_steering_factors: 9
+steering_datasets: ["OUATPrefix"]
+# "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
