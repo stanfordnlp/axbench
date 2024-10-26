@@ -30,6 +30,7 @@ from args.dataset_args import DatasetArgs
 
 # all supported methods
 import axbench
+from axbench import SteeringDatasetFactory
 
 
 import logging
@@ -174,14 +175,22 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     return current_df
 
 
-class SteeringDatasetFactory(object):
-    def __init__(
-        self, model, tokenizer, dump_dir, **kwargs):
-        self.model = model
-        self.tokenizer = tokenizer
+def create_data_steering(
+    dataset_factory, metadata, concept_id, num_of_examples, 
+    n_steering_factors, steering_datasets, args):
+    # prepare concept related data.
+    concept = metadata[concept_id]["concept"]
+    sae_link = metadata[concept_id]["ref"]
+    sae_id = int(sae_link.split("/")[-1]) 
 
-    def create_eval_df(self, subset_n, n_steering_factors, steering_datasets):
-        pass
+    current_df = dataset_factory.create_eval_df(
+        [concept], num_of_examples, n_steering_factors, steering_datasets
+    )
+    current_df["concept_id"] = concept_id
+    current_df["sae_link"] = sae_link
+    current_df["sae_id"] = sae_id
+
+    return current_df
 
 
 def infer_steering(args):
@@ -205,10 +214,42 @@ def infer_steering(args):
     tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
     tokenizer.padding_side = "right"
 
+    state = load_state(args.dump_dir)
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting concept index: {start_concept_id}")
+    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
+
     # We dont need to load dataset factory for steering, only existing datasets.
     dataset_factory = SteeringDatasetFactory(model, tokenizer, dump_dir)
-    current_df = dataset_factory.create_eval_df(
-        num_of_examples, n_steering_factors, steering_datasets)
+
+    # Pre-load inference models.
+    benchmark_models = []
+    for model_name in args.models:
+        model_class = getattr(axbench, model_name)
+        logger.warning(f"Loading {model_class} from disk for inference.\n")
+        benchmark_model = model_class(
+            model, tokenizer, layer=layer, 
+            low_rank_dimension=len(metadata))
+        benchmark_model.load(
+            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering")
+        benchmark_models += [benchmark_model]
+
+    torch.cuda.empty_cache()
+    for concept_id in progress_bar:
+        # Create.
+        current_df = create_data_steering(
+            dataset_factory, metadata, concept_id, num_of_examples, 
+            n_steering_factors, steering_datasets, args)
+
+        # Evaluate.
+        for model_idx, model_name in enumerate(args.models):
+            results = benchmark_models[model_idx].predict_steer(current_df)
+            for k, v in results.items():
+                current_df[f"{model_name}_{k}"] = v
+
+        # Save.
+        save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "steering",
+            current_df, rotation_freq)
 
 
 def infer_latent(args):

@@ -16,27 +16,27 @@ import numpy as np
 import pyreft
 from pyreax import (
     JumpReLUSAECollectIntervention, 
+    SubspaceAdditionIntervention
 )
 from huggingface_hub import hf_hub_download
 
 
 class GemmaScopeSAE(Model):
-
-    def __init__(self, model, tokenizer, layer, training_args=None, **kwargs):
-        self.model = model
-        self.tokenizer = tokenizer
-        # abstracting layer
-        self.layer = layer
-        self.training_args = training_args
-
     def __str__(self):
         return 'GemmaScopeSAE'
     
     def make_model(self, **kwargs):
-        ax = JumpReLUSAECollectIntervention(
+        mode = kwargs.get("mode", "latent")
+        if mode == "latent":
+            ax = JumpReLUSAECollectIntervention(
             embed_dim=self.model.config.hidden_size, 
-            low_rank_dimension=kwargs.get("low_rank_dimension", 2),
-        )
+                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+            )
+        elif mode == "steering":
+            ax = SubspaceAdditionIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+            )
         ax = ax.train()
         reft_config = pyreft.ReftConfig(representations=[{
             "layer": l,
@@ -45,18 +45,8 @@ class GemmaScopeSAE(Model):
             "intervention": ax} for l in [self.layer]])
         ax_model = pyreft.get_reft_model(self.model, reft_config)
         ax_model.set_device("cuda")
-        ax_model.print_trainable_parameters()
         self.ax = ax
         self.ax_model = ax_model
-
-    def make_dataloader(self, examples, **kwargs):
-        pass
-    
-    def train(self, examples, **kwargs):
-        pass
-        
-    def save(self, dump_dir, **kwargs):
-        pass
 
     def load(self, dump_dir=None, **kwargs):
         sae_path = kwargs["sae_path"].split("https://www.neuronpedia.org/")[-1]
@@ -73,7 +63,7 @@ class GemmaScopeSAE(Model):
         )
         params = np.load(path_to_params)
         pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
-        self.make_model(low_rank_dimension=params['W_enc'].shape[1])
+        self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
         self.ax.load_state_dict(pt_params, strict=False)
     
     @torch.no_grad()
@@ -106,5 +96,37 @@ class GemmaScopeSAE(Model):
             "max_token": all_max_token}
 
     def predict_steer(self, examples, **kwargs):
-        pass
+        self.ax.eval()
+        # set tokenizer padding to left
+        self.tokenizer.padding_side = "left"
 
+        # iterate rows in batch
+        batch_size = kwargs.get("batch_size", 16)
+        all_generations = []
+        for i in range(0, len(examples), batch_size):
+            batch_examples = examples.iloc[i:i+batch_size]
+            input_strings = batch_examples['input'].tolist()
+            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
+            idx = torch.tensor(batch_examples['sae_id'].tolist()).to("cuda")
+            # tokenize input_strings
+            inputs = self.tokenizer(
+                input_strings, return_tensors="pt", padding=True, truncation=True
+            ).to("cuda")
+            _, generations = self.ax_model.generate(
+                inputs, 
+                unit_locations=None, intervene_on_prompt=True, 
+                subspaces=[{"idx": idx, "mag": mag}],
+                max_new_tokens=128, do_sample=True, 
+                early_stopping=True, 
+                temperature=0.7, 
+            )
+            # Decode and print only the generated text without prompt tokens
+            input_lengths = [len(input_ids) for input_ids in inputs.input_ids]
+            generated_texts = [
+                self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
+                for generation, input_length in zip(generations, input_lengths)
+            ]
+            all_generations += generated_texts
+        return {
+            "steered_generation": all_generations,
+        }

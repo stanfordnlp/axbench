@@ -1,11 +1,11 @@
-models: ["GemmaScopeSAE"]
+models: ["ReAX"]
 model_name: "google/gemma-2-2b"
 
 # "LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"
 input_length: 32
 output_length: 10
 
-num_of_examples: 50
+num_of_examples: 3
 rotation_freq: 1000
 data_dir: "axbench/demo/generate"
 train_dir: "axbench/demo/train"

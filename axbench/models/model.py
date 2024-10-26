@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
 import torch
 
-class Model(ABC):
+
+class Model(object):
 
     def __init__(self, model, tokenizer, layer, training_args=None, **kwargs):
         self.model = model
@@ -16,7 +16,6 @@ class Model(ABC):
     def make_dataloader(self, examples, **kwargs):
         pass
     
-    @abstractmethod
     def train(self, examples, **kwargs):
         pass
         
@@ -42,7 +41,7 @@ class Model(ABC):
         bias = torch.load(
             f"{dump_dir}/{model_name}_bias.pt"
         )
-        self.make_model(low_rank_dimension=weight.shape[1])
+        self.make_model(low_rank_dimension=weight.shape[1], **kwargs)
         self.ax.proj.weight.data = weight.cuda()
         self.ax.proj.bias.data = bias.cuda()
     
