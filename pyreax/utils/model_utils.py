@@ -35,7 +35,8 @@ def gather_residual_activations(model, target_layer, inputs):
     nonlocal target_act # make sure we can modify the target_act from the outer scope
     target_act = outputs[0]
     return outputs
-  handle = model.model.layers[target_layer].register_forward_hook(gather_target_act_hook)
+  handle = model.model.layers[target_layer].register_forward_hook(
+      gather_target_act_hook, always_call=True)
   _ = model.forward(**inputs)
   handle.remove()
   return target_act

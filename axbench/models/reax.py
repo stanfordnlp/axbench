@@ -134,6 +134,7 @@ class ReAX(Model):
         progress_bar.close()
         logger.warning("Training finished.")
     
+    @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
         

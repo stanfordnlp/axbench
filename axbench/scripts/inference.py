@@ -219,21 +219,20 @@ def infer_latent(args):
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
     
     torch.cuda.empty_cache()
-    with torch.no_grad():
-        for concept_id in progress_bar:
-            # Create.
-            current_df = create_data_latent(
-                dataset_factory, metadata, concept_id, num_of_examples, args)
+    for concept_id in progress_bar:
+        # Create.
+        current_df = create_data_latent(
+            dataset_factory, metadata, concept_id, num_of_examples, args)
 
-            # Evaluate.
-            for model_idx, model_name in enumerate(args.models):
-                results = benchmark_models[model_idx].predict_latent(current_df)
-                for k, v in results.items():
-                    current_df[f"{model_name}_{k}"] = v
-            
-            # Save.
-            save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
-                current_df, rotation_freq)
+        # Evaluate.
+        for model_idx, model_name in enumerate(args.models):
+            results = benchmark_models[model_idx].predict_latent(current_df)
+            for k, v in results.items():
+                current_df[f"{model_name}_{k}"] = v
+        
+        # Save.
+        save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
+            current_df, rotation_freq)
 
 
 def main():

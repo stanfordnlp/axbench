@@ -21,24 +21,26 @@ class Model(ABC):
         pass
         
     def save(self, dump_dir, **kwargs):
-        weight_file = dump_dir / f"{self.__str__()}_weight.pt"
+        model_name = kwargs.get("model_name", self.__str__())
+        weight_file = dump_dir / f"{model_name}_weight.pt"
         weight = self.ax.proj.weight.data.cpu()
         if weight_file.exists():
             weight = torch.cat([torch.load(weight_file), weight], dim=0)
         torch.save(weight, weight_file)
         
-        bias_file = dump_dir / f"{self.__str__()}_bias.pt"
+        bias_file = dump_dir / f"{model_name}_bias.pt"
         bias = self.ax.proj.bias.data.cpu()
         if bias_file.exists():
             bias = torch.cat([torch.load(bias_file), bias], dim=0)
         torch.save(bias, bias_file)
 
     def load(self, dump_dir=None, **kwargs):
+        model_name = kwargs.get("model_name", self.__str__())
         weight = torch.load(
-            f"{dump_dir}/{self.__str__()}_weight.pt"
+            f"{dump_dir}/{model_name}_weight.pt"
         )
         bias = torch.load(
-            f"{dump_dir}/{self.__str__()}_bias.pt"
+            f"{dump_dir}/{model_name}_bias.pt"
         )
         self.make_model(low_rank_dimension=weight.shape[1])
         self.ax.proj.weight.data = weight.cuda()

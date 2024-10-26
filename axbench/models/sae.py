@@ -76,6 +76,7 @@ class GemmaScopeSAE(Model):
         self.make_model(low_rank_dimension=params['W_enc'].shape[1])
         self.ax.load_state_dict(pt_params, strict=False)
     
+    @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
         
