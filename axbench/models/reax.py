@@ -13,7 +13,11 @@ except ModuleNotFoundError:
     sys.path.append("../../../pyreax")
     import pyreax
 
-import pyreft
+from pyvene import (
+    IntervenableConfig,
+    IntervenableModel
+)
+
 from pyreax import (
     EXAMPLE_TAG, 
     ReAXFactory, 
@@ -63,12 +67,12 @@ class ReAX(Model):
             )
         self.ax = ax
         self.ax.train()
-        reft_config = pyreft.ReftConfig(representations=[{
+        ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
             "intervention": self.ax} for l in [self.layer]])
-        ax_model = pyreft.get_reft_model(self.model, reft_config)
+        ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device("cuda")
         self.ax_model = ax_model
     

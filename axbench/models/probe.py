@@ -13,7 +13,6 @@ except ModuleNotFoundError:
     sys.path.append("../../../pyreax")
     import pyreax
 
-import pyreft
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
