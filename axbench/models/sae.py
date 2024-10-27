@@ -10,10 +10,13 @@ except ModuleNotFoundError:
     import sys
     sys.path.append("../../../pyreax")
     import pyreax
+from pyvene import (
+    IntervenableConfig,
+    IntervenableModel
+)
 
 import os, requests, torch
 import numpy as np
-import pyreft
 from pyreax import (
     JumpReLUSAECollectIntervention, 
     SubspaceAdditionIntervention
@@ -38,12 +41,12 @@ class GemmaScopeSAE(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         ax = ax.train()
-        reft_config = pyreft.ReftConfig(representations=[{
+        ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
             "intervention": ax} for l in [self.layer]])
-        ax_model = pyreft.get_reft_model(self.model, reft_config)
+        ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device("cuda")
         self.ax = ax
         self.ax_model = ax_model
