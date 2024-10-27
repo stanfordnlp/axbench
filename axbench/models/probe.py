@@ -25,6 +25,7 @@ from pyreax import (
     gather_residual_activations, 
     get_lr
 )
+from pyreax.utils.model_utils import calculate_l1_losses
 from transformers import get_scheduler
 
 import logging
@@ -174,7 +175,7 @@ class LinearProbe(Model):
             max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
             all_acts += [ax_acts]
-            all_max_act += [max_ax_act]
+            all_max_act += [max_ax_act] 
             all_max_act_idx += [max_ax_act_idx]
             all_max_token += [max_token]
         return {
@@ -217,23 +218,19 @@ class L1LinearProbe(LinearProbe):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 )
-                latent = self.ax(activations).squeeze(-1) # bs, seq
+                latent = self.ax(activations).squeeze(-1)  # bs, seq
                 loss = criterion(
                     latent[:,1:][nonbos_mask.bool()], 
                     inputs["labels"].unsqueeze(1).repeat(
                         1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
                 )
-                null_loss = 0
-                l1_loss = 0
-                for i in range(latent.shape[0]):
-                    if inputs["labels"][i] == 0:
-                        topk_latent, _ = torch.topk(latent[i, 1:][nonbos_mask.bool()[i]], self.training_args.k_latent_null_loss, dim=-1)
-                        null_loss = topk_latent.mean(dim=-1) # any negative label is null
-                        null_loss += null_loss.sum()
-                    if inputs["labels"][i] == 1:
-                        l1_loss = latent[i, 1:][nonbos_mask.bool()[i]].mean(dim=-1) # any positive label is active
-                        l1_loss += l1_loss.sum()
-                
+                null_loss, l1_loss = calculate_l1_losses(
+                    latent[:,1:],
+                    labels=inputs["labels"],
+                    mask=nonbos_mask,
+                    k_latent_null_loss=self.training_args.k_latent_null_loss
+                )
+
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
 
@@ -241,7 +238,6 @@ class L1LinearProbe(LinearProbe):
                 loss.backward()
                 set_decoder_norm_to_unit_norm(self.ax)
                 remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_step += 1
                 curr_lr = get_lr(optimizer)
                 # optim
                 optimizer.step()

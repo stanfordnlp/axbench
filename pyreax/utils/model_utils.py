@@ -67,3 +67,38 @@ def remove_gradient_parallel_to_decoder_directions(model):
         "d_out, d_out d_in -> d_out d_in",
     )
 
+
+def calculate_l1_losses(latent, labels, mask=None, k_latent_null_loss=1):
+    """
+    Calculate L1 losses with masked mean.
+    
+    Parameters:
+    - latent: latent representation, shape [batch_size, seq_len]
+    - labels: labels, shape [batch_size]
+    - mask: long mask, shape [batch_size, seq_len]
+    - k_latent_null_loss: top-k value for null loss, default 1
+    """
+    batch_size, seq_len = latent.shape
+    
+    if mask is None:
+        mask = torch.ones_like(latent, dtype=torch.long)
+    
+    mask = mask.bool()
+    
+    # Set masked positions to -inf so that topk won't select them.
+    masked_latent = torch.where(mask, latent, torch.full_like(latent, float('-inf')))
+    topk_latent, _ = torch.topk(masked_latent, k_latent_null_loss, dim=-1)  # [batch_size, k]
+    
+    # Calculate masked mean.
+    masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
+    valid_counts = mask.sum(dim=-1)  # [batch_size]
+    
+    # Avoid division by zero.
+    eps = torch.finfo(latent.dtype).eps
+    mean_all = masked_sum / (valid_counts + eps)
+    mean_topk = topk_latent.mean(dim=-1)  # [batch_size]
+    
+    null_loss = (mean_topk * (labels == 0)).sum()
+    l1_loss = (mean_all * (labels != 0)).sum()
+    
+    return null_loss, l1_loss
