@@ -67,3 +67,30 @@ def remove_gradient_parallel_to_decoder_directions(model):
         "d_out, d_out d_in -> d_out d_in",
     )
 
+
+def calculate_l1_losses(latent, labels, k_latent_null_loss=1):
+    """
+    Calculate L1 losses (null_loss and l1_loss).
+    
+    Parameters:
+    - latent: latent representation, shape [batch_size, seq_len] or [batch_size, seq_len, 1]
+    - labels: labels, shape [batch_size]
+    - k_latent_null_loss: top-k value for null loss, default 1
+    
+    Returns:
+    - null_loss: calculated null loss
+    - l1_loss: calculated l1 loss
+    """
+    if latent.dim() == 3:
+        latent = latent.squeeze(-1)
+    
+    batch_size, seq_len = latent.shape
+    
+    topk_latent, _ = torch.topk(latent, k_latent_null_loss, dim=-1)
+    mean_topk = topk_latent.mean(dim=-1)
+    mean_all = latent.mean(dim=-1)
+    
+    null_loss = (mean_topk * (labels == 0)).sum()
+    l1_loss = (mean_all * (labels != 0)).sum()
+    
+    return null_loss, l1_loss

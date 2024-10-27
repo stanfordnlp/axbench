@@ -33,6 +33,7 @@ from pyreax import (
     get_lr
 )
 from transformers import get_scheduler
+from axbench.utils.loss_utils import calculate_l1_losses
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -120,13 +121,13 @@ class ReAX(Model):
                 # loss
                 loss = cf_outputs.loss
                 latent = self.ax_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
-                topk_latent, _ = torch.topk(latent, self.training_args.k_latent_null_loss, dim=-1)
-                null_loss = (topk_latent.mean(dim=-1)*(inputs["groups"]==EXAMPLE_TAG.CONTROL.value))
-                null_loss = null_loss.sum()
+                print(f"Reax latent shape: {latent.shape}")
+                null_loss, l1_loss = calculate_l1_losses(
+                    latent, 
+                    labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
+                    k_latent_null_loss=self.training_args.k_latent_null_loss
+                )
         
-                l1_loss = (latent.mean(dim=-1)*(inputs["groups"]!=EXAMPLE_TAG.CONTROL.value))
-                l1_loss = l1_loss.sum()
-                
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
                 
@@ -170,7 +171,7 @@ class ReAX(Model):
             max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
             all_acts += [ax_acts]
-            all_max_act += [max_ax_act]
+            all_max_act += [max_ax_act] 
             all_max_act_idx += [max_ax_act_idx]
             all_max_token += [max_token]
         return {
@@ -214,3 +215,4 @@ class ReAX(Model):
         return {
             "steered_generation": all_generations,
         }
+
