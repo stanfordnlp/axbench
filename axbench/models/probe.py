@@ -25,6 +25,7 @@ from pyreax import (
     gather_residual_activations, 
     get_lr
 )
+from pyreax.utils.model_utils import calculate_l1_losses
 from transformers import get_scheduler
 
 import logging
@@ -223,10 +224,10 @@ class L1LinearProbe(LinearProbe):
                     inputs["labels"].unsqueeze(1).repeat(
                         1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
                 )
-
                 null_loss, l1_loss = calculate_l1_losses(
-                    latent[:, 1:][nonbos_mask.bool()],
+                    latent[:,1:],
                     labels=inputs["labels"],
+                    mask=nonbos_mask,
                     k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
 

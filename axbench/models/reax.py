@@ -33,7 +33,7 @@ from pyreax import (
     get_lr
 )
 from transformers import get_scheduler
-from axbench.utils.loss_utils import calculate_l1_losses
+from pyreax.utils.model_utils import calculate_l1_losses
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -120,11 +120,12 @@ class ReAX(Model):
         
                 # loss
                 loss = cf_outputs.loss
-                latent = self.ax_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
-                print(f"Reax latent shape: {latent.shape}")
+                latent = self.ax_model.full_intervention_outputs[0].latent
+
                 null_loss, l1_loss = calculate_l1_losses(
                     latent, 
                     labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
+                    mask=inputs["intervention_masks"],
                     k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
         
