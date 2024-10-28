@@ -15,7 +15,10 @@ except ModuleNotFoundError:
 
 import os
 import pandas as pd
-import pyreft
+from pyvene import (
+    IntervenableConfig,
+    IntervenableModel
+)
 from pyreax import (
     EXAMPLE_TAG, 
     ReAXFactory, 
@@ -31,6 +34,7 @@ from pyreax import (
     get_lr
 )
 from transformers import get_scheduler
+from pyreax.utils.model_utils import calculate_l1_losses
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -57,12 +61,12 @@ class ReAX(Model):
             )
         self.ax = ax
         self.ax.train()
-        reft_config = pyreft.ReftConfig(representations=[{
+        ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
             "intervention": self.ax} for l in [self.layer]])
-        ax_model = pyreft.get_reft_model(self.model, reft_config)
+        ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device("cuda")
         self.ax_model = ax_model
     
@@ -109,14 +113,15 @@ class ReAX(Model):
         
                 # loss
                 loss = cf_outputs.loss
-                latent = self.ax_model.full_intervention_outputs[0].latent * inputs["intervention_masks"]
-                topk_latent, _ = torch.topk(latent, self.training_args.k_latent_null_loss, dim=-1)
-                null_loss = (topk_latent.mean(dim=-1)*(inputs["groups"]==EXAMPLE_TAG.CONTROL.value))
-                null_loss = null_loss.sum()
+                latent = self.ax_model.full_intervention_outputs[0].latent
+
+                null_loss, l1_loss = calculate_l1_losses(
+                    latent, 
+                    labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
+                    mask=inputs["intervention_masks"],
+                    k_latent_null_loss=self.training_args.k_latent_null_loss
+                )
         
-                l1_loss = (latent.mean(dim=-1)*(inputs["groups"]!=EXAMPLE_TAG.CONTROL.value))
-                l1_loss = l1_loss.sum()
-                
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
                 
@@ -160,7 +165,7 @@ class ReAX(Model):
             max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
 
             all_acts += [ax_acts]
-            all_max_act += [max_ax_act]
+            all_max_act += [max_ax_act] 
             all_max_act_idx += [max_ax_act_idx]
             all_max_token += [max_token]
         return {
@@ -172,7 +177,6 @@ class ReAX(Model):
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
         # For ReAX, we need to look into the concept in the same group, since they are used in training.
         max_activations = {} # sae_id to max_activation
-
         # Loop over saved latent files in dump_dir.
         for file in os.listdir(dump_dir):
             if file.startswith("latent_") and file.endswith(".csv"):
