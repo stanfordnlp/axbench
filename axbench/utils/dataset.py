@@ -1,6 +1,19 @@
 import pandas as pd
 
 
+def OUATPrefix_steering_factors(n):
+    if n < 3:
+        return [i * 0.5 for i in range(n)]
+    # Allocate points: 60% to 0-2 range, 40% to >2 range
+    n_small = int(n * 0.6)
+    n_large = n - n_small
+    # Dense sampling from 0 to 2
+    small_factors = [i * (2.0 / (n_small - 1)) for i in range(n_small)]
+    # Exponential spacing for larger values
+    large_factors = [2.0 + (i * 0.5) for i in range(1, n_large + 1)]
+    return small_factors + large_factors
+
+
 class SteeringDatasetFactory(object):
     def __init__(
         self, model, tokenizer, dump_dir, **kwargs):
@@ -8,9 +21,8 @@ class SteeringDatasetFactory(object):
         self.tokenizer = tokenizer
 
     def create_eval_df(self, concepts, subset_n, n_steering_factors, steering_datasets):
-        common_steering_factors = [f*20.0 for f in range(n_steering_factors)]
         for dataset_name in steering_datasets:
-            print(f"Creating steering dataset: {dataset_name}")
+            common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
             if dataset_name == "OUATPrefix":
                 # we generate subset_n * n_steering_factors examples for OUATPrefix.
                 # OUATPrefix is basically a prefix dataset.

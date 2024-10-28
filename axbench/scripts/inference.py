@@ -56,7 +56,7 @@ def load_config(config_path):
     return d
 
 
-def load_state(dump_dir):
+def load_state(dump_dir, mode):
     """
     Load the state from a file if it exists.
     
@@ -66,7 +66,7 @@ def load_state(dump_dir):
     Returns:
         dict: The loaded state dictionary, or None if no state file exists.
     """
-    state_path = os.path.join(f"{dump_dir}/inference", STATE_FILE)
+    state_path = os.path.join(f"{dump_dir}/inference", f"{mode}_{STATE_FILE}")
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
             return pickle.load(f)
@@ -78,6 +78,7 @@ def load_metadata_flatten(metadata_path):
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
+    group_id = 0
     with open(Path(metadata_path) / METADATA_FILE, 'r') as f:
         for line in f:
             data = json.loads(line)
@@ -90,8 +91,10 @@ def load_metadata_flatten(metadata_path):
                     "ref": ref,
                     "concept_genres_map": {concept: concept_genres_map},
                     "contrast_concepts_map": {concept: contrast_concepts_map},
+                    "group_id": group_id
                 }
                 metadata += [flatten_data]  # Return the metadata as is
+            group_id += 1
     return metadata
 
 
@@ -125,14 +128,14 @@ def retry_with_backoff(func, *args, **kwargs):
 
 def save(
     dump_dir, state, concept_id, partition,
-    current_df, rotation_freq):
+    current_df, rotation_freq, mode):
     """
     Save the current state, metadata, and DataFrame.
     """
     dump_dir = Path(dump_dir) / "inference"
     dump_dir.mkdir(parents=True, exist_ok=True)
     
-    state_path = os.path.join(dump_dir, STATE_FILE)
+    state_path = os.path.join(dump_dir, f"{mode}_{STATE_FILE}")
     with open(state_path, "wb") as f:
         pickle.dump(state, f)
     
@@ -150,6 +153,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     # prepare concept related data.
     concept = metadata[concept_id]["concept"]
     sae_link = metadata[concept_id]["ref"]
+    group_id = metadata[concept_id]["group_id"]
     sae_id = int(sae_link.split("/")[-1]) 
     concept_genres_map = metadata[concept_id]["concept_genres_map"]
     contrast_concepts_map = metadata[concept_id]["contrast_concepts_map"]
@@ -168,6 +172,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
         current_df["concept_id"] = concept_id
         current_df["sae_link"] = sae_link
         current_df["sae_id"] = sae_id
+        current_df["group_id"] = group_id
     except Exception as e:
         logger.warning(f"Failed to create evaluation data for group {concept_id}: {e}")
         return
@@ -190,7 +195,7 @@ def create_data_steering(
     current_df["sae_link"] = sae_link
     current_df["sae_id"] = sae_id
 
-    return current_df
+    return current_df, (concept_id, sae_link, sae_id)
 
 
 def infer_steering(args):
@@ -214,7 +219,7 @@ def infer_steering(args):
     tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
     tokenizer.padding_side = "right"
 
-    state = load_state(args.dump_dir)
+    state = load_state(args.dump_dir, "steering")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
@@ -233,23 +238,27 @@ def infer_steering(args):
         benchmark_model.load(
             dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering")
         benchmark_models += [benchmark_model]
+        # Pre-compute mean activations for steering eval based on latent eval.
+        benchmark_model.pre_compute_mean_activations(
+            os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir)
 
     torch.cuda.empty_cache()
     for concept_id in progress_bar:
         # Create.
-        current_df = create_data_steering(
+        current_df, (_, sae_link, sae_id) = create_data_steering(
             dataset_factory, metadata, concept_id, num_of_examples, 
             n_steering_factors, steering_datasets, args)
 
         # Evaluate.
         for model_idx, model_name in enumerate(args.models):
-            results = benchmark_models[model_idx].predict_steer(current_df)
+            results = benchmark_models[model_idx].predict_steer(
+                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id)
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
 
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "steering",
-            current_df, rotation_freq)
+            current_df, rotation_freq, mode="steering")
 
 
 def infer_latent(args):
@@ -286,7 +295,7 @@ def infer_latent(args):
             dump_dir=train_dir, sae_path=metadata[0]["ref"])
         benchmark_models += [benchmark_model]
 
-    state = load_state(args.dump_dir)
+    state = load_state(args.dump_dir, "latent")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
@@ -305,7 +314,7 @@ def infer_latent(args):
         
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
-            current_df, rotation_freq)
+            current_df, rotation_freq, mode="latent")
 
 
 def main():
@@ -323,9 +332,19 @@ def main():
     logger.warning("Inferencing with following configuration:")
     logger.warning(args)
     
+    def check_latent_eval_done(args):
+        # Check if at least one latent eval fragment exists.
+        if os.path.exists(os.path.join(
+            args.dump_dir, "inference", "latent_data_fragment_0.csv")):
+            return True
+        return False
+
     if args.mode == "latent":
         infer_latent(args)
     elif args.mode == "steering":
+        # steering eval must be done after latent eval.
+        if not check_latent_eval_done(args):
+            raise ValueError("Latent eval must be done before steering eval.")
         infer_steering(args)
 
 

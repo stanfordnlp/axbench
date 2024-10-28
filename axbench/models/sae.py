@@ -16,7 +16,10 @@ from pyvene import (
 )
 
 import os, requests, torch
+import json
+import tqdm
 import numpy as np
+import pandas as pd
 from pyreax import (
     JumpReLUSAECollectIntervention, 
     SubspaceAdditionIntervention
@@ -67,7 +70,10 @@ class GemmaScopeSAE(Model):
         params = np.load(path_to_params)
         pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
-        self.ax.load_state_dict(pt_params, strict=False)
+        if isinstance(self.ax, JumpReLUSAECollectIntervention):
+            self.ax.load_state_dict(pt_params, strict=False)
+        else:
+            self.ax.proj.weight.data = pt_params['W_dec']
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
@@ -97,39 +103,46 @@ class GemmaScopeSAE(Model):
             "max_act": all_max_act, 
             "max_act_idx": all_max_act_idx,
             "max_token": all_max_token}
+    
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
 
-    def predict_steer(self, examples, **kwargs):
-        self.ax.eval()
-        # set tokenizer padding to left
-        self.tokenizer.padding_side = "left"
+        # Loop over all csv files in dump_dir.
+        sae_links = []
+        for file in os.listdir(dump_dir):
+            if file.endswith(".csv") and file.startswith("latent_data_fragment"):
+                df = pd.read_csv(os.path.join(dump_dir, file))
+                # sort by concept_id from small to large and enumerate through all concept_ids.
+                for sae_link in sorted(df["sae_link"].unique()):
+                    sae_links += [sae_link]
 
-        # iterate rows in batch
-        batch_size = kwargs.get("batch_size", 16)
-        all_generations = []
-        for i in range(0, len(examples), batch_size):
-            batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['input'].tolist()
-            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
-            idx = torch.tensor(batch_examples['sae_id'].tolist()).to("cuda")
-            # tokenize input_strings
-            inputs = self.tokenizer(
-                input_strings, return_tensors="pt", padding=True, truncation=True
-            ).to("cuda")
-            _, generations = self.ax_model.generate(
-                inputs, 
-                unit_locations=None, intervene_on_prompt=True, 
-                subspaces=[{"idx": idx, "mag": mag}],
-                max_new_tokens=128, do_sample=True, 
-                early_stopping=True, 
-                temperature=0.7, 
-            )
-            # Decode and print only the generated text without prompt tokens
-            input_lengths = [len(input_ids) for input_ids in inputs.input_ids]
-            generated_texts = [
-                self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
-                for generation, input_length in zip(generations, input_lengths)
-            ]
-            all_generations += generated_texts
-        return {
-            "steered_generation": all_generations,
-        }
+        model_name, sae_name = sae_links[0].split("/")[-3], sae_links[0].split("/")[-2]
+        max_activations = {} # sae_id to max_activation
+
+        # Load existing max activations file and skip if exists.
+        max_activations_file = os.path.join(
+            kwargs.get("master_data_dir", "axbench/data"), 
+            f"{model_name}_{sae_name}_max_activations.json")
+        if os.path.exists(max_activations_file):
+            with open(max_activations_file, "r") as f:
+                max_activations = json.load(f)
+            max_activations = {int(k): v for k, v in max_activations.items()}
+        
+        has_new = False
+        for sae_link in tqdm.tqdm(sae_links):
+            sae_path = sae_link.split("https://www.neuronpedia.org/")[-1]
+            sae_id = int(sae_link.split("/")[-1])
+            if sae_id in max_activations:
+                continue
+            url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+            headers = {"X-Api-Key": os.environ["NP_API_KEY"]}
+            response = requests.get(url, headers=headers)
+            max_activation = response.json()["activations"][0]["maxValue"]
+            max_activations[sae_id] = max_activation
+            has_new = True
+
+        if has_new:
+            with open(max_activations_file, "w") as f:
+                json.dump(max_activations, f)
+
+        self.max_activations = max_activations
+        return max_activations
