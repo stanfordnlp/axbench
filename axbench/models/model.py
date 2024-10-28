@@ -1,4 +1,5 @@
 import torch
+import einops
 
 
 class Model(object):
@@ -133,7 +134,14 @@ class Model(object):
     def get_logits(self, concept_id):
         top_logits, neg_logits = [None], [None]
         if concept_id is not None:
-            vocab_logits = self.model.lm_head.weight @ self.ax.proj.weight.data[concept_id]
+            W_U = self.model.lm_head.weight.T
+            W_U = W_U * (self.model.norm.weight +
+                        torch.ones_like(self.model.norm.weight, dtype=torch.float32))[:, None]
+            W_U -= einops.reduce(
+                W_U, "d_model d_vocab -> 1 d_vocab", "mean"
+            )
+
+            vocab_logits = self.ax.proj.weight.data[concept_id] @ W_U
             top_values, top_indices = vocab_logits.topk(k=10, sorted=True)
             top_tokens = self.tokenizer.batch_decode(top_indices.unsqueeze(dim=-1))
             top_logits = [list(zip(top_tokens, top_values.tolist()))]
