@@ -13,6 +13,8 @@ except ModuleNotFoundError:
     sys.path.append("../../../pyreax")
     import pyreax
 
+import os
+import pandas as pd
 import pyreft
 from pyreax import (
     EXAMPLE_TAG, 
@@ -38,14 +40,6 @@ logger = logging.getLogger(__name__)
 
 
 class ReAX(Model):
-    
-    def __init__(self, model, tokenizer, layer, training_args=None, **kwargs):
-        self.model = model
-        self.tokenizer = tokenizer
-        # abstracting layer
-        self.layer = layer
-        self.training_args = training_args
-    
     def __str__(self):
         return 'ReAX'
 
@@ -175,38 +169,24 @@ class ReAX(Model):
             "max_act_idx": all_max_act_idx,
             "max_token": all_max_token}
 
-    def predict_steer(self, examples, **kwargs):
-        self.ax.eval()
-        # set tokenizer padding to left
-        self.tokenizer.padding_side = "left"
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # For ReAX, we need to look into the concept in the same group, since they are used in training.
+        max_activations = {} # sae_id to max_activation
 
-        # iterate rows in batch
-        batch_size = kwargs.get("batch_size", 16)
-        all_generations = []
-        for i in range(0, len(examples), batch_size):
-            batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['input'].tolist()
-            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
-            idx = torch.tensor(batch_examples['concept_id'].tolist()).to("cuda")
-            # tokenize input_strings
-            inputs = self.tokenizer(
-                input_strings, return_tensors="pt", padding=True, truncation=True
-            ).to("cuda")
-            _, generations = self.ax_model.generate(
-                inputs, 
-                unit_locations=None, intervene_on_prompt=True, 
-                subspaces=[{"idx": idx, "mag": mag}],
-                max_new_tokens=128, do_sample=True, 
-                early_stopping=True, 
-                temperature=0.7, 
-            )
-            # Decode and print only the generated text without prompt tokens
-            input_lengths = [len(input_ids) for input_ids in inputs.input_ids]
-            generated_texts = [
-                self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
-                for generation, input_length in zip(generations, input_lengths)
-            ]
-            all_generations += generated_texts
-        return {
-            "steered_generation": all_generations,
-        }
+        # Loop over saved latent files in dump_dir.
+        for file in os.listdir(dump_dir):
+            if file.startswith("latent_") and file.endswith(".csv"):
+                latent_path = os.path.join(dump_dir, file)
+                latent = pd.read_csv(latent_path)
+                # loop through unique sorted concept_id
+                for concept_id in sorted(latent["concept_id"].unique()):
+                    concept_latent = latent[latent["concept_id"] == concept_id]
+                    # group id if this concept
+                    group_id = concept_latent["group_id"].iloc[0]
+                    # get the mean activation of this group but not with this concept_id
+                    group_latent = latent[latent["group_id"] == group_id]
+                    group_latent = group_latent[group_latent["concept_id"] != concept_id]
+                    max_act = group_latent[f"{self.__str__()}_max_act"].max()
+                    max_activations[concept_id] = max_act
+        self.max_activations = max_activations
+        return max_activations  

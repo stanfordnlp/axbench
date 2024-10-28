@@ -1,6 +1,7 @@
 # inference with test dataset
 #     python axbench/scripts/inference.py --config axbench/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
 models: ["LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE"]
+model_name: "google/gemma-2-2b"
 input_length: 32
 output_length: 10
 

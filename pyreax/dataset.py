@@ -113,16 +113,16 @@ class ReAXFactory(object):
 
         for (tag, concept, idx), eval_content in zip(tags, all_eval_content):
             if tag in {"positive"}:
-                all_examples += [[content, concept, tag, idx] for content in eval_content]
+                all_examples += [[content, concept, tag] for content in eval_content]
             elif tag in {"negative"}:
-                all_examples += [[content, concept, tag, idx] for content in eval_content[concept]]
+                all_examples += [[content, concept, tag] for content in eval_content[concept]]
             elif tag in {"hard negative seen", "hard negative unseen"}:
-                all_examples += [[content[1], "//".join(content[0]), tag, idx] for content in eval_content[1]]
+                all_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
 
         df = pd.DataFrame(
             all_examples, 
             columns = [
-                'input', 'input_concept', 'category', 'id'])
+                'input', 'input_concept', 'category'])
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()
@@ -167,11 +167,11 @@ class ReAXFactory(object):
         for concept in concepts:
             if len(contrast_concepts_map[concept]) == 0:
                 for content in concepts_random_content[concept]:
-                    null_prompts += [(concept, "null", content)]
+                    null_prompts += [(concept, "empty", content)]
             else:
                 n_random = n_per_concept // (len(concepts)*2)
                 for content in concepts_random_content[concept][:n_random]:
-                    null_prompts += [(concept, "null", content)]
+                    null_prompts += [(concept, "empty", content)]
                 for content in polysemantic_content[concept]:
                     null_prompts += [(concept, f"{content[0][0]}//{content[0][1]}", content[1])]
         null_outputs = get_model_continues(
@@ -180,7 +180,7 @@ class ReAXFactory(object):
         for (concept, tag, prompt), output in zip(null_prompts, null_outputs):
             in_idx = concept2id[concept]
             out_idx = sample_index_exclude(len(concepts), in_idx)
-            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL, in_idx, out_idx, tag, "null"]]
+            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL, in_idx, out_idx, tag, "empty"]]
         
         # modify exist content to have desired concepts.
         modify_prompts = []

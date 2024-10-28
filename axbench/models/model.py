@@ -9,6 +9,7 @@ class Model(object):
         # abstracting layer
         self.layer = layer
         self.training_args = training_args
+        self.max_activations = {}
 
     def make_model(self, **kwargs):
         pass
@@ -48,6 +49,99 @@ class Model(object):
     def predict_latent(self, examples, **kwargs):
         pass
 
+    @torch.no_grad()
     def predict_steer(self, examples, **kwargs):
-        pass
+        self.ax.eval()
+        # set tokenizer padding to left
+        self.tokenizer.padding_side = "left"
+        # depending on the model, we use different concept id columns
+        concept_id_col = "sae_id" if "sae" in self.__str__().lower() else "concept_id"
 
+        # get top logits and neg logits
+        concept_id = kwargs.get("sae_id", None) \
+            if "sae" in self.__str__().lower() else kwargs.get("concept_id", None)
+        top_logits, neg_logits = self.get_logits(concept_id)
+
+        # iterate rows in batch
+        batch_size = kwargs.get("batch_size", 16)
+        all_generations = []
+        all_perplexities = []
+        all_strenghts = []
+        for i in range(0, len(examples), batch_size):
+            batch_examples = examples.iloc[i:i+batch_size]
+            input_strings = batch_examples['input'].tolist()
+            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
+            idx = torch.tensor(batch_examples[concept_id_col].tolist()).to("cuda")
+            max_acts = torch.tensor([
+                self.max_activations.get(id, 1.0) 
+                for id in batch_examples[concept_id_col].tolist()]).to("cuda")
+            # tokenize input_strings
+            inputs = self.tokenizer(
+                input_strings, return_tensors="pt", padding=True, truncation=True
+            ).to("cuda")
+            _, generations = self.ax_model.generate(
+                inputs, 
+                unit_locations=None, intervene_on_prompt=True, 
+                subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}],
+                max_new_tokens=128, do_sample=True, 
+                # following neuronpedia, we use temperature=0.5 and repetition_penalty=2.0
+                temperature=0.5, repetition_penalty=2.0
+            )
+
+            # Decode and print only the generated text without prompt tokens
+            input_lengths = [len(input_ids) for input_ids in inputs.input_ids]
+            generated_texts = [
+                self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
+                for generation, input_length in zip(generations, input_lengths)
+            ]
+            all_generations += generated_texts
+
+            # Calculate perplexity for each sequence
+            batch_input_ids = self.tokenizer(
+                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
+            batch_attention_mask = (batch_input_ids != self.tokenizer.pad_token_id).float()
+            
+            # Forward pass without labels to get logits
+            outputs = self.model(input_ids=batch_input_ids, attention_mask=batch_attention_mask)
+            
+            logits = outputs.logits[:, :-1, :].contiguous()  # Remove last token prediction
+            target_ids = batch_input_ids[:, 1:].contiguous()  # Shift right by 1
+            
+            # Calculate loss for each token
+            loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
+            token_losses = loss_fct(logits.view(-1, logits.size(-1)), target_ids.view(-1))
+            
+            # Reshape losses and mask
+            token_losses = token_losses.view(batch_input_ids.size(0), -1)
+            mask = batch_attention_mask[:, 1:].contiguous()
+            
+            # Calculate perplexity for each sequence
+            seq_lengths = mask.sum(dim=1)
+            seq_losses = (token_losses * mask).sum(dim=1) / seq_lengths
+            seq_perplexities = torch.exp(seq_losses).tolist()
+            all_perplexities.extend(seq_perplexities)
+            all_strenghts.extend((mag*max_acts).tolist())
+
+        return {
+            "steered_generation": all_generations,
+            "top_logits": top_logits * len(all_generations),
+            "neg_logits": neg_logits * len(all_generations),
+            "perplexity": all_perplexities,
+            "strength": all_strenghts,
+        }
+
+    def get_logits(self, concept_id):
+        top_logits, neg_logits = [None], [None]
+        if concept_id is not None:
+            vocab_logits = self.model.lm_head.weight @ self.ax.proj.weight.data[concept_id]
+            top_values, top_indices = vocab_logits.topk(k=10, sorted=True)
+            top_tokens = self.tokenizer.batch_decode(top_indices.unsqueeze(dim=-1))
+            top_logits = [list(zip(top_tokens, top_values.tolist()))]
+            
+            neg_values, neg_indices = vocab_logits.topk(k=10, largest=False, sorted=True)
+            neg_tokens = self.tokenizer.batch_decode(neg_indices.unsqueeze(dim=-1))
+            neg_logits = [list(zip(neg_tokens, neg_values.tolist()))]
+        return top_logits, neg_logits
+    
+    def pre_compute_mean_activations(self, dump_dir):
+        pass

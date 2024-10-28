@@ -1,7 +1,9 @@
-models: ["ReAX"]
+models: ["ReAX"] 
+# "LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"
+
+# for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
 model_name: "google/gemma-2-2b"
 
-# "LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"
 input_length: 32
 output_length: 10
 
@@ -12,6 +14,9 @@ train_dir: "axbench/demo/train"
 dump_dir: "axbench/demo"
 
 # steering related params
-n_steering_factors: 9
+n_steering_factors: 18
 steering_datasets: ["OUATPrefix"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
+
+# master data dir is shared across all jobs.
+master_data_dir: "axbench/data"
