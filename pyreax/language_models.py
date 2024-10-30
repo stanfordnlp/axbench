@@ -77,7 +77,7 @@ class LanguageModelStats(object):
 class LanguageModel(object):
     """Main class abstract async remote language model access"""
 
-    def __init__(self, model, dump_dir, **kwargs):
+    def __init__(self, model, dump_dir=None, **kwargs):
         self.model = model
         if "gpt-4o" in model:
             pass
@@ -86,9 +86,10 @@ class LanguageModel(object):
         self.stats = LanguageModelStats(model)
 
         # dump dir
-        cur_save_dir = Path(dump_dir) / "lm_cache"
-        cur_save_dir.mkdir(parents=True, exist_ok=True)
-        self.dump_dir = cur_save_dir
+        if dump_dir:
+            cur_save_dir = Path(dump_dir) / "lm_cache"
+            cur_save_dir.mkdir(parents=True, exist_ok=True)
+            self.dump_dir = cur_save_dir
     
     def normalize(self, text):
         return text.strip()
@@ -98,30 +99,42 @@ class LanguageModel(object):
             messages=[{"role": "user", "content": prompt}], model=self.model)
         return response
         
-    async def chat_completions(self, api_names, prompts):
-        """handling batched async calls"""
-        client = AsyncOpenAI(
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            timeout=100.0,
-            http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
-            max_retries=2,
-        )
-        # batched calls.
-        async_responses = [
-            self.chat_completion(client, prompt) for prompt in prompts]
-        raw_completions = await asyncio.gather(*async_responses)
+    async def chat_completions(self, api_names, prompts, batch_size=32):
+        """handling batched async calls with internal batching mechanism"""
+        # Ensure api_names is a list of appropriate length
+        if not isinstance(api_names, list):
+            api_names = [api_names] * len(prompts)
 
-        # post handlings.
-        completions = []
-        for i, raw_completion in enumerate(raw_completions):
-            raw_completion = raw_completion.to_dict()
-            completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-            completions += [completion]
-            api_name = api_names[i] if isinstance(api_names, list) else api_names
-            self.stats.record(
-                api_name, raw_completion['usage'], 
-                prompt=prompts[i], completion=completion)
-        return completions
+        # Process in batches
+        all_completions = []
+        for i in range(0, len(prompts), batch_size):
+            batch_prompts = prompts[i:i + batch_size]
+            batch_api_names = api_names[i:i + batch_size]
+            
+            client = AsyncOpenAI(
+                api_key=os.environ.get("OPENAI_API_KEY"),
+                timeout=100.0,
+                http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
+                max_retries=2,
+            )
+            
+            # batched calls
+            async_responses = [
+                self.chat_completion(client, prompt) for prompt in batch_prompts]
+            raw_completions = await asyncio.gather(*async_responses)
+
+            # post handling for current batch
+            for j, raw_completion in enumerate(raw_completions):
+                raw_completion = raw_completion.to_dict()
+                completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
+                all_completions.append(completion)
+                self.stats.record(
+                    batch_api_names[j], raw_completion['usage'],
+                    prompt=batch_prompts[j], completion=completion)
+                
+            await client.close()  # Clean up client after each batch
+            
+        return all_completions
 
     def dump(self):
         with open(self.dump_dir / "tmp_prompt_cache.json", "w") as outfile:
