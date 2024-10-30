@@ -180,7 +180,7 @@ class ReAXFactory(object):
         for (concept, tag, prompt), output in zip(null_prompts, null_outputs):
             in_idx = concept2id[concept]
             out_idx = sample_index_exclude(len(concepts), in_idx)
-            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL, in_idx, out_idx, tag, "empty"]]
+            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL.value, in_idx, out_idx, tag, "empty"]]
         
         # modify exist content to have desired concepts.
         modify_prompts = []
@@ -200,7 +200,7 @@ class ReAXFactory(object):
             in_idx = concept2id[modify_prompts[i][0]]
             out_idx = concept2id[inverse_concepts[i]]
             all_examples += [[
-                prompt, output, EXAMPLE_TAG.EXPERIMENT, 
+                prompt, output, EXAMPLE_TAG.EXPERIMENT.value, 
                 in_idx, out_idx, modify_prompts[i][0], inverse_concepts[i]]]
 
         df = pd.DataFrame(
@@ -267,11 +267,7 @@ def make_data_module(
     for _, row in df.iterrows():
         _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
             int(row["input_subspace"]), int(row["output_subspace"])
-        if str(row["group"]) == "EXAMPLE_TAG.CONTROL":
-            _group = 0
-        else:
-            _group = 1
-
+        _group = row["group"]
         # prepare input ids
         base_prompt = _input
         if isinstance(_output, float):

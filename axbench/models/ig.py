@@ -18,9 +18,6 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from pyreax import (
-    EXAMPLE_TAG, 
-)
-from pyreax import (
     gather_residual_activations, 
     get_lr
 )

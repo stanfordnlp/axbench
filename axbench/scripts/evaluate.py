@@ -25,7 +25,12 @@ from pathlib import Path
 import numpy as np
 
 import axbench
-from axbench import plot_aggregated_roc
+from axbench import (
+    plot_aggregated_roc, 
+    plot_perplexity,
+    plot_strength,
+    plot_lm_judge_rating
+)
 from args.eval_args import EvalArgs
 
 import logging
@@ -37,20 +42,21 @@ logger = logging.getLogger(__name__)
 STATE_FILE = "evaluate_state.pkl"
 
 
-def data_generator(data_dir):
+def data_generator(data_dir, mode):
     """
     Generator function to read data files and yield data subsets by group_id.
 
     Args:
         data_dir (str): Path to the data directory.
+        mode (str): Mode of operation ('latent' or 'steering').
 
     Yields:
         (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
     """
     # Get list of files sorted by index
-    file_list = sorted(glob.glob(os.path.join(data_dir, 'latent_data_fragment_*.csv')))
+    file_list = sorted(glob.glob(os.path.join(data_dir, f'{mode}_data_fragment_*.parquet')))
     for file_path in file_list:
-        df = pd.read_csv(file_path)
+        df = pd.read_parquet(file_path)
         concept_ids = df['concept_id'].unique()
         concept_ids.sort()
         for concept_id in concept_ids:
@@ -68,7 +74,7 @@ def save_results(dump_dir, state, concept_id, partition, eval_results, rotation_
     dump_dir.mkdir(parents=True, exist_ok=True)
     
     # Save state
-    state_path = os.path.join(dump_dir, STATE_FILE)
+    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}")
     with open(state_path, "wb") as f:
         pickle.dump(state, f)
     
@@ -83,7 +89,7 @@ def save_results(dump_dir, state, concept_id, partition, eval_results, rotation_
         f.write(json.dumps(result_entry) + "\n")
 
 
-def load_state(dump_dir):
+def load_state(dump_dir, mode):
     """
     Load the state from a file if it exists.
     
@@ -93,16 +99,60 @@ def load_state(dump_dir):
     Returns:
         dict: The loaded state dictionary, or None if no state file exists.
     """
-    state_path = os.path.join(f"{dump_dir}/evaluate", STATE_FILE)
+    state_path = os.path.join(f"{dump_dir}/evaluate", f"{mode}_{STATE_FILE}")
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
             return pickle.load(f)
     return None
 
 
+def plot_steering(dump_dir):
+    dump_dir = Path(dump_dir) / "evaluate"
+    # aggregate all results
+    file_list = sorted(glob.glob(os.path.join(dump_dir, 'steering_fragment_*.jsonl')))
+    aggregated_results = []
+    for file_path in file_list:
+        aggregated_results += load_jsonl(file_path)
+
+    # other plot goes here
+    plot_perplexity(aggregated_results, write_to_path=dump_dir)
+    plot_strength(aggregated_results, write_to_path=dump_dir)
+    # plot_lm_judge_rating(aggregated_results, write_to_path=dump_dir)
+
+
 def eval_steering(args):
 
-    raise NotImplementedError("Steering inference is not implemented yet.")
+    data_dir = args.data_dir
+    dump_dir = args.dump_dir
+    rotation_freq = args.rotation_freq
+    df_generator = data_generator(args.data_dir, mode="steering")
+
+    state = load_state(args.dump_dir, mode="steering")
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting concept_id: {start_concept_id}")
+
+    for concept_id, current_df in df_generator:
+        if concept_id < start_concept_id:
+            continue
+        logger.warning(f"Evaluating concept_id: {concept_id}")
+        
+        # Initialize a dictionary for storing evaluation results for this `concept_id`
+        eval_results = {}
+        for model_name in args.models:
+            for evaluator_name in args.steering_evaluators:
+                evaluator_class = getattr(axbench, evaluator_name)
+                evaluator = evaluator_class(model_name, dump_dir=dump_dir)
+                # Call each evaluator and store results
+                eval_result = evaluator.compute_metrics(current_df)
+                if evaluator.__str__() not in eval_results:
+                    eval_results[evaluator.__str__()] = {}
+                eval_results[evaluator.__str__()][model_name.__str__()] = eval_result
+        save_results(
+            dump_dir, {"concept_id": concept_id + 1}, 
+            concept_id, 'steering', eval_results, rotation_freq)
+
+    # final plot
+    plot_steering(dump_dir)
 
 
 def load_jsonl(jsonl_path):
@@ -138,9 +188,9 @@ def eval_latent(args):
     data_dir = args.data_dir
     dump_dir = args.dump_dir
     rotation_freq = args.rotation_freq
-    df_generator = data_generator(args.data_dir)
+    df_generator = data_generator(args.data_dir, mode="latent")
 
-    state = load_state(args.dump_dir)
+    state = load_state(args.dump_dir, mode="latent")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept_id: {start_concept_id}")
 

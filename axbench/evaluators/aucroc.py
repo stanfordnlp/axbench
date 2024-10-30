@@ -5,7 +5,7 @@ from .evaluator import Evaluator
 
 
 class AUCROCEvaluator(Evaluator):
-    def __init__(self, model_name):
+    def __init__(self, model_name, **kwargs):
         self.model_name = model_name
     
     def __str__(self):
@@ -15,7 +15,8 @@ class AUCROCEvaluator(Evaluator):
         data = data.copy()
         
         # Normalize the activation columns
-        data['normalized_max'] = data[f'{self.model_name}_max_act'] / data[f'{self.model_name}_max_act'].max()
+        max_acts = data[f'{self.model_name}_max_act']
+        data['normalized_max'] = (max_acts - max_acts.min()) / (max_acts.max() - max_acts.min())
         
         # Apply class labels
         data['label'] = data['category'].map(class_labels)
