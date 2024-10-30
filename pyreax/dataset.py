@@ -138,6 +138,8 @@ class ReAXFactory(object):
         logger.warning("Creating dataframe.")
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
+        content_id = 0
+        content_map = {}
 
         input_length = kwargs.get("input_length", 32)
         output_length = kwargs.get("output_length", 10)
@@ -167,47 +169,73 @@ class ReAXFactory(object):
         for concept in concepts:
             if len(contrast_concepts_map[concept]) == 0:
                 for content in concepts_random_content[concept]:
-                    null_prompts += [(concept, "empty", content)]
+                    content_map[content] = content_id
+                    null_prompts += [(concept, "empty", content, content_id)]
+                    content_id += 1
             else:
                 n_random = n_per_concept // (len(concepts)*2)
                 for content in concepts_random_content[concept][:n_random]:
-                    null_prompts += [(concept, "empty", content)]
+                    content_map[content] = content_id
+                    null_prompts += [(concept, "empty", content, content_id)]
+                    content_id += 1
                 for content in polysemantic_content[concept]:
-                    null_prompts += [(concept, f"{content[0][0]}//{content[0][1]}", content[1])]
+                    content_map[content[1]] = content_id
+                    null_prompts += [(concept, f"{content[0][0]}//{content[0][1]}", content[1], content_id)]
+                    content_id += 1
+
         null_outputs = get_model_continues(
-            self.model, self.tokenizer, [prompt[-1] for prompt in null_prompts], 
+            self.model, self.tokenizer, [prompt[2] for prompt in null_prompts],
             max_new_tokens=int(output_length*1.5))
-        for (concept, tag, prompt), output in zip(null_prompts, null_outputs):
+
+        # Save control examples
+        for (concept, tag, prompt, curr_content_id), output in zip(null_prompts, null_outputs):
             in_idx = concept2id[concept]
             out_idx = sample_index_exclude(len(concepts), in_idx)
-            all_examples += [[prompt, output, EXAMPLE_TAG.CONTROL, in_idx, out_idx, tag, "empty"]]
-        
+            all_examples += [[
+                prompt, output, EXAMPLE_TAG.CONTROL.value,
+                in_idx, out_idx, tag, "empty",
+                curr_content_id,  # content_id
+                -1  # no source content
+            ]]
+
         # modify exist content to have desired concepts.
         modify_prompts = []
         for concept in concepts:
             for prompt in null_prompts:
-                modify_prompts.append((concept, prompt[1], prompt[2]))
+                modify_prompts.append((concept, prompt[1], prompt[2], prompt[3]))  # include source content ID
+
         modify_task = modify_content_with_concept(
-            self.lm_model, self.tokenizer, content=modify_prompts, length=input_length)
+            self.lm_model, self.tokenizer,
+            content=[(p[0], p[1], p[2]) for p in modify_prompts],  # keep the same interface
+            length=input_length)
         concept_prompts = asyncio.run(run_tasks([modify_task]))[0]
+
+        # process experiment examples with content tracking
         inverse_concepts = [concepts[sample_index_exclude(len(concepts), concept2id[prompt[0]])]
             for prompt in modify_prompts]
         continue_task = continue_with_concept(
             self.lm_model, self.tokenizer, 
             concepts=inverse_concepts, content=concept_prompts, length=output_length)
         concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+
         for i, (prompt, output) in enumerate(zip(concept_prompts, concept_outputs)):
             in_idx = concept2id[modify_prompts[i][0]]
             out_idx = concept2id[inverse_concepts[i]]
             all_examples += [[
-                prompt, output, EXAMPLE_TAG.EXPERIMENT, 
-                in_idx, out_idx, modify_prompts[i][0], inverse_concepts[i]]]
+                prompt, output, EXAMPLE_TAG.EXPERIMENT.value,
+                in_idx, out_idx, modify_prompts[i][0], inverse_concepts[i],
+                content_id,  # new content ID
+                modify_prompts[i][3]  # source content ID
+            ]]
+            content_id += 1
 
+        # update the column definitions of the DataFrame
         df = pd.DataFrame(
             all_examples, 
             columns = [
                 'input', 'output', 'group', 'input_subspace', 'output_subspace', 
-                'input_concept', 'output_concept'])
+                'input_concept', 'output_concept', 'content_id', 'source_content_id'
+            ])
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()
@@ -267,11 +295,7 @@ def make_data_module(
     for _, row in df.iterrows():
         _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
             int(row["input_subspace"]), int(row["output_subspace"])
-        if str(row["group"]) == "EXAMPLE_TAG.CONTROL":
-            _group = 0
-        else:
-            _group = 1
-
+        _group = row["group"]
         # prepare input ids
         base_prompt = _input
         if isinstance(_output, float):
