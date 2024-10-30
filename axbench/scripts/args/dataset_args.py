@@ -22,6 +22,7 @@ class DatasetArgs:
     model_name: Optional[str] = None
     n_steering_factors: Optional[int] = None
     master_data_dir: Optional[str] = None # this syncs across all jobs.
+    eva_batch_size: Optional[int] = None
     # Add any other parameters as needed
 
     def __init__(

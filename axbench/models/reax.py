@@ -21,7 +21,6 @@ from pyvene import (
 )
 from pyreax import (
     EXAMPLE_TAG, 
-    ReAXFactory, 
     MaxReLUIntervention, 
     SubspaceAdditionIntervention,
     make_data_module, 

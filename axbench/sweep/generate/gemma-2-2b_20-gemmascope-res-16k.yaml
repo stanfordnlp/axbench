@@ -1,11 +1,11 @@
 # generate dataset
 #     python axbench/scripts/generate.py --config axbench/sweep/generate/gemma-2-2b_20-gemmascope-res-16k.yaml
 input_length: 32
-output_length: 10
+output_length: 16
 
-num_of_examples: 72
+num_of_examples: 48
 rotation_freq: 1000
 concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
 dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k"
 seed: 42
-max_concepts: 10
+max_concepts: 50

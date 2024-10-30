@@ -15,18 +15,22 @@ models:
     lr: 0.003
     coeff_l1_loss_null: 0.05
     coeff_l1_loss: 0.001
-  # LinearProbe:
-  #   batch_size: 6
-  #   n_epochs: 12
-  #   lr: 0.003
-  # L1LinearProbe:
-  #   batch_size: 6
-  #   n_epochs: 12
-  #   k_latent_null_loss: 1
-  #   lr: 0.003
-  #   coeff_l1_loss_null: 0.5
-  #   coeff_l1_loss: 0.1
-  # IntegratedGradients:
-  #   batch_size: 128
-  #   n_epochs: 20
-  #   lr: 0.0008
+  L1LinearProbe:
+    batch_size: 6
+    n_epochs: 12
+    k_latent_null_loss: 1
+    lr: 0.003
+    coeff_l1_loss_null: 0.5
+    coeff_l1_loss: 0.1
+  Random:
+    batch_size: 128
+    n_epochs: 1
+  MeanEmbedding:
+    batch_size: 128
+    n_epochs: 1
+  MeanActivation:
+    batch_size: 128
+    n_epochs: 1
+  MeanPositiveActivation:
+    batch_size: 128
+    n_epochs: 1

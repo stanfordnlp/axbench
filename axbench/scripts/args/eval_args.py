@@ -9,7 +9,7 @@ class EvalArgs:
     # Define all parameters with type annotations and optional default values
     models: field(default_factory = lambda: [])
     latent_evaluators: field(default_factory = lambda: [])
-    steer_evaluators: field(default_factory = lambda: [])
+    steering_evaluators: field(default_factory = lambda: [])
     rotation_freq: Optional[int] = 1_000
     data_dir: Optional[str] = None
     dump_dir: Optional[str] = None
