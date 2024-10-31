@@ -31,7 +31,8 @@ from args.dataset_args import DatasetArgs
 # all supported methods
 import axbench
 from axbench import SteeringDatasetFactory
-
+from openai import AsyncOpenAI
+import httpx, asyncio
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -295,8 +296,22 @@ def infer_latent(args):
     tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
     tokenizer.padding_side = "right"
 
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100, 
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
     # Load dataset factory for evals.
-    dataset_factory = ReAXFactory(model, tokenizer, dump_dir)
+    dataset_factory = ReAXFactory(model, client, tokenizer, dump_dir)
 
     # Pre-load inference models.
     benchmark_models = []

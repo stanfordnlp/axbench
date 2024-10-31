@@ -29,13 +29,13 @@ class ReAXFactory(object):
     """Main class of async generating training pairs for two subspaces"""
 
     def __init__(
-        self, model, tokenizer, dump_dir, **kwargs):
+        self, model, client, tokenizer, dump_dir, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
 
         # prepare lm model
         lm_model = kwargs.get("lm_model", "gpt-4o")
-        self.lm_model = LanguageModel(lm_model, dump_dir)
+        self.lm_model = LanguageModel(lm_model, client, dump_dir)
 
     def get_total_price(self):
         """Estimate API costs"""

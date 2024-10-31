@@ -2,8 +2,8 @@
 #     python axbench/scripts/inference.py --config axbench/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
 models: [
   # "LinearProbe", "IntegratedGradients", "InputXGradients",
-  "L1LinearProbe", "ReAX", "GemmaScopeSAE", 
-  # "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation"
+  # "Random", "MeanEmbedding", "MeanActivation", 
 ] 
 
 # for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
@@ -21,7 +21,7 @@ n_steering_factors: 10
 steering_datasets: ["OUATPrefix"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
 steering_batch_size: 256
-steering_output_length: 64
+steering_output_length: 128
 steering_num_of_examples: 20
 
 # master data dir is shared across all jobs.

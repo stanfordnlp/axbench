@@ -32,6 +32,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from pyreax import ReAXFactory
 from args.dataset_args import DatasetArgs
 from pathlib import Path
+from openai import AsyncOpenAI
+import httpx, asyncio
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -237,8 +239,22 @@ def main():
     start_group_id = state.get("group_id", 0) if state else 0
     logger.warning(f"Starting group index: {start_group_id}")
     
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100, 
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
     # Init the dataset factory.
-    dataset_factory = ReAXFactory(model, tokenizer, dump_dir)
+    dataset_factory = ReAXFactory(model, client, tokenizer, dump_dir)
     progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
     for group_id in progress_bar:
         concepts, refs = concept_groups[group_id]

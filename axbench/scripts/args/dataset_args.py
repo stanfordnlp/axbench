@@ -15,6 +15,7 @@ class DatasetArgs:
     train_dir: Optional[str] = None
     dump_dir: Optional[str] = None
     concept_path: Optional[str] = None
+    num_of_examples: Optional[int] = None
     latent_num_of_examples: Optional[int] = None
     rotation_freq: Optional[int] = 1_000
     seed: Optional[int] = None

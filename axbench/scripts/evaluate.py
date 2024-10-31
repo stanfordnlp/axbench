@@ -133,9 +133,12 @@ def plot_steering(dump_dir):
         aggregated_results += load_jsonl(file_path)
 
     # other plot goes here
-    plot_perplexity(aggregated_results, write_to_path=dump_dir)
-    plot_strength(aggregated_results, write_to_path=dump_dir)
-    plot_lm_judge_rating(aggregated_results, write_to_path=dump_dir)
+    try:
+        plot_perplexity(aggregated_results, write_to_path=dump_dir)
+        plot_strength(aggregated_results, write_to_path=dump_dir)
+        plot_lm_judge_rating(aggregated_results, write_to_path=dump_dir)
+    except Exception as e:
+        logger.warning(f"Failed to plot LMJudgeEvaluator: {e}")
 
 
 def eval_steering_single_task(args_tuple):
@@ -158,7 +161,7 @@ def eval_steering_single_task(args_tuple):
 
     try:
         evaluator_class = getattr(axbench, evaluator_name)
-        evaluator = evaluator_class(model_name, client, dump_dir=dump_dir, concept_id=concept_id)
+        evaluator = evaluator_class(model_name, dump_dir=dump_dir, concept_id=concept_id, client=client)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result)
     finally:
@@ -195,6 +198,11 @@ def eval_steering(args):
     
     if not all_tasks:
         logger.warning("No tasks to evaluate")
+
+        # Generate final plot
+        logger.warning("Generating final plot...")
+        plot_steering(dump_dir)
+        logger.warning("Evaluation completed!")
         return
 
     # Group results by concept_id
