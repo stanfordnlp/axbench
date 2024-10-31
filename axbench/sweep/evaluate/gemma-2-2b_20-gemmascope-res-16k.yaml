@@ -7,7 +7,13 @@ models: [
 ] 
 
 latent_evaluators: ["AUCROCEvaluator"]
-steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
+steering_evaluators: [
+  # "PerplexityEvaluator", 
+  "LMJudgeEvaluator"
+]
 data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/inference"
 dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
 rotation_freq: 1000
+
+# Number of processes to run in parallel for steering evaluation.
+num_of_workers: 64

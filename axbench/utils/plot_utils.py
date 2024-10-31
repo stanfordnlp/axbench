@@ -9,19 +9,9 @@ from matplotlib.colors import hsv_to_rgb
 def plot_aggregated_roc(metrics_list, write_to_path=None):
     # Define common FPR thresholds for interpolation
     common_fpr = np.linspace(0, 1, 100)
-    
-    # Initialize lists to store interpolated TPRs and AUCs for both SAE and REAX
-    sae_tprs = []
-    reax_tprs = []
-    sae_aucs = []
-    reax_aucs = []
-    
+
     # Set up the plot
     plt.figure(figsize=(3, 3))
-
-    all_mean_tpr = []
-    all_mean_auc = []
-    all_model_name = []
     
     # Process each metric in the metrics list
     tprs = {}
@@ -133,10 +123,9 @@ def plot_perplexity(jsonl_data, write_to_path=None):
     plt.yscale('log')
     
     # Add finer x-axis ticks
-    min_factor = min(min(aggregated[method]['factor']) for method in methods)
-    max_factor = max(max(aggregated[method]['factor']) for method in methods)
-    plt.xticks(np.arange(min_factor, max_factor + 0.5, 0.5), fontsize=12, color='black')
-    plt.yticks(fontsize=12, color='black')
+    first_method = list(methods)[0]
+    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
+    plt.yticks(fontsize=8, color='black')
     
     # Add legend
     plt.legend(loc="lower right", 
@@ -212,10 +201,9 @@ def plot_strength(jsonl_data, write_to_path=None):
     plt.ylabel('Strength', fontsize=10, color='black')
     
     # Add finer x-axis ticks
-    min_factor = min(min(aggregated[method]['factor']) for method in methods)
-    max_factor = max(max(aggregated[method]['factor']) for method in methods)
-    plt.xticks(np.arange(min_factor, max_factor + 0.5, 0.5), fontsize=12, color='black')
-    plt.yticks(fontsize=12, color='black')
+    first_method = list(methods)[0]
+    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
+    plt.yticks(fontsize=8, color='black')
     
     # Add legend
     plt.legend(loc="lower right", 
@@ -291,10 +279,9 @@ def plot_lm_judge_rating(jsonl_data, write_to_path=None):
     plt.ylabel('LM Judge Rating', fontsize=10, color='black')
     
     # Add finer x-axis ticks
-    min_factor = min(min(aggregated[method]['factor']) for method in methods)
-    max_factor = max(max(aggregated[method]['factor']) for method in methods)
-    plt.xticks(np.arange(min_factor, max_factor + 0.5, 0.5), fontsize=12, color='black')
-    plt.yticks(fontsize=12, color='black')
+    first_method = list(methods)[0]
+    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
+    plt.yticks(fontsize=8, color='black')
     
     # Add legend
     plt.legend(loc="lower right", 

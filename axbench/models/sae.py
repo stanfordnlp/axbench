@@ -84,16 +84,19 @@ class GemmaScopeSAE(Model):
         all_max_act_idx = []
         all_max_token = []
         for _, row in examples.iterrows():
-            inputs = self.tokenizer.encode(
-                row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-            ax_acts = self.ax_model.forward(
-                {"input_ids": inputs}, return_dict=True
-            ).collected_activations[0][1:, row["sae_id"]].data.cpu().numpy().tolist() # no bos token
-            ax_acts = [round(x, 3) for x in ax_acts]
-            max_ax_act = max(ax_acts)
-            max_ax_act_idx = ax_acts.index(max_ax_act)
-            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-
+            try:
+                inputs = self.tokenizer.encode(
+                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
+                ax_acts = self.ax_model.forward(
+                    {"input_ids": inputs}, return_dict=True
+                ).collected_activations[0][1:, row["sae_id"]].data.cpu().numpy().tolist() # no bos token
+                ax_acts = [round(x, 3) for x in ax_acts]
+                max_ax_act = max(ax_acts)
+                max_ax_act_idx = ax_acts.index(max_ax_act)
+                max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
+            except Exception as e:
+                logger.warning(f"Failed to get max activation for {row['concept_id']}: {e}")
+                continue
             all_acts += [ax_acts]
             all_max_act += [max_ax_act]
             all_max_act_idx += [max_ax_act_idx]
@@ -105,12 +108,11 @@ class GemmaScopeSAE(Model):
             "max_token": all_max_token}
     
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
-
-        # Loop over all csv files in dump_dir.
+        # Loop over all praqut files in dump_dir.
         sae_links = []
         for file in os.listdir(dump_dir):
-            if file.endswith(".csv") and file.startswith("latent_data_fragment"):
-                df = pd.read_csv(os.path.join(dump_dir, file))
+            if file.endswith(".parquet") and file.startswith("latent_data_fragment"):
+                df = pd.read_parquet(os.path.join(dump_dir, file))
                 # sort by concept_id from small to large and enumerate through all concept_ids.
                 for sae_link in sorted(df["sae_link"].unique()):
                     sae_links += [sae_link]

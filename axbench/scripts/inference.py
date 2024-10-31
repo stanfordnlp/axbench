@@ -179,7 +179,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
         current_df = retry_with_backoff(
             dataset_factory.create_eval_df,
             [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
-            eval_contrast_concepts_map, input_length=args.input_length, output_length=args.output_length
+            eval_contrast_concepts_map, input_length=args.input_length,
         )
         current_df["concept_id"] = concept_id
         current_df["sae_link"] = sae_link
@@ -215,7 +215,7 @@ def infer_steering(args):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
-    num_of_examples = args.num_of_examples
+    num_of_examples = args.steering_num_of_examples
     rotation_freq = args.rotation_freq
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
@@ -265,7 +265,9 @@ def infer_steering(args):
         for model_idx, model_name in enumerate(args.models):
             results = benchmark_models[model_idx].predict_steer(
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
-                batch_size=args.eva_batch_size)
+                batch_size=args.steering_batch_size, 
+                eval_output_length=args.steering_output_length
+            )
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
 
@@ -279,7 +281,7 @@ def infer_latent(args):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
-    num_of_examples = args.num_of_examples
+    num_of_examples = args.latent_num_of_examples
     rotation_freq = args.rotation_freq
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)

@@ -1,6 +1,5 @@
-import torch
-import einops
-
+import torch, einops, os
+import pandas as pd
 
 class Model(object):
 
@@ -60,6 +59,7 @@ class Model(object):
 
         # iterate rows in batch
         batch_size = kwargs.get("batch_size", 64)
+        eval_output_length = kwargs.get("eval_output_length", 128)
         all_generations = []
         all_perplexities = []
         all_strenghts = []
@@ -79,7 +79,7 @@ class Model(object):
                 inputs, 
                 unit_locations=None, intervene_on_prompt=True, 
                 subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}],
-                max_new_tokens=128, do_sample=True, 
+                max_new_tokens=eval_output_length, do_sample=True, 
                 # following neuronpedia, we use temperature=0.5 and repetition_penalty=2.0
                 temperature=0.5, repetition_penalty=2.0
             )
@@ -144,5 +144,23 @@ class Model(object):
             neg_logits = [list(zip(neg_tokens, neg_values.tolist()))]
         return top_logits, neg_logits
     
-    def pre_compute_mean_activations(self, dump_dir):
-        pass
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # For ReAX, we need to look into the concept in the same group, since they are used in training.
+        max_activations = {} # sae_id to max_activation
+        # Loop over saved latent files in dump_dir.
+        for file in os.listdir(dump_dir):
+            if file.startswith("latent_") and file.endswith(".parquet"):
+                latent_path = os.path.join(dump_dir, file)
+                latent = pd.read_parquet(latent_path)
+                # loop through unique sorted concept_id
+                for concept_id in sorted(latent["concept_id"].unique()):
+                    concept_latent = latent[latent["concept_id"] == concept_id]
+                    # group id if this concept
+                    group_id = concept_latent["group_id"].iloc[0]
+                    # get the mean activation of this group but not with this concept_id
+                    group_latent = latent[latent["group_id"] == group_id]
+                    group_latent = group_latent[group_latent["concept_id"] != concept_id]
+                    max_act = group_latent["ReAX_max_act"].max()
+                    max_activations[concept_id] = max_act
+        self.max_activations = max_activations
+        return max_activations  

@@ -15,14 +15,16 @@ class DatasetArgs:
     train_dir: Optional[str] = None
     dump_dir: Optional[str] = None
     concept_path: Optional[str] = None
-    num_of_examples: Optional[int] = None
+    latent_num_of_examples: Optional[int] = None
     rotation_freq: Optional[int] = 1_000
     seed: Optional[int] = None
     max_concepts: Optional[int] = None
     model_name: Optional[str] = None
     n_steering_factors: Optional[int] = None
     master_data_dir: Optional[str] = None # this syncs across all jobs.
-    eva_batch_size: Optional[int] = None
+    steering_batch_size: Optional[int] = None
+    steering_output_length: Optional[int] = None
+    steering_num_of_examples: Optional[int] = None
     # Add any other parameters as needed
 
     def __init__(
