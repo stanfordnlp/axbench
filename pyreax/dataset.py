@@ -123,6 +123,7 @@ class ReAXFactory(object):
             all_examples, 
             columns = [
                 'input', 'input_concept', 'category'])
+        df = df[df["input"].str.strip() != ""]
         end = time.time()
         elapsed = round(end-start, 3)
         total_price = self.get_total_price()

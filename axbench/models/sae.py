@@ -22,9 +22,18 @@ import numpy as np
 import pandas as pd
 from pyreax import (
     JumpReLUSAECollectIntervention, 
-    SubspaceAdditionIntervention
+    SubspaceAdditionIntervention,
+)
+from pyreax import (
+    gather_residual_activations, 
 )
 from huggingface_hub import hf_hub_download
+
+import logging
+logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.WARN)
+logger = logging.getLogger(__name__)
 
 
 class GemmaScopeSAE(Model):
@@ -78,29 +87,37 @@ class GemmaScopeSAE(Model):
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
+        batch_size = kwargs.get('batch_size', 32)
         
         all_acts = []
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
-        for _, row in examples.iterrows():
-            try:
-                inputs = self.tokenizer.encode(
-                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-                ax_acts = self.ax_model.forward(
-                    {"input_ids": inputs}, return_dict=True
-                ).collected_activations[0][1:, row["sae_id"]].data.cpu().numpy().tolist() # no bos token
-                ax_acts = [round(x, 3) for x in ax_acts]
-                max_ax_act = max(ax_acts)
-                max_ax_act_idx = ax_acts.index(max_ax_act)
-                max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-            except Exception as e:
-                logger.warning(f"Failed to get max activation for {row['concept_id']}: {e}")
-                continue
-            all_acts += [ax_acts]
-            all_max_act += [max_ax_act]
-            all_max_act_idx += [max_ax_act_idx]
-            all_max_token += [max_token]
+        for i in range(0, len(examples), batch_size):
+            batch = examples.iloc[i:i + batch_size]
+            inputs = self.tokenizer(
+                batch["input"].tolist(), return_tensors="pt", 
+                add_special_tokens=True, padding=True, truncation=True).to("cuda")
+            gather_acts = gather_residual_activations(
+                self.model, self.layer, inputs)
+            ax_acts = self.ax.encode(
+                gather_acts[:, 1:],  # no bos token
+            )
+            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            # Process each sequence in the batch
+            for seq_idx, row in enumerate(batch.itertuples()):
+                acts = ax_acts[seq_idx, :seq_lens[seq_idx], row.sae_id].cpu().numpy().tolist()  # no bos token
+                acts = [round(x, 3) for x in acts]
+                max_act = max(acts)
+                max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
+                max_act_idx = max_act_indices[0]
+                # Get tokens for this specific sequence
+                tokens = self.tokenizer.tokenize(row.input)
+                max_token = tokens[max_act_idx]
+                all_acts.append(acts)
+                all_max_act.append(max_act)
+                all_max_act_idx.append(max_act_idx)
+                all_max_token.append(max_token)
         return {
             "acts": all_acts,
             "max_act": all_max_act, 

@@ -16,4 +16,4 @@ dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
 rotation_freq: 1000
 
 # Number of processes to run in parallel for steering evaluation.
-num_of_workers: 64
+num_of_workers: 32

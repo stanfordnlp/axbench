@@ -234,6 +234,8 @@ class InputXGradients(IntegratedGradients):
 
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
+        batch_size = kwargs.get('batch_size', 32)
+
         for param in self.ax.parameters():
             param.requires_grad = False
 
@@ -243,11 +245,19 @@ class InputXGradients(IntegratedGradients):
         all_max_act_idx = []
         all_max_token = []
         correct = 0
-        for _, row in examples.iterrows():
-            inputs = self.tokenizer.encode(
-                row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
+        for i in range(0, len(examples), batch_size):
+            batch = examples.iloc[i:i + batch_size]
+            # Batch encode all inputs
+            inputs = self.tokenizer(
+                batch["input"].tolist(),
+                return_tensors="pt",
+                padding=True,
+                add_special_tokens=True
+            ).to("cuda")
+
             act_in = gather_residual_activations(
-                self.model, self.layer, {"input_ids": inputs})
+                self.model, self.layer, inputs)
+            
             act_in = act_in.detach().requires_grad_(True)
             # simulate forward pass for the rest of the layers in the model
             def set_target_act_hook(mod, inputs, outputs):
@@ -258,30 +268,35 @@ class InputXGradients(IntegratedGradients):
                 return new_outputs
             handle = self.model.model.layers[self.layer].register_forward_hook(
                 set_target_act_hook, always_call=True)
-            outputs = self.model.forward(**{"input_ids": inputs}, output_hidden_states=True)
+            pred = self.ax(
+                {"input_ids": inputs["input_ids"], 
+                    "attention_mask": inputs["attention_mask"]}
+            )[..., batch["concept_id"].tolist()] # only consider the target concept
             handle.remove()
 
-            last_token_representations = outputs.hidden_states[-1][:,-1]
-            pred = torch.sigmoid(self.ax.proj(last_token_representations))[
-                ..., row["concept_id"]] # only consider the target concept
             # get gradient
             (grad,) = torch.autograd.grad(pred.sum(), act_in)
-            pred_label = (pred.flatten() >= 0.5).int().tolist()[0]
-            actual_label = 1 if row["category"] == "positive" else 0
-            correct += (pred_label == actual_label)
-            ax_acts = torch.abs(act_in * grad).sum(dim=-1)[:,1:]
+            pred_labels = (pred.flatten() >= 0.5).int().tolist()
 
-            ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
-            ax_acts = [round(x, 3) for x in ax_acts]
-            max_ax_act = max(ax_acts)
-            max_ax_act_idx = ax_acts.index(max_ax_act)
-            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
+            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            # Handle batch of examples
+            for idx, (pred_label, row) in enumerate(zip(pred_labels, batch.itertuples())):
+                actual_label = 1 if row.category == "positive" else 0
+                correct += (pred_label == actual_label)
+                
+                # Get attributions for this example
+                ax_acts_single = torch.abs(act_in[idx] * grad[idx]).sum(dim=-1)[1:]  # Remove first token
+                ax_acts = ax_acts_single[:seq_lens[idx]].flatten().data.cpu().numpy().tolist()
+                ax_acts = [round(x, 3) for x in ax_acts]
+                max_ax_act = max(ax_acts)
+                max_ax_act_idx = ax_acts.index(max_ax_act)
+                max_token = self.tokenizer.tokenize(row.input)[max_ax_act_idx]
 
-            all_pred_label += [pred_label]
-            all_acts += [ax_acts]
-            all_max_act += [max_ax_act]
-            all_max_act_idx += [max_ax_act_idx]
-            all_max_token += [max_token]
+                all_pred_label.append(pred_label)
+                all_acts.append(ax_acts)
+                all_max_act.append(max_ax_act)
+                all_max_act_idx.append(max_ax_act_idx)
+                all_max_token.append(max_token)
         acc = correct / len(examples)
         logger.warning(f"InputXGradients classification accuracy: {acc}")
         return {
