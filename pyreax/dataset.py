@@ -197,7 +197,6 @@ class ReAXFactory(object):
                 curr_content_id,  # content_id
                 -1  # no source content
             ]]
-
         # modify exist content to have desired concepts.
         modify_prompts = []
         for concept in concepts:

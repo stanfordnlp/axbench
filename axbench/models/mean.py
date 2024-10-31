@@ -92,14 +92,13 @@ class LogisticRegressionModel(torch.nn.Module):
         self.proj = torch.nn.Linear(input_dim, low_rank_dimension)
     
     def forward(self, x):
-        # Forward pass: apply linear transformation followed by sigmoid activation
-        return torch.sigmoid(self.proj(x))
+        return self.proj(x)
 
 
-class LinearProbe(Model):
+class MeanEmbedding(Model):
     
     def __str__(self):
-        return 'LinearProbe'
+        return 'MeanEmbedding'
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
@@ -124,57 +123,13 @@ class LinearProbe(Model):
             ax_model.set_device("cuda")
             self.ax_model = ax_model
 
-    def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, self.model, examples)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
-            collate_fn=data_module["data_collator"])
-        return train_dataloader
-    
     def train(self, examples, **kwargs):
-        train_dataloader = self.make_dataloader(examples)
         self.make_model(**kwargs)
         torch.cuda.empty_cache()
-        self.ax.train()
-        # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
-        lr_scheduler = get_scheduler(
-            "linear", optimizer=optimizer,
-            num_warmup_steps=0, num_training_steps=num_training_steps)
-        criterion = torch.nn.BCELoss()
-
-        # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
-        for epoch in range(self.training_args.n_epochs):
-            for batch in train_dataloader:
-                # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
-                activations = gather_residual_activations(
-                    self.model, self.layer, 
-                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
-                )
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
-                labels = labels[nonbos_mask.bool()].unsqueeze(1).float()
-
-                preds = self.ax(activations)
-                loss = criterion(preds, labels)
-
-                loss.backward()
-                set_decoder_norm_to_unit_norm(self.ax)
-                remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_lr = get_lr(optimizer)
-                curr_step += 1
-                # optim
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                progress_bar.update(1)
-                progress_bar.set_description(
-                    "lr %.6f || loss %.6f" % (curr_lr, loss))
-        progress_bar.close()
+        # set the decoder weights to be the mean of the embeddings
+        W_U = self.model.lm_head.weight.mean(dim=0).detach().clone().unsqueeze(0)
+        self.ax.proj.weight.data = W_U.data
+        set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
 
     @torch.no_grad()
@@ -229,66 +184,77 @@ class LinearProbe(Model):
                     max_activations[concept_id] = max_act
         self.max_activations = max_activations
         return max_activations  
+    
 
-
-class L1LinearProbe(LinearProbe):
+class MeanActivation(MeanEmbedding):
     
     def __str__(self):
-        return 'L1LinearProbe'
+        return 'MeanActivation'
 
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
+
+    @torch.no_grad()
     def train(self, examples, **kwargs):
-        """with a L1 penalty on the activations"""
         train_dataloader = self.make_dataloader(examples)
         self.make_model(**kwargs)
         torch.cuda.empty_cache()
-        self.ax.train()
-        # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
-        lr_scheduler = get_scheduler(
-            "linear", optimizer=optimizer,
-            num_warmup_steps=0, num_training_steps=num_training_steps)
-        criterion = torch.nn.BCELoss()
-
+        self.ax.eval()
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        all_activations = []
+        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
                 inputs = {k: v.to("cuda") for k, v in batch.items()}
-                nonbos_mask = inputs["attention_mask"][:,1:]
                 activations = gather_residual_activations(
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
-                )
-                latent = self.ax(activations).squeeze(-1)  # bs, seq
-                loss = criterion(
-                    latent[:,1:][nonbos_mask.bool()], 
-                    inputs["labels"].unsqueeze(1).repeat(
-                        1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
-                )
-                null_loss, l1_loss = calculate_l1_losses(
-                    latent[:,1:],
-                    labels=inputs["labels"],
-                    mask=nonbos_mask,
-                    k_latent_null_loss=self.training_args.k_latent_null_loss
-                )
-
-                coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
-
-                # grads
-                loss.backward()
-                set_decoder_norm_to_unit_norm(self.ax)
-                remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_lr = get_lr(optimizer)
-                curr_step += 1
-                # optim
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                progress_bar.update(1)
-                progress_bar.set_description(
-                    "lr %.6f || loss %.6f || null l1 loss %.6f" % (curr_lr, loss, null_loss))
-        progress_bar.close()
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                all_activations.append(activations)
+        all_activations = torch.cat(all_activations, dim=0)
+        mean_activation = all_activations.mean(dim=0)
+        self.ax.proj.weight.data = mean_activation.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
+
+
+class MeanPositiveActivation(MeanActivation):
+    
+    def __str__(self):
+        return 'MeanPositiveActivation'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        self.make_model(**kwargs)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        # Main training loop.
+        all_activations = []
+        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
+        for epoch in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
+                all_activations.append(activations[label_mask])
+        all_activations = torch.cat(all_activations, dim=0)
+        mean_activation = all_activations.mean(dim=0)
+        self.ax.proj.weight.data = mean_activation.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+

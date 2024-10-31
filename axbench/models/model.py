@@ -58,13 +58,8 @@ class Model(object):
         # depending on the model, we use different concept id columns
         concept_id_col = "sae_id" if "sae" in self.__str__().lower() else "concept_id"
 
-        # get top logits and neg logits
-        concept_id = kwargs.get("sae_id", None) \
-            if "sae" in self.__str__().lower() else kwargs.get("concept_id", None)
-        top_logits, neg_logits = self.get_logits(concept_id)
-
         # iterate rows in batch
-        batch_size = kwargs.get("batch_size", 16)
+        batch_size = kwargs.get("batch_size", 64)
         all_generations = []
         all_perplexities = []
         all_strenghts = []
@@ -125,8 +120,6 @@ class Model(object):
 
         return {
             "steered_generation": all_generations,
-            "top_logits": top_logits * len(all_generations),
-            "neg_logits": neg_logits * len(all_generations),
             "perplexity": all_perplexities,
             "strength": all_strenghts,
         }
@@ -135,8 +128,8 @@ class Model(object):
         top_logits, neg_logits = [None], [None]
         if concept_id is not None:
             W_U = self.model.lm_head.weight.T
-            W_U = W_U * (self.model.norm.weight +
-                        torch.ones_like(self.model.norm.weight, dtype=torch.float32))[:, None]
+            W_U = W_U * (self.model.model.norm.weight +
+                        torch.ones_like(self.model.model.norm.weight, dtype=torch.float32))[:, None]
             W_U -= einops.reduce(
                 W_U, "d_model d_vocab -> 1 d_vocab", "mean"
             )

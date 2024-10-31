@@ -1,5 +1,11 @@
-models: ["LinearProbe", "L1LinearProbe", "ReAX", "GemmaScopeSAE", "IntegratedGradients", "InputXGradients"]
+models: [
+  # "LinearProbe", "IntegratedGradients", "InputXGradients",
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", 
+  "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+] 
+
 latent_evaluators: ["AUCROCEvaluator"]
+steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
 rotation_freq: 1000

@@ -140,12 +140,13 @@ def partition_lists(list1, list2, step=2):
         partitions.append(group)
     return partitions
 
+
 def save(
     dump_dir, state, group_id, 
     concepts, concept_genres_map, contrast_concepts_map, 
     refs, partition, current_df, rotation_freq):
     """
-    Save the current state, metadata, and DataFrame.
+    Save the current state, metadata, and DataFrame using Parquet format.
     """
     # handle training df first
     dump_dir = Path(dump_dir) / "generate"
@@ -168,15 +169,16 @@ def save(
     with open(metadata_path, "a") as f:
         f.write(json.dumps(metadata_entry) + "\n")
     
-    # Save DataFrame
+    # Save DataFrame using Parquet
     fragment_index = group_id // rotation_freq
-    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
+    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.parquet")
     if os.path.exists(df_path):
-        existing_df = pd.read_csv(df_path)
+        existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
     else:
         combined_df = current_df
-    combined_df.to_csv(df_path, index=False)
+    combined_df.to_parquet(df_path, index=False)
+
 
 def load_state(dump_dir):
     """

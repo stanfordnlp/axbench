@@ -128,25 +128,37 @@ def retry_with_backoff(func, *args, **kwargs):
 
 def save(
     dump_dir, state, concept_id, partition,
-    current_df, rotation_freq, mode):
+    current_df, rotation_freq):
     """
-    Save the current state, metadata, and DataFrame.
+    Save the current state, metadata, and DataFrame using Parquet format.
+    
+    Args:
+        dump_dir (str): Directory to save the files
+        state (dict): State dictionary to save
+        concept_id (int): Current concept ID
+        partition (str): Partition name (e.g., 'latent' or 'steering')
+        current_df (pd.DataFrame): Current DataFrame to save
+        rotation_freq (int): Frequency to rotate fragment files
     """
     dump_dir = Path(dump_dir) / "inference"
     dump_dir.mkdir(parents=True, exist_ok=True)
     
-    state_path = os.path.join(dump_dir, f"{mode}_{STATE_FILE}")
+    # Save state
+    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}")
     with open(state_path, "wb") as f:
         pickle.dump(state, f)
     
+    # Save DataFrame
     fragment_index = concept_id // rotation_freq
-    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
+    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.parquet")
+    
     if os.path.exists(df_path):
-        existing_df = pd.read_csv(df_path)
+        existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
     else:
         combined_df = current_df
-    combined_df.to_csv(df_path, index=False)
+    
+    combined_df.to_parquet(df_path, engine='pyarrow')
 
 
 def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, args):
@@ -252,13 +264,14 @@ def infer_steering(args):
         # Evaluate.
         for model_idx, model_name in enumerate(args.models):
             results = benchmark_models[model_idx].predict_steer(
-                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id)
+                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
+                batch_size=args.eva_batch_size)
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
 
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "steering",
-            current_df, rotation_freq, mode="steering")
+            current_df, rotation_freq)
 
 
 def infer_latent(args):
@@ -314,7 +327,7 @@ def infer_latent(args):
         
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
-            current_df, rotation_freq, mode="latent")
+            current_df, rotation_freq)
 
 
 def main():
@@ -335,7 +348,7 @@ def main():
     def check_latent_eval_done(args):
         # Check if at least one latent eval fragment exists.
         if os.path.exists(os.path.join(
-            args.dump_dir, "inference", "latent_data_fragment_0.csv")):
+            args.dump_dir, "inference", "latent_data_fragment_0.parquet")):
             return True
         return False
 

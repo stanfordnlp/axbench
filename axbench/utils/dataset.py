@@ -2,16 +2,7 @@ import pandas as pd
 
 
 def OUATPrefix_steering_factors(n):
-    if n < 3:
-        return [i * 0.5 for i in range(n)]
-    # Allocate points: 60% to 0-2 range, 40% to >2 range
-    n_small = int(n * 0.6)
-    n_large = n - n_small
-    # Dense sampling from 0 to 2
-    small_factors = [i * (2.0 / (n_small - 1)) for i in range(n_small)]
-    # Exponential spacing for larger values
-    large_factors = [2.0 + (i * 0.5) for i in range(1, n_large + 1)]
-    return small_factors + large_factors
+    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
 
 
 class SteeringDatasetFactory(object):
