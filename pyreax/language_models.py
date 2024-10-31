@@ -1,7 +1,6 @@
 from .utils.constants import *
 
 import httpx, asyncio
-from openai import AsyncOpenAI
 import os, uuid, string, json
 from pathlib import Path
 
@@ -77,14 +76,14 @@ class LanguageModelStats(object):
 class LanguageModel(object):
     """Main class abstract async remote language model access"""
 
-    def __init__(self, model, dump_dir=None, **kwargs):
+    def __init__(self, model, client, dump_dir=None, **kwargs):
         self.model = model
         if "gpt-4o" in model:
             pass
         else:
             raise ValueError(f"{model} model class is not supported yet.")
         self.stats = LanguageModelStats(model)
-
+        self.client = client
         # dump dir
         if dump_dir:
             cur_save_dir = Path(dump_dir) / "lm_cache"
@@ -110,17 +109,11 @@ class LanguageModel(object):
         for i in range(0, len(prompts), batch_size):
             batch_prompts = prompts[i:i + batch_size]
             batch_api_names = api_names[i:i + batch_size]
-            
-            client = AsyncOpenAI(
-                api_key=os.environ.get("OPENAI_API_KEY"),
-                timeout=100.0,
-                http_client=httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=500, max_connections=100)),
-                max_retries=2,
-            )
-            
+            print(f"Processing batch {i} of {api_names[0]} with {len(batch_prompts)} prompts")
+
             # batched calls
             async_responses = [
-                self.chat_completion(client, prompt) for prompt in batch_prompts]
+                self.chat_completion(self.client, prompt) for prompt in batch_prompts]
             raw_completions = await asyncio.gather(*async_responses)
 
             # post handling for current batch
@@ -131,8 +124,6 @@ class LanguageModel(object):
                 self.stats.record(
                     batch_api_names[j], raw_completion['usage'],
                     prompt=batch_prompts[j], completion=completion)
-                
-            await client.close()  # Clean up client after each batch
             
         return all_completions
 
@@ -142,4 +133,8 @@ class LanguageModel(object):
         
         with open(self.dump_dir / "cost.jsonl", 'a') as f:
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
+
+    async def close(self):
+        """Close the underlying HTTP client"""
+        await self.client.close()
 

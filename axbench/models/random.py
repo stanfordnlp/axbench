@@ -94,18 +94,21 @@ class Random(Model):
         all_max_act_idx = []
         all_max_token = []
         for _, row in examples.iterrows():
-            inputs = self.tokenizer.encode(
-                row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-            act_in = gather_residual_activations(
-                self.model, self.layer, {"input_ids": inputs})
-            ax_acts = self.ax(act_in[:,1:])
-            ax_acts = ax_acts[..., row["concept_id"]]
-            ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
-            ax_acts = [round(x, 3) for x in ax_acts]
-            max_ax_act = max(ax_acts)
-            max_ax_act_idx = ax_acts.index(max_ax_act)
-            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-
+            try:
+                inputs = self.tokenizer.encode(
+                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
+                act_in = gather_residual_activations(
+                    self.model, self.layer, {"input_ids": inputs})
+                ax_acts = self.ax(act_in[:,1:])
+                ax_acts = ax_acts[..., row["concept_id"]]
+                ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
+                ax_acts = [round(x, 3) for x in ax_acts]
+                max_ax_act = max(ax_acts)
+                max_ax_act_idx = ax_acts.index(max_ax_act)
+                max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
+            except Exception as e:
+                logger.warning(f"Failed to get max activation for {row['concept_id']}: {e}")
+                continue
             all_acts += [ax_acts]
             all_max_act += [max_ax_act] 
             all_max_act_idx += [max_ax_act_idx]
@@ -116,24 +119,3 @@ class Random(Model):
             "max_act_idx": all_max_act_idx,
             "max_token": all_max_token}
 
-    def pre_compute_mean_activations(self, dump_dir, **kwargs):
-        # For ReAX, we need to look into the concept in the same group, since they are used in training.
-        max_activations = {} # sae_id to max_activation
-        # Loop over saved latent files in dump_dir.
-        for file in os.listdir(dump_dir):
-            if file.startswith("latent_") and file.endswith(".csv"):
-                latent_path = os.path.join(dump_dir, file)
-                latent = pd.read_csv(latent_path)
-                # loop through unique sorted concept_id
-                for concept_id in sorted(latent["concept_id"].unique()):
-                    concept_latent = latent[latent["concept_id"] == concept_id]
-                    # group id if this concept
-                    group_id = concept_latent["group_id"].iloc[0]
-                    # get the mean activation of this group but not with this concept_id
-                    group_latent = latent[latent["group_id"] == group_id]
-                    group_latent = group_latent[group_latent["concept_id"] != concept_id]
-                    # load ReAX as the approximation of the max activation for probes
-                    max_act = group_latent["ReAX_max_act"].max()
-                    max_activations[concept_id] = max_act
-        self.max_activations = max_activations
-        return max_activations  

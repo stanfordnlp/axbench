@@ -13,6 +13,7 @@ class EvalArgs:
     rotation_freq: Optional[int] = 1_000
     data_dir: Optional[str] = None
     dump_dir: Optional[str] = None
+    num_of_workers: Optional[int] = 16
     # Add any other parameters as needed
 
     def __init__(
