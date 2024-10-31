@@ -138,7 +138,7 @@ class ReAXFactory(object):
         logger.warning("Creating dataframe.")
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
-        content_id = 0
+        content_id = n * kwargs.get("current_group_id", 0)
         content_map = {}
 
         input_length = kwargs.get("input_length", 32)
