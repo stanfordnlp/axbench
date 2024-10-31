@@ -252,7 +252,8 @@ def main():
             current_df = retry_with_backoff(
                 dataset_factory.create_train_df,
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
-                input_length=args.input_length, output_length=args.output_length
+                input_length=args.input_length, output_length=args.output_length,
+                current_group_id=group_id
             )
             current_df["group_id"] = group_id
         except Exception as e:
