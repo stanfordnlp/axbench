@@ -26,18 +26,24 @@ logger = logging.getLogger(__name__)
 
 
 RATING_TEMPLATE = """[System]
-Please act as an impartial evaluator and assess the fluency of the provided sentence fragment \
-and determine if it effectively contains terms related to the specified concept. Note that sentences may be \
-incomplete or fragmented; please rate what is provided. Your evaluation should focus on two \
-factors: (1) Fluency: whether the fragment is grammatically coherent, clear, and natural; \
-(2) Concept Presence: whether the fragment clearly has terms related to the user-specified concept. \
-Rate between 0 and 10 based on fluency and effective incorporation of the concept. Provide a \
-brief explanation (1-2 sentences) of your rating to support your decision. After your explanation, \
-give the rating in this exact format: "Rating: [[score]]".
+You are an impartial evaluator. Your task is to determine if the sentence fragment both:
+1. Contains clear references or terms related to the specified concept (not just superficial mentions)
+2. Presents these references within a grammatically coherent structure (not just random related words)
+
+For a rating of 1, the fragment must satisfy BOTH criteria:
+- The concept must be clearly and meaningfully incorporated
+- The fragment must form a grammatically sensible phrase or sentence
+
+Rate 0 if either:
+- The concept is missing or only superficially mentioned
+- The words are jumbled or lack basic grammatical structure
+
+First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
+Then provide your rating in exactly this format: "Rating: [[score]]"
 
 [The Start of the Concept]
 %s
-[The End of the Concept]
+[The End of the Sentence Fragment]
 
 [The Start of the Sentence Fragment]
 %s

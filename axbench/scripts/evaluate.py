@@ -29,9 +29,7 @@ import httpx, asyncio
 import axbench
 from axbench import (
     plot_aggregated_roc, 
-    plot_perplexity,
-    plot_strength,
-    plot_lm_judge_rating
+    plot_metric
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -134,9 +132,30 @@ def plot_steering(dump_dir):
 
     # other plot goes here
     try:
-        plot_perplexity(aggregated_results, write_to_path=dump_dir)
-        plot_strength(aggregated_results, write_to_path=dump_dir)
-        plot_lm_judge_rating(aggregated_results, write_to_path=dump_dir)
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='PerplexityEvaluator', 
+            metric_name='perplexity', 
+            y_label='Perplexity', 
+            use_log_scale=True, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='PerplexityEvaluator', 
+            metric_name='strength', 
+            y_label='Strength', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='LMJudgeEvaluator', 
+            metric_name='lm_judge_rating', 
+            y_label='LM Judge Rating', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
     except Exception as e:
         logger.warning(f"Failed to plot LMJudgeEvaluator: {e}")
 

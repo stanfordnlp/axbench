@@ -4,7 +4,11 @@ models: [
   "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
 ] 
 
-latent_evaluators: ["AUCROCEvaluator"]
+latent_evaluators: [
+  # "AUCROCEvaluator",
+  "HardNegativeEvaluator",
+  # "ReciprocalRankEvaluator"
+]
 steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"

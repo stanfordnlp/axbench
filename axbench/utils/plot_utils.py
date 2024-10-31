@@ -5,6 +5,22 @@ from scipy import interpolate
 from sklearn.metrics import auc
 from matplotlib.colors import hsv_to_rgb
 
+# Predefined color and marker sequences for consistency
+COLORS = [
+    '#1f77b4',  # blue
+    '#ff7f0e',  # orange
+    '#2ca02c',  # green
+    '#d62728',  # red
+    '#9467bd',  # purple
+    '#8c564b',  # brown
+    '#e377c2',  # pink
+    '#7f7f7f',  # gray
+    '#bcbd22',  # olive
+    '#17becf'   # cyan
+]
+
+MARKERS = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
+
 
 def plot_aggregated_roc(metrics_list, write_to_path=None):
     # Define common FPR thresholds for interpolation
@@ -30,23 +46,25 @@ def plot_aggregated_roc(metrics_list, write_to_path=None):
             tprs[model_name].append(interp_tpr)
             aucs[model_name].append(auc)
 
-    for model_name in tprs.keys():
-        # Calculate mean TPR and AUC
+    # Sort model names for consistent ordering
+    sorted_models = sorted(tprs.keys())
+    
+    # Plot each model's ROC curve with consistent styling
+    for idx, model_name in enumerate(sorted_models):
         mean_tpr = np.mean(tprs[model_name], axis=0)
         mean_auc = np.mean(aucs[model_name])
-    
-        # Plot mean ROC curve for SAE with refined style
+        
         plt.plot(
             common_fpr, mean_tpr,
+            color=COLORS[idx % len(COLORS)],
             linestyle='--',
             linewidth=2,
             label=f"{model_name} (Mean AUC = {mean_auc:.2f})"
         )
     
-    # Plot diagonal line for reference with custom style
+    # Rest of the plotting code remains the same
     plt.plot([0, 1], [0, 1], color='gray', linestyle=':', linewidth=1.5, label='Chance')
     
-    # Aesthetic improvements for a polished look
     plt.xlabel("False Positive Rate (FPR)", fontsize=10, color='black')
     plt.ylabel("True Positive Rate (TPR)", fontsize=10, color='black')
     plt.legend(loc="lower right", fontsize=5, frameon=True, fancybox=True, framealpha=0.8, shadow=True)
@@ -54,80 +72,62 @@ def plot_aggregated_roc(metrics_list, write_to_path=None):
     plt.xticks(fontsize=12, color='black')
     plt.yticks(fontsize=12, color='black')
     
-    # Show the plot
     plt.savefig(write_to_path / "aggregated_roc.png", dpi=300, bbox_inches='tight')
 
 
-def plot_perplexity(jsonl_data, write_to_path=None):
-    """
-    Plot perplexity vs factor for different methods.
-    Data is aggregated over concepts.
-    
-    Args:
-        jsonl_data: List of dictionaries containing evaluation results
-        write_to_path: Optional path to save the plot
-    """    
-    # Get unique methods from the data
+def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=False, write_to_path=None):
+    # Get unique methods and sort them
     methods = set()
     for entry in jsonl_data:
-        methods.update(entry['results']['PerplexityEvaluator'].keys())
+        methods.update(entry['results'][evaluator_name].keys())
     methods = sorted(list(methods))
-    
-    # Generate evenly spaced colors based on number of methods
-    colors = [hsv_to_rgb((i / len(methods), 0.8, 0.8)) for i in range(len(methods))]
     
     # Aggregate data across concepts
     aggregated = {method: {
-        'perplexity': [],
+        metric_name: [],
         'factor': []
     } for method in methods}
     
     # Collect data from all concepts
     for entry in jsonl_data:
-        results = entry['results']['PerplexityEvaluator']
+        results = entry['results'][evaluator_name]
         for method in methods:
             if method in results:
-                aggregated[method]['perplexity'].append(results[method]['perplexity'])
+                aggregated[method][metric_name].append(results[method][metric_name])
                 aggregated[method]['factor'].append(results[method]['factor'])
     
     # Average across concepts
     for method in methods:
-        aggregated[method]['perplexity'] = np.mean(aggregated[method]['perplexity'], axis=0)
-        aggregated[method]['factor'] = aggregated[method]['factor'][0]  # Take first since all same
-    
+        aggregated[method][metric_name] = np.mean(aggregated[method][metric_name], axis=0)
+        aggregated[method]['factor'] = aggregated[method]['factor'][0]
+
     # Create the plot
     plt.figure(figsize=(6, 3))
     
-    # Define marker styles
-    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*']  # Add more if needed
-    
-    # Plot perplexity
-    for method, color, marker in zip(methods, colors, markers[:len(methods)]):
+    # Plot the metric with consistent colors and markers
+    for idx, method in enumerate(methods):
         plt.plot(aggregated[method]['factor'], 
-                aggregated[method]['perplexity'],
+                aggregated[method][metric_name],
+                color=COLORS[idx % len(COLORS)],
+                marker=MARKERS[idx % len(MARKERS)],
                 linestyle='--',
                 linewidth=2,
-                marker=marker,
                 markersize=6,
-                markerfacecolor=color,
                 markeredgecolor='black',
                 markeredgewidth=1,
-                label=f'{method}',
-                color=color)
+                label=f'{method}')
     
-    # Customize the plot
+    # Rest of the customization remains the same
     plt.xlabel('Factor', fontsize=10, color='black')
-    plt.ylabel('Perplexity', fontsize=10, color='black')
+    plt.ylabel(y_label, fontsize=10, color='black')
     
-    # Set y-axis to log scale for perplexity
-    plt.yscale('log')
+    if use_log_scale:
+        plt.yscale('log')
     
-    # Add finer x-axis ticks
-    first_method = list(methods)[0]
-    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
+    first_method = methods[0]
+    plt.xticks(aggregated[first_method]['factor'], fontsize=6, color='black')
     plt.yticks(fontsize=8, color='black')
     
-    # Add legend
     plt.legend(loc="lower right", 
               fontsize=5, 
               frameon=True, 
@@ -135,168 +135,10 @@ def plot_perplexity(jsonl_data, write_to_path=None):
               framealpha=0.8, 
               shadow=True)
     
-    # Add grid
     plt.grid(True, linestyle='--', alpha=0.5)
     
     if write_to_path:
-        plt.savefig(write_to_path / "perplexity.png", 
-                   dpi=300, bbox_inches='tight')
-    else:
-        plt.show()
-    
-    plt.close()
-
-
-def plot_strength(jsonl_data, write_to_path=None):  
-    # Get unique methods from the data
-    methods = set()
-    for entry in jsonl_data:
-        methods.update(entry['results']['PerplexityEvaluator'].keys())
-    methods = sorted(list(methods))
-    
-    # Generate evenly spaced colors based on number of methods
-    colors = [hsv_to_rgb((i / len(methods), 0.8, 0.8)) for i in range(len(methods))]
-    
-    # Aggregate data across concepts
-    aggregated = {method: {
-        'strength': [],
-        'factor': []
-    } for method in methods}
-    
-    # Collect data from all concepts
-    for entry in jsonl_data:
-        results = entry['results']['PerplexityEvaluator']
-        for method in methods:
-            if method in results:
-                aggregated[method]['strength'].append(results[method]['strength'])
-                aggregated[method]['factor'].append(results[method]['factor'])
-
-    # Average across concepts
-    for method in methods:
-        aggregated[method]['strength'] = np.mean(aggregated[method]['strength'], axis=0)
-        aggregated[method]['factor'] = aggregated[method]['factor'][0]  # Take first since all same
-
-    # Create the plot
-    plt.figure(figsize=(6, 3))
-    
-    # Define marker styles
-    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*']  # Add more if needed
-    
-    # Plot perplexity
-    for method, color, marker in zip(methods, colors, markers[:len(methods)]):
-        plt.plot(aggregated[method]['factor'], 
-                aggregated[method]['strength'],
-                linestyle='--',
-                linewidth=2,
-                marker=marker,
-                markersize=6,
-                markerfacecolor=color,
-                markeredgecolor='black',
-                markeredgewidth=1,
-                label=f'{method}',
-                color=color)
-    
-    # Customize the plot
-    plt.xlabel('Factor', fontsize=10, color='black')
-    plt.ylabel('Strength', fontsize=10, color='black')
-    
-    # Add finer x-axis ticks
-    first_method = list(methods)[0]
-    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
-    plt.yticks(fontsize=8, color='black')
-    
-    # Add legend
-    plt.legend(loc="lower right", 
-              fontsize=5, 
-              frameon=True, 
-              fancybox=True, 
-              framealpha=0.8, 
-              shadow=True)
-    
-    # Add grid
-    plt.grid(True, linestyle='--', alpha=0.5)
-    
-    if write_to_path:
-        plt.savefig(write_to_path / "strength.png", 
-                   dpi=300, bbox_inches='tight')
-    else:
-        plt.show()
-    
-    plt.close()
-
-
-def plot_lm_judge_rating(jsonl_data, write_to_path=None):
-    # Get unique methods from the data
-    methods = set()
-    for entry in jsonl_data:
-        methods.update(entry['results']['LMJudgeEvaluator'].keys())
-    methods = sorted(list(methods))
-    
-    # Generate evenly spaced colors based on number of methods
-    colors = [hsv_to_rgb((i / len(methods), 0.8, 0.8)) for i in range(len(methods))]
-    
-    # Aggregate data across concepts
-    aggregated = {method: {
-        'lm_judge_rating': [],
-        'factor': []
-    } for method in methods}
-    
-    # Collect data from all concepts
-    for entry in jsonl_data:
-        results = entry['results']['LMJudgeEvaluator']
-        for method in methods:
-            if method in results:
-                aggregated[method]['lm_judge_rating'].append(results[method]['lm_judge_rating'])
-                aggregated[method]['factor'].append(results[method]['factor'])
-    
-    # Average across concepts
-    for method in methods:
-        aggregated[method]['lm_judge_rating'] = np.mean(aggregated[method]['lm_judge_rating'], axis=0)
-        aggregated[method]['factor'] = aggregated[method]['factor'][0]  # Take first since all same
-    
-    # Create the plot
-    plt.figure(figsize=(6, 3))
-    
-    # Define marker styles
-    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*']  # Add more if needed
-    
-    # Plot lm_judge_rating
-    for method, color, marker in zip(methods, colors, markers[:len(methods)]):
-        plt.plot(aggregated[method]['factor'], 
-                aggregated[method]['lm_judge_rating'],
-                linestyle='--',
-                linewidth=2,
-                marker=marker,
-                markersize=6,
-                markerfacecolor=color,
-                markeredgecolor='black',
-                markeredgewidth=1,
-                label=f'{method}',
-                color=color)
-    
-    # Customize the plot
-    plt.xlabel('Factor', fontsize=10, color='black')
-    plt.ylabel('LM Judge Rating', fontsize=10, color='black')
-    
-    # Add finer x-axis ticks
-    first_method = list(methods)[0]
-    plt.xticks(aggregated[first_method]['factor'], fontsize=8, color='black')
-    plt.yticks(fontsize=8, color='black')
-    
-    # Add legend
-    plt.legend(loc="lower right", 
-              fontsize=5, 
-              frameon=True, 
-              fancybox=True, 
-              framealpha=0.8, 
-              shadow=True)
-    
-    # Add grid
-    plt.grid(True, linestyle='--', alpha=0.5)
-    
-    if write_to_path:
-        plt.savefig(write_to_path / "lm_judge_rating.png", 
-                   dpi=300, bbox_inches='tight')
+        plt.savefig(write_to_path / f"{metric_name}.png", dpi=300, bbox_inches='tight')
     else:
         plt.show()
     
