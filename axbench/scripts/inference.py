@@ -99,34 +99,6 @@ def load_metadata_flatten(metadata_path):
     return metadata
 
 
-def retry_with_backoff(func, *args, **kwargs):
-    """
-    Generic retry mechanism with exponential backoff.
-    
-    Args:
-        func (callable): The function to retry.
-        *args: Positional arguments for the function.
-        **kwargs: Keyword arguments for the function.
-    
-    Returns:
-        The result of the function if successful.
-    
-    Raises:
-        Exception: The last exception raised if all retries fail.
-    """
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            retries += 1
-            if retries >= MAX_RETRIES:
-                logger.warning(f"Failed after {MAX_RETRIES} retries: {e}")
-                raise
-            logger.warning(f"Retrying ({retries}/{MAX_RETRIES}) after failure: {e}")
-            time.sleep(RETRY_DELAY * retries)
-
-
 def save(
     dump_dir, state, concept_id, partition,
     current_df, rotation_freq):
@@ -175,21 +147,14 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
             [concept], 
             concept_genres_map=concept_genres_map,
             contrast_concepts_map=contrast_concepts_map)
-
-    try:
-        current_df = retry_with_backoff(
-            dataset_factory.create_eval_df,
-            [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
-            eval_contrast_concepts_map, input_length=args.input_length,
-        )
-        current_df["concept_id"] = concept_id
-        current_df["sae_link"] = sae_link
-        current_df["sae_id"] = sae_id
-        current_df["group_id"] = group_id
-    except Exception as e:
-        logger.warning(f"Failed to create evaluation data for group {concept_id}: {e}")
-        return
-
+    current_df = dataset_factory.create_eval_df(
+        [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
+        eval_contrast_concepts_map, input_length=args.input_length,
+    )
+    current_df["concept_id"] = concept_id
+    current_df["sae_link"] = sae_link
+    current_df["sae_id"] = sae_id
+    current_df["group_id"] = group_id
     return current_df
 
 

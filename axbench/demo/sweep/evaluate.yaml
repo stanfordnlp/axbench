@@ -9,3 +9,6 @@ steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
 rotation_freq: 1000
+
+# Number of processes to run in parallel for steering evaluation.
+num_of_workers: 64

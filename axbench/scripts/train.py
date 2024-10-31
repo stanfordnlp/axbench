@@ -114,6 +114,7 @@ def save(args, group_id, models, rotation_freq):
 def binarize_df(original_df, concept, model_name):
     if model_name in {
         "LinearProbe", "L1LinearProbe", "IntegratedGradients",
+        "InputXGradients", "IntegratedGradients",
         "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
     }:
         # assign input and output containing concept with 1, otherwise 0

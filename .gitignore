@@ -5,6 +5,7 @@ axbench/demo/
 *.out
 axbench/results/
 local_exp.sh
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

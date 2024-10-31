@@ -177,40 +177,6 @@ class LinearProbe(Model):
         progress_bar.close()
         logger.warning("Training finished.")
 
-    @torch.no_grad()
-    def predict_latent(self, examples, **kwargs):
-        self.ax.eval()
-
-        all_acts = []
-        all_max_act = []
-        all_max_act_idx = []
-        all_max_token = []
-        for _, row in examples.iterrows():
-            try:
-                inputs = self.tokenizer.encode(
-                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-                act_in = gather_residual_activations(
-                    self.model, self.layer, {"input_ids": inputs})
-                ax_acts = self.ax(act_in[:,1:])
-                ax_acts = ax_acts[..., row["concept_id"]]
-                ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
-                ax_acts = [round(x, 3) for x in ax_acts]
-                max_ax_act = max(ax_acts)
-                max_ax_act_idx = ax_acts.index(max_ax_act)
-                max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-            except Exception as e:
-                logger.warning(f"Failed to get max activation for {row['concept_id']}: {e}")
-                continue
-            all_acts += [ax_acts]
-            all_max_act += [max_ax_act] 
-            all_max_act_idx += [max_ax_act_idx]
-            all_max_token += [max_token]
-        return {
-            "acts": all_acts,
-            "max_act": all_max_act, 
-            "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token}
-
 
 class L1LinearProbe(LinearProbe):
     

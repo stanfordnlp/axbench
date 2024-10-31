@@ -143,36 +143,46 @@ class ReAX(Model):
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
+        batch_size = kwargs.get('batch_size', 32)
         
         all_acts = []
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
-        for _, row in examples.iterrows():
-            try:
-                inputs = self.tokenizer.encode(
-                    row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
-                reax_in = gather_residual_activations(
-                    self.model, self.layer, {"input_ids": inputs})
-                _, ax_acts = self.ax.encode(
-                    reax_in[:,1:], # no bos token
-                    subspaces={
-                        "input_subspaces": torch.tensor([row["concept_id"]])}, k=1)
-                ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
-                ax_acts = [round(x, 3) for x in ax_acts]
-                max_ax_act = max(ax_acts)
-                max_ax_act_idx = ax_acts.index(max_ax_act)
-                max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-            except Exception as e:
-                logger.warning(f"Failed to get max activation for {row['concept_id']}: {e}")
-                continue
-            all_acts += [ax_acts]
-            all_max_act += [max_ax_act] 
-            all_max_act_idx += [max_ax_act_idx]
-            all_max_token += [max_token]
+        
+        # Process in batches
+        for i in range(0, len(examples), batch_size):
+            batch = examples.iloc[i:i + batch_size]
+            # Batch encode all inputs
+            inputs = self.tokenizer(
+                batch["input"].tolist(), return_tensors="pt", 
+                add_special_tokens=True, padding=True, truncation=True).to("cuda")
+            
+            gather_acts = gather_residual_activations(
+                self.model, self.layer, inputs)
+            _, ax_acts = self.ax.encode(
+                gather_acts[:, 1:],  # no bos token
+                subspaces={
+                    "input_subspaces": torch.tensor(batch["concept_id"].tolist())
+                }, k=1)
+            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            # Process each sequence in the batch
+            for seq_idx, ax_seq in enumerate(ax_acts):
+                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.cpu().numpy().tolist()
+                acts = [round(x, 3) for x in acts]
+                max_act = max(acts)
+                max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
+                max_act_idx = max_act_indices[0]
+                # Get tokens for this specific sequence
+                tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])
+                max_token = tokens[max_act_idx]
+                all_acts.append(acts)
+                all_max_act.append(max_act)
+                all_max_act_idx.append(max_act_idx)
+                all_max_token.append(max_token)
         return {
             "acts": all_acts,
-            "max_act": all_max_act, 
+            "max_act": all_max_act,
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token}
-
+            "max_token": all_max_token
+        }
