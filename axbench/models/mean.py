@@ -120,7 +120,7 @@ class MeanEmbedding(Model):
                 "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
                 "intervention": self.ax} for l in [self.layer]])
             ax_model = IntervenableModel(ax_config, self.model)
-            ax_model.set_device("cuda")
+            ax_model.set_device(self.device)
             self.ax_model = ax_model
 
     def train(self, examples, **kwargs):
@@ -183,13 +183,14 @@ class MeanPositiveActivation(MeanActivation):
         self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.eval()
+        self.ax.to(self.device)
         # Main training loop.
         all_activations = []
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 activations = gather_residual_activations(
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}

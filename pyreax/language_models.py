@@ -124,7 +124,7 @@ class LanguageModel(object):
                 self.stats.record(
                     batch_api_names[j], raw_completion['usage'],
                     prompt=batch_prompts[j], completion=completion)
-            
+
         return all_completions
 
     def dump(self):
