@@ -23,7 +23,7 @@ latent_num_of_examples: 100
 n_steering_factors: 10
 steering_datasets: ["OUATPrefix"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
-steering_batch_size: 256
+steering_batch_size: 64
 steering_output_length: 128
 steering_num_of_examples: 20
 

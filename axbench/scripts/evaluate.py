@@ -29,9 +29,8 @@ import httpx, asyncio
 import axbench
 from axbench import (
     plot_aggregated_roc, 
-    plot_perplexity,
-    plot_strength,
-    plot_lm_judge_rating
+    plot_metric,
+    plot_accuracy_bars
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -134,11 +133,32 @@ def plot_steering(dump_dir):
 
     # other plot goes here
     try:
-        plot_perplexity(aggregated_results, write_to_path=dump_dir)
-        plot_strength(aggregated_results, write_to_path=dump_dir)
-        plot_lm_judge_rating(aggregated_results, write_to_path=dump_dir)
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='PerplexityEvaluator', 
+            metric_name='perplexity', 
+            y_label='Perplexity', 
+            use_log_scale=True, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='PerplexityEvaluator', 
+            metric_name='strength', 
+            y_label='Strength', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='LMJudgeEvaluator', 
+            metric_name='lm_judge_rating', 
+            y_label='LM Judge Rating', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
     except Exception as e:
-        logger.warning(f"Failed to plot LMJudgeEvaluator: {e}")
+        logger.warning(f"Failed to plot: {e}")
 
 
 def eval_steering_single_task(args_tuple):
@@ -260,11 +280,11 @@ def plot_latent(dump_dir):
     aggregated_results = []
     for file_path in file_list:
         aggregated_results += load_jsonl(file_path)
-
-    # roc plot
-    roc_results = [aggregated_result["results"]["AUCROCEvaluator"] 
-                   for aggregated_result in aggregated_results]
-    plot_aggregated_roc(roc_results, write_to_path=dump_dir)
+    try:
+        plot_aggregated_roc(aggregated_results, write_to_path=dump_dir)
+        plot_accuracy_bars(aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir)
+    except Exception as e:
+        logger.warning(f"Failed to plot: {e}")
 
     # other plot goes here
 
@@ -300,9 +320,10 @@ def eval_latent(args):
             dump_dir, {"concept_id": concept_id + 1}, 
             concept_id, 'latent', eval_results, rotation_freq)
 
-    # final plot
+    # Generate final plot
+    logger.warning("Generating final plot...")
     plot_latent(dump_dir)
-
+    logger.warning("Evaluation completed!")
 
 def main():
     custom_args = [

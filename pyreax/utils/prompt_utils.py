@@ -162,12 +162,30 @@ async def modify_content_with_concept(client, tokenizer, content, length):
 
 async def continue_with_concept(client, tokenizer, concepts, content, length):
     prompts = []
-    for i, concept in enumerate(concepts):
+    content_token_lengths = []
+    
+    # Get token lengths of original content
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
         prompts += [T_CONTINUE_WITH_CONCEPT.format(
-            CONCEPT=concept, CONTENT=content[i], LENGTH=length)]
+            CONCEPT=concepts[i], CONTENT=c, LENGTH=length)]
+    
     responses = await client.chat_completions("continue_with_concept", prompts)
-    return [tokenizer.convert_tokens_to_string(tokenizer.tokenize(
-        response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
+    
+    continued_content = []
+    for i, response in enumerate(responses):
+        # Get full response tokens
+        full_tokens = tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))
+        
+        # Skip the original content tokens and limit to requested length
+        continued_tokens = full_tokens[content_token_lengths[i]:content_token_lengths[i] + int(length*1.5)]
+        
+        # Convert back to string
+        continued_text = tokenizer.convert_tokens_to_string(continued_tokens)
+        continued_content.append(continued_text)
+    
+    return continued_content
 
 
 async def get_content_with_concept(client, tokenizer, count, genres, concept, length):

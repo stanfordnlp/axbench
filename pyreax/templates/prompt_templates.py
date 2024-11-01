@@ -199,18 +199,16 @@ T_CONTINUE_WITH_CONCEPT = """Given the partial content:
 Your task is to:
 
 1. Complete the content by adding elements that are related to '{CONCEPT}'.
-2. Do not repeat the original partial content; write only the continuation directly.
-3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
-4. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
-5. Avoid using any special characters not standard for the genre, including quotation marks (" or ') and ellipses (...), unless appropriate.
+2. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
+3. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
+4. Avoid using any special characters not standard for the genre, including quotation marks (" or ') and ellipses (...), unless appropriate.
 
 **Formatting Guidelines:**
 
-- Write your continuation on a single line (or appropriate format for the genre) in plain text.
-- Do not include the original partial content.
-- Do not start the continuation with '...'.
+- Return the continuation with the original partial content.
+- Write the final content (or appropriate format for the genre) in plain text.
 - Do not include any additional text, explanations, or formatting.
 
-**Final Answer:** Return only the continuation, following the guidelines above."""
+**Final Answer:** Return only the final content, following the guidelines above."""
 
 

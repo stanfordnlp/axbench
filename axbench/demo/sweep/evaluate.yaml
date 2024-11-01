@@ -1,14 +1,18 @@
 models: [
   # "LinearProbe", "IntegratedGradients", "InputXGradients",
-  "L1LinearProbe", "ReAX", "GemmaScopeSAE", 
-  "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation"
+  # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
-latent_evaluators: ["AUCROCEvaluator"]
+latent_evaluators: [
+  "AUCROCEvaluator",
+  "HardNegativeEvaluator",
+  # "ReciprocalRankEvaluator"
+]
 steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
 rotation_freq: 1000
 
 # Number of processes to run in parallel for steering evaluation.
-num_of_workers: 64
+num_of_workers: 32

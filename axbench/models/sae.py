@@ -23,6 +23,7 @@ import pandas as pd
 from pyreax import (
     JumpReLUSAECollectIntervention, 
     SubspaceAdditionIntervention,
+    DictionaryAdditionIntervention # please try this one
 )
 from pyreax import (
     gather_residual_activations, 
@@ -45,18 +46,18 @@ class GemmaScopeSAE(Model):
         if mode == "latent":
             ax = JumpReLUSAECollectIntervention(
             embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         elif mode == "steering":
             ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         ax = ax.train()
         ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
-            "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
+            "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
             "intervention": ax} for l in [self.layer]])
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device("cuda")
@@ -79,10 +80,11 @@ class GemmaScopeSAE(Model):
         params = np.load(path_to_params)
         pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
-        if isinstance(self.ax, JumpReLUSAECollectIntervention):
-            self.ax.load_state_dict(pt_params, strict=False)
-        else:
+        if isinstance(self.ax, SubspaceAdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
+        else:
+            self.ax.load_state_dict(pt_params, strict=False)
+            
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):

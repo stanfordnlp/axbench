@@ -1,9 +1,9 @@
 models: [
   # "LinearProbe", 
-  "IntegratedGradients", 
+  # "IntegratedGradients", 
   # "InputXGradients",
-  # "L1LinearProbe", "ReAX", "GemmaScopeSAE", 
-  # "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation"
+  # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
 # for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
@@ -14,13 +14,13 @@ dump_dir: "axbench/demo"
 
 # latent related params
 input_length: 32
-latent_num_of_examples: 10
+latent_num_of_examples: 50
 
 # steering related params
 n_steering_factors: 10
 steering_datasets: ["OUATPrefix"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
-steering_batch_size: 256
+steering_batch_size: 32
 steering_output_length: 128
 steering_num_of_examples: 20
 

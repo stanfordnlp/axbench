@@ -6,7 +6,11 @@ models: [
   # "Random", "MeanEmbedding", "MeanActivation", 
 ] 
 
-latent_evaluators: ["AUCROCEvaluator"]
+latent_evaluators: [
+  "AUCROCEvaluator",
+  "HardNegativeEvaluator",
+  # "ReciprocalRankEvaluator"
+]
 steering_evaluators: [
   "PerplexityEvaluator", 
   "LMJudgeEvaluator"
