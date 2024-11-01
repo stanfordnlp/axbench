@@ -538,6 +538,7 @@ def infer_steering(args):
         ),
         max_retries=3,
     )
+    factory_tokenizer = create_tokenizer(args.model_name)
 
     # Choose executor based on multi_gpu flag
     if args.multi_gpu:
