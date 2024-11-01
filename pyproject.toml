@@ -14,4 +14,9 @@ dependencies = [
     "torch>=2.5.0",
     "transformers",
     "pyvene>=0.1.5",
+    "dspy>=2.5.16",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
