@@ -167,7 +167,7 @@ def create_data_steering(
     sae_id = int(sae_link.split("/")[-1]) 
 
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, n_steering_factors, steering_datasets
+        [concept], num_of_examples, n_steering_factors, steering_datasets,
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -206,7 +206,10 @@ def infer_steering(args):
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
 
     # We dont need to load dataset factory for steering, only existing datasets.
-    dataset_factory = SteeringDatasetFactory(model, tokenizer, dump_dir)
+    dataset_factory = SteeringDatasetFactory(
+        model, tokenizer, dump_dir, 
+        master_data_dir=args.master_data_dir
+    )
 
     # Pre-load inference models.
     benchmark_models = []

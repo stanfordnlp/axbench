@@ -13,3 +13,4 @@ from .models.probe import *
 from .models.ig import *
 from .models.random import *
 from .models.mean import *
+from .models.prompt import *

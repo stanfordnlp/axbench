@@ -218,7 +218,6 @@ def eval_steering(args):
     
     if not all_tasks:
         logger.warning("No tasks to evaluate")
-
         # Generate final plot
         logger.warning("Generating final plot...")
         plot_steering(dump_dir)

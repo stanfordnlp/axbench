@@ -2,10 +2,7 @@
 #     python axbench/scripts/inference.py --config axbench/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
 models: [
   # "LinearProbe", "IntegratedGradients", "InputXGradients",
-  "L1LinearProbe", 
-  "ReAX", 
-  "GemmaScopeSAE", 
-  "MeanPositiveActivation"
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
   # "Random", "MeanEmbedding", "MeanActivation", 
 ] 
 
@@ -20,10 +17,11 @@ input_length: 32
 latent_num_of_examples: 100
 
 # steering related params
+steering_model_name: "google/gemma-2-2b-it"
 n_steering_factors: 10
-steering_datasets: ["OUATPrefix"]
+steering_datasets: ["AlpacaEval"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
-steering_batch_size: 64
+steering_batch_size: 32
 steering_output_length: 128
 steering_num_of_examples: 20
 

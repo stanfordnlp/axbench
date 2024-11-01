@@ -1,6 +1,6 @@
 models: [
   # "LinearProbe", "IntegratedGradients", "InputXGradients",
-  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation"
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
