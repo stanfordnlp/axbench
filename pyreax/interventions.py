@@ -68,7 +68,7 @@ class MaxReLUIntervention(
         )
 
 
-class SubspaceAdditionIntervention(
+class AdditionIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
@@ -81,9 +81,89 @@ class SubspaceAdditionIntervention(
                 self.embed_dim, kwargs["low_rank_dimension"], bias=True)
 
     def forward(self, base, source=None, subspaces=None):
-        steering_vec = torch.tensor(subspaces["mag"]) * self.proj.weight[subspaces["idx"]].unsqueeze(dim=0)
-        output = base + steering_vec
+        # use subspaces["idx"] to select the correct weight vector
+        steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * \
+            subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        output = base + steering_vec.unsqueeze(dim=1)
         return output
+    
+
+class SubspaceAdditionIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"], bias=True)
+    
+    def forward(self, base, source=None, subspaces=None):
+        # Get the normalized subspace vector (unit vector)
+        v = self.proj.weight[subspaces["idx"]].unsqueeze(1)
+        proj_coeff = (base * v).sum(dim=-1, keepdim=True)
+        proj_vec = proj_coeff * v  
+
+        steering_scale = subspaces["max_act"].unsqueeze(-1).unsqueeze(-1) * \
+            subspaces["mag"].unsqueeze(-1).unsqueeze(-1)
+        steering_vec = steering_scale * v
+        
+        # Replace the projection component with the steering vector
+        output = (base - proj_vec) + steering_vec
+        return output
+
+
+class DictionaryAdditionIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Anthropic's intervention method. 
+    
+    For smaller models, we just gave up on this ...
+    But feel free to try it and see if it works for you.
+    """
+    def __init__(self, **kwargs):
+        # Note that we initialize these to zeros because we're loading in pre-trained weights.
+        # If you want to train your own SAEs then we recommend using appropriate initialization.
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.W_enc = nn.Parameter(torch.zeros(self.embed_dim, kwargs["low_rank_dimension"]))
+        self.W_dec = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"], self.embed_dim))
+        self.threshold = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
+        self.b_enc = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
+        self.b_dec = nn.Parameter(torch.zeros(self.embed_dim))
+        
+        # Load pre-trained weights if necessary
+        # self.load_state_dict(torch.load('path_to_pretrained_weights.pth'))
+    
+    def encode(self, input_acts):
+        pre_acts = torch.matmul(input_acts, self.W_enc) + self.b_enc  # Shape: [batch_size, seq_len, low_rank_dimension]
+        mask = (pre_acts > self.threshold)  # Shape: [batch_size, seq_len, low_rank_dimension]
+        acts = mask * torch.nn.functional.relu(pre_acts)
+        return acts
+
+    def decode(self, acts):
+        reconstructed = torch.matmul(acts, self.W_dec) + self.b_dec  # Shape: [batch_size, seq_len, embed_dim]
+        return reconstructed
+
+    def forward(self, base, source=None, subspaces=None):
+        """
+        base: Residual stream activity x, shape [batch_size, seq_len, embed_dim]
+        subspaces: Dictionary containing 'idx' and 'mag'
+        """
+        acts = self.encode(base)
+        SAE_x = self.decode(acts)
+        error_x = base - SAE_x
+        
+        acts_modified = acts.clone()
+        acts_modified[:, :, subspaces['idx']] = \
+            subspaces['mag'] * subspaces["max_act"]
+
+        modified_SAE_x = self.decode(acts_modified)
+        x_new = modified_SAE_x + error_x 
+
+        return x_new
 
 
 class JumpReLUSAECollectIntervention(

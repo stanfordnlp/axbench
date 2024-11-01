@@ -1,11 +1,11 @@
 # train
-#     python benchmark/scripts/train.py --config benchmark/sweep/train/gemma-2-2b_20-gemmascope-res-16k.yaml
+#     python axbench/scripts/train.py --config axbench/sweep/train/gemma-2-2b_20-gemmascope-res-16k.yaml
 model_name: "google/gemma-2-2b"
 layer: 20
 component: "res"
 
-data_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/generate"
-dump_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k"
+data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/generate"
+dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k"
 
 # training params
 models: 
@@ -16,3 +16,13 @@ models:
     lr: 0.003
     coeff_l1_loss_null: 0.05
     coeff_l1_loss: 0.001
+  L1LinearProbe:
+    batch_size: 6
+    n_epochs: 12
+    k_latent_null_loss: 1
+    lr: 0.003
+    coeff_l1_loss_null: 0.5
+    coeff_l1_loss: 0.1
+  MeanPositiveActivation:
+    batch_size: 128
+    n_epochs: 1

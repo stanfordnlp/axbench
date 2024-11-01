@@ -47,9 +47,9 @@ def data_generator(data_dir):
         (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
     """
     # Get list of files sorted by index
-    file_list = sorted(glob.glob(os.path.join(data_dir, 'train_data_fragment_*.csv')))
+    file_list = sorted(glob.glob(os.path.join(data_dir, 'train_data_fragment_*.parquet')))
     for file_path in file_list:
-        df = pd.read_csv(file_path)
+        df = pd.read_parquet(file_path)
         group_ids = df['group_id'].unique()
         group_ids.sort()
         for group_id in group_ids:
@@ -111,6 +111,32 @@ def save(args, group_id, models, rotation_freq):
         json.dump(config, f)
 
 
+def binarize_df(original_df, concept, model_name):
+    if model_name in {
+        "LinearProbe", "L1LinearProbe", "IntegratedGradients",
+        "InputXGradients", "IntegratedGradients",
+        "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+    }:
+        # assign input and output containing concept with 1, otherwise 0
+        input_df = original_df[original_df["input_concept"]==concept]
+        output_df = original_df[original_df["output_concept"]==concept]
+        positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+        positive_df = pd.DataFrame(positive_df, columns=['input'])
+
+        input_df = original_df[original_df["input_concept"]!=concept]
+        output_df = original_df[original_df["output_concept"]!=concept]
+        negative_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+        negative_df = pd.DataFrame(negative_df, columns=['input'])
+
+        positive_df["labels"] = 1
+        negative_df["labels"] = 0
+
+        return pd.concat([positive_df, negative_df], axis=0)
+    else:
+        # not implemented
+        raise NotImplementedError(f"Binarization not implemented for {model_name}")
+
+
 def main():
     args = TrainingArgs()
 
@@ -144,12 +170,22 @@ def main():
         benchmark_models = []
         for model_name in args.models.keys():
             model_class = getattr(axbench, model_name)
-            logger.warning(f"Training {model_class} with group_id {group_id} ({len(group_df)})\n")
-            benchmark_model = model_class(
-                model, tokenizer, layer=args.layer, 
-                training_args=args.models[model_name])
-            benchmark_model.train(group_df)
-            benchmark_models += [benchmark_model]
+            if model_name == "ReAX":
+                logger.warning(f"Training {model_class} with paired data: group_id {group_id} ({len(group_df)})\n")
+                benchmark_model = model_class(
+                    model, tokenizer, layer=args.layer, 
+                    training_args=args.models[model_name])
+                benchmark_model.train(group_df)
+                benchmark_models += [benchmark_model]
+            else:
+                for concept in metadata[group_id]["concepts"]:
+                    logger.warning(
+                        f"Training {model_class} with non-paired data for concept {concept} ({len(group_df)})\n")
+                    benchmark_model = model_class(
+                        model, tokenizer, layer=args.layer, 
+                        training_args=args.models[model_name])
+                    benchmark_model.train(binarize_df(group_df, concept, model_name))
+                    benchmark_models += [benchmark_model]
 
         # Save
         save(args, group_id, benchmark_models, DEFAULT_ROTATION_FREQ)

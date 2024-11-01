@@ -1,10 +1,29 @@
-# generate dataset
-models: ["ReAX", "GemmaScopeSAE"]
-input_length: 32
-output_length: 10
+models: [
+  # "LinearProbe", 
+  # "IntegratedGradients", 
+  # "InputXGradients",
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation"
+  # "Random", "MeanEmbedding", "MeanActivation"
+] 
 
-num_of_examples: 50
-rotation_freq: 1000
+# for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
+model_name: "google/gemma-2-2b"
 data_dir: "axbench/demo/generate"
 train_dir: "axbench/demo/train"
 dump_dir: "axbench/demo"
+
+# latent related params
+input_length: 32
+latent_num_of_examples: 50
+
+# steering related params
+n_steering_factors: 10
+steering_datasets: ["OUATPrefix"]
+# "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
+steering_batch_size: 32
+steering_output_length: 128
+steering_num_of_examples: 20
+
+# master data dir is shared across all jobs.
+master_data_dir: "axbench/data"
+rotation_freq: 1000

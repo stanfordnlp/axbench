@@ -1,11 +1,32 @@
 # inference with test dataset
-#     python benchmark/scripts/inference.py --config benchmark/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
-models: ["ReAX", "GemmaScopeSAE"]
-input_length: 32
-output_length: 10
+#     python axbench/scripts/inference.py --config axbench/sweep/inference/gemma-2-2b_20-gemmascope-res-16k.yaml --mode latent
+models: [
+  # "LinearProbe", "IntegratedGradients", "InputXGradients",
+  "L1LinearProbe", 
+  "ReAX", 
+  "GemmaScopeSAE", 
+  "MeanPositiveActivation"
+  # "Random", "MeanEmbedding", "MeanActivation", 
+] 
 
-num_of_examples: 100
+# for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
+model_name: "google/gemma-2-2b"
+data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/generate"
+train_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/train"
+dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
+
+# latent related params
+input_length: 32
+latent_num_of_examples: 100
+
+# steering related params
+n_steering_factors: 10
+steering_datasets: ["OUATPrefix"]
+# "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
+steering_batch_size: 64
+steering_output_length: 128
+steering_num_of_examples: 20
+
+# master data dir is shared across all jobs.
+master_data_dir: "axbench/data"
 rotation_freq: 1000
-data_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/generate"
-train_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/train"
-dump_dir: "benchmark/results/gemma-2-2b_20-gemmascope-res-16k/"

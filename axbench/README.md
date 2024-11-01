@@ -27,10 +27,10 @@ Inference with latent activations with representation abstractions:
 python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
 ```
 
-#### steering (not implemented yet)
+#### steering
 Inference with model steering with representation abstractions:
 ```bash
-python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode steer
+python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode steering
 ```
 
 ### evaluate
@@ -41,10 +41,10 @@ To evaluate inference results for latent activations:
 python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
 ```
 
-#### steering (not implemented yet)
+#### steering
 To evaluate inference results for steering:
 ```bash
-python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode steer
+python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode steering
 ```
 
 ### (optional) plot

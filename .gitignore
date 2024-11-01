@@ -1,11 +1,13 @@
 old_*.ipynb
 tmp_save/
 axbench/data/*.json
-axbench/demo/lm_cache
+axbench/demo/
 *.out
 axbench/results/
 set_key.py
 uv.lock
+local_exp.sh
+*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

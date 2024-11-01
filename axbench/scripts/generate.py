@@ -32,6 +32,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from pyreax import ReAXFactory
 from args.dataset_args import DatasetArgs
 from pathlib import Path
+from openai import AsyncOpenAI
+import httpx, asyncio
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -140,12 +142,13 @@ def partition_lists(list1, list2, step=2):
         partitions.append(group)
     return partitions
 
+
 def save(
     dump_dir, state, group_id, 
     concepts, concept_genres_map, contrast_concepts_map, 
     refs, partition, current_df, rotation_freq):
     """
-    Save the current state, metadata, and DataFrame.
+    Save the current state, metadata, and DataFrame using Parquet format.
     """
     # handle training df first
     dump_dir = Path(dump_dir) / "generate"
@@ -168,15 +171,16 @@ def save(
     with open(metadata_path, "a") as f:
         f.write(json.dumps(metadata_entry) + "\n")
     
-    # Save DataFrame
+    # Save DataFrame using Parquet
     fragment_index = group_id // rotation_freq
-    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.csv")
+    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.parquet")
     if os.path.exists(df_path):
-        existing_df = pd.read_csv(df_path)
+        existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
     else:
         combined_df = current_df
-    combined_df.to_csv(df_path, index=False)
+    combined_df.to_parquet(df_path, index=False)
+
 
 def load_state(dump_dir):
     """
@@ -235,8 +239,22 @@ def main():
     start_group_id = state.get("group_id", 0) if state else 0
     logger.warning(f"Starting group index: {start_group_id}")
     
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100, 
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
     # Init the dataset factory.
-    dataset_factory = ReAXFactory(model, tokenizer, dump_dir)
+    dataset_factory = ReAXFactory(model, client, tokenizer, dump_dir)
     progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
     for group_id in progress_bar:
         concepts, refs = concept_groups[group_id]
@@ -250,7 +268,8 @@ def main():
             current_df = retry_with_backoff(
                 dataset_factory.create_train_df,
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
-                input_length=args.input_length, output_length=args.output_length
+                input_length=args.input_length, output_length=args.output_length,
+                current_group_id=group_id
             )
             current_df["group_id"] = group_id
         except Exception as e:
