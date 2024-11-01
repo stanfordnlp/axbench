@@ -190,11 +190,14 @@ def infer_steering(args):
     steering_datasets = args.steering_datasets
     
     # Load lm.
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map="cpu")
+    model = AutoModelForCausalLM.from_pretrained(
+        args.steering_model_name if args.steering_model_name else args.model_name, 
+        device_map="cpu"
+    )
     model.config.use_cache = False
     model = model.cuda()    
     model = model.eval()
-    tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer =  AutoTokenizer.from_pretrained(args.steering_model_name)
     tokenizer.padding_side = "right"
 
     state = load_state(args.dump_dir, "steering")

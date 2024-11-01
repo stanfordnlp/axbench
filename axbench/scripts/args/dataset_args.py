@@ -21,6 +21,7 @@ class DatasetArgs:
     seed: Optional[int] = None
     max_concepts: Optional[int] = None
     model_name: Optional[str] = None
+    steering_model_name: Optional[str] = None
     n_steering_factors: Optional[int] = None
     master_data_dir: Optional[str] = None # this syncs across all jobs.
     steering_batch_size: Optional[int] = None
