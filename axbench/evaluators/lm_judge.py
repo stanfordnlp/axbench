@@ -30,7 +30,7 @@ You are an impartial evaluator. Your task is to determine if the sentence fragme
 1. Contains clear references or terms related to the specified concept (not just superficial mentions)
 2. Presents these references within a grammatically coherent structure (not just random related words)
 
-For a rating of 1, the fragment must satisfy BOTH criteria:
+Rate 1 if the fragment satisfies BOTH criteria:
 - The concept must be clearly and meaningfully incorporated
 - The fragment must form a grammatically sensible phrase or sentence
 
@@ -43,7 +43,7 @@ Then provide your rating in exactly this format: "Rating: [[score]]"
 
 [The Start of the Concept]
 %s
-[The End of the Sentence Fragment]
+[The End of the Concept]
 
 [The Start of the Sentence Fragment]
 %s
@@ -111,12 +111,12 @@ class LMJudgeEvaluator(Evaluator):
                     # Remove any trailing period
                     rating_text = rating_text.rstrip('.').strip('"').strip("'").strip("*").strip()
                     # Convert to float
-                    rating = float(rating_text)/10.0
+                    rating = float(rating_text)
                 
                 # Try to find "**Rating: X**" format (markdown)
                 elif "**Rating:" in completion:
                     rating_text = completion.split("**Rating:")[-1].split("**")[0].strip()
-                    rating = float(rating_text)/10.0
+                    rating = float(rating_text)
                 
                 if rating is not None and 0 <= rating <= 1:
                     ratings.append(rating)

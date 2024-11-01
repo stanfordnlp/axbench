@@ -22,7 +22,11 @@ COLORS = [
 MARKERS = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
 
 
-def plot_aggregated_roc(metrics_list, write_to_path=None):
+def plot_aggregated_roc(jsonl_data, write_to_path=None):
+
+    metrics_list = [aggregated_result["results"]["AUCROCEvaluator"] 
+                   for aggregated_result in jsonl_data]
+    
     # Define common FPR thresholds for interpolation
     common_fpr = np.linspace(0, 1, 100)
 
@@ -139,6 +143,89 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     
     if write_to_path:
         plt.savefig(write_to_path / f"{metric_name}.png", dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+    
+    plt.close()
+
+
+def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
+    # Get unique methods and sort them
+    methods = set()
+    for entry in jsonl_data:
+        methods.update(entry['results'][evaluator_name].keys())
+    methods = sorted(list(methods))
+    
+    # Initialize data structures for both metrics
+    seen_accuracies = {method: [] for method in methods}
+    unseen_accuracies = {method: [] for method in methods}
+    
+    # Collect data from all concepts
+    for entry in jsonl_data:
+        results = entry['results'][evaluator_name]
+        for method in methods:
+            if method in results:
+                seen_accuracies[method].append(
+                    results[method].get('hard_negative_seen_accuracy', 0))
+                unseen_accuracies[method].append(
+                    results[method].get('hard_negative_unseen_accuracy', 0))
+    
+    # Calculate means
+    seen_means = {method: np.mean(vals) for method, vals in seen_accuracies.items()}
+    unseen_means = {method: np.mean(vals) for method, vals in unseen_accuracies.items()}
+    
+    # Plotting
+    plt.figure(figsize=(6, 4))
+    x = np.arange(len(methods))
+    width = 0.35
+    
+    # Create bars
+    seen_bars = plt.bar(x - width/2, [seen_means[m] for m in methods],
+                       width, 
+                       color='white',  # White background to make hatches more visible
+                       edgecolor=[COLORS[i % len(COLORS)] for i in range(len(methods))],
+                       hatch='///',  # Denser hatching for better visibility
+                       label='Seen')
+    
+    unseen_bars = plt.bar(x + width/2, [unseen_means[m] for m in methods],
+                         width,
+                         color='white',  # White background to make hatches more visible
+                         edgecolor=[COLORS[i % len(COLORS)] for i in range(len(methods))],
+                         hatch='\\\\\\',  # Denser hatching for better visibility
+                         label='Unseen')
+    
+    # Add value labels on top of bars
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            plt.text(rect.get_x() + rect.get_width()/2., height,
+                    f'{height:.2f}',
+                    ha='center', va='bottom', fontsize=8)
+    
+    autolabel(seen_bars)
+    autolabel(unseen_bars)
+    
+    # Set y-axis limits from 0 to 1 with 5% headroom
+    plt.ylim(0, 1.05)
+
+    # Customize the plot
+    plt.ylabel('Accuracy', fontsize=10, color='black')
+    plt.title('Hard Negative Accuracy Comparison', fontsize=12)
+    plt.xticks(x, methods, rotation=45, ha='right', fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.legend(fontsize=8, 
+              loc='upper right',
+              handles=[
+                  plt.Rectangle((0,0),1,1, facecolor='white', hatch='///', label='Seen', edgecolor='black'),
+                  plt.Rectangle((0,0),1,1, facecolor='white', hatch='\\\\\\', label='Unseen', edgecolor='black')
+              ])
+    plt.grid(True, linestyle='--', alpha=0.3)
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    if write_to_path:
+        plt.savefig(write_to_path / "accuracy_comparison.png", dpi=300, bbox_inches='tight')
     else:
         plt.show()
     

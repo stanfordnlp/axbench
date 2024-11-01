@@ -5,6 +5,11 @@ from .evaluator import Evaluator
 
 
 class HardNegativeEvaluator(Evaluator):
+    """
+    WARNING: it turns out pure accuracy on hard negatives is not a good metric for evaluating abstractions.
+    The abstraction could be very insensitive to any concept, but still have high accuracy on hard negatives.
+    This might also affect many similar metrics in other papers on ambiguity, fuzziness, etc. Be careful out there :)
+    """
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
     
@@ -21,28 +26,39 @@ class HardNegativeEvaluator(Evaluator):
         # Normalize the activation columns
         max_acts = data[f'{self.model_name}_max_act']
         data['normalized_max'] = (max_acts - max_acts.min()) / (max_acts.max() - max_acts.min())
-        
-        # Apply class labels
+        data['normalized_max'] = data['normalized_max'].fillna(0)
         data['label'] = data['category'].map(class_labels)
-        filtered_data = data.dropna(subset=['label'])
-        filtered_data = filtered_data.fillna(0) # in case others are still nan, e.g., max_reax_act = 0.0
         
-        # Compute ROC metrics for max_act
-        fpr, tpr, thresholds = roc_curve(filtered_data['label'], filtered_data['normalized_max'])
-        roc_auc = auc(fpr, tpr)
+        # First, get threshold using only positive and negative samples
+        train_data = data[data['category'].isin(['positive', 'negative'])].dropna(subset=['label'])
+        fpr, tpr, thresholds = roc_curve(train_data['label'], train_data['normalized_max'])
+        base_auc = auc(fpr, tpr)
         j_scores = tpr - fpr
         optimal_idx = np.argmax(j_scores)
         optimal_threshold = thresholds[optimal_idx]
         
-        # Prepare output dictionary
-        metrics = {
-            "roc_auc": float(roc_auc),
-            "optimal_threshold": float(optimal_threshold),
-            "roc_curve": {
-                "fpr": fpr.tolist(),
-                "tpr": tpr.tolist(),
-                # "thresholds": thresholds.tolist()
+        # If threshold is positive or negative infinity, return 0 for all metrics
+        if np.isinf(float(optimal_threshold)):
+            return {
+                "hard_negative_seen_accuracy": 0.0,
+                "hard_negative_unseen_accuracy": 0.0,
+                "base_auc": base_auc
             }
-        }
+        
+        # Then evaluate hard negatives
+        hard_neg_seen = data[data['category'] == "hard negative seen"]
+        hard_neg_unseen = data[data['category'] == "hard negative unseen"]
+        
+        metrics = {"base_auc": float(base_auc)}
+        
+        # Compute accuracy (percentage correctly classified as negative)
+        if len(hard_neg_seen) > 0:
+            predictions = (hard_neg_seen['normalized_max'] >= optimal_threshold).astype(int)
+            metrics["hard_negative_seen_accuracy"] = float((predictions == 0).mean()) * base_auc
+        
+        if len(hard_neg_unseen) > 0:
+            predictions = (hard_neg_unseen['normalized_max'] >= optimal_threshold).astype(int)
+            metrics["hard_negative_unseen_accuracy"] = float((predictions == 0).mean()) * base_auc
+        
         return metrics
 
