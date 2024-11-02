@@ -28,3 +28,5 @@ steering_num_of_examples: 20
 # master data dir is shared across all jobs.
 master_data_dir: "axbench/data"
 rotation_freq: 1000
+seed: 42
+lm_model: "gpt-4o-mini"
