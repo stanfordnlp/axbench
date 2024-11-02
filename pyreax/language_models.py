@@ -121,13 +121,13 @@ class LanguageModel(object):
         # check if the prompt is cached
         api_count = self.api_count.get(api_name, 0)
         self.api_count[api_name] = api_count + 1 # increment api count
-        if f"{prompt}_____{api_count}" in self.cache_in_mem:
-            return (self.cache_in_mem[f"{prompt}_____{api_count}"], None)
+        if f"{prompt}_____{api_count}_____{api_name}" in self.cache_in_mem:
+            return (self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"], None)
         raw_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model)
         raw_completion = raw_completion.to_dict()
         completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-        self.cache_in_mem[f"{prompt}_____{api_count}"] = completion
+        self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"] = completion
         usage = raw_completion['usage']
         return (completion, usage)
         

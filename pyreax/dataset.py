@@ -57,15 +57,18 @@ class ReAXFactory(object):
         if kwargs.get("concept_genres_map", None) != None:
             logger.warning("Creating contrast concepts for the inputs (skipping genres as they are provided).")
             contrast_task = get_contrast_concepts(
-                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None))
+                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
+                api_tag=kwargs.get("api_tag", ""))
             contrast_concepts_map = asyncio.run(
                 run_tasks([contrast_task]))[0]
             concept_genres_map = kwargs.get("concept_genres_map", None)
         else:
             logger.warning("Creating genre and contrast concepts for the inputs.")
-            genre_task = get_concept_genres(self.lm_model, concepts)
+            genre_task = get_concept_genres(self.lm_model, concepts, 
+                                            api_tag=kwargs.get("api_tag", ""))
             contrast_task = get_contrast_concepts(
-                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None))
+                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
+                api_tag=kwargs.get("api_tag", ""))
             concept_genres_map, contrast_concepts_map = asyncio.run(
                 run_tasks([genre_task, contrast_task]))
 
@@ -92,26 +95,28 @@ class ReAXFactory(object):
             # positive
             eval_tasks.append(get_content_with_concept(
                 self.lm_model, self.tokenizer, subset_n, concept_genres_map, 
-                concept=concept, length=input_length))
+                concept=concept, length=input_length, api_tag="inference"))
             tags.append(("positive", concept, idx))
             # negative
             eval_tasks.append(get_random_content(
                 self.lm_model, self.tokenizer, subset_n, concept_genres_map, [concept], 
-                length=input_length))
+                length=input_length, api_tag="inference"))
             tags.append(("negative", concept, idx))
             # hard negative seen
             exist_polysemantic_meanings = train_contrast_concepts_map[concept]
             if len(exist_polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
                     self.lm_model, self.tokenizer, concept_genres_map, 
-                    exist_polysemantic_meanings, concept, length=input_length))
+                    exist_polysemantic_meanings, concept, length=input_length, 
+                    api_tag="inference"))
                 tags.append(("hard negative seen", concept, idx))
             # hard negative unseen
             polysemantic_meanings = eval_contrast_concepts_map[concept]
             if len(polysemantic_meanings) != 0:
                 eval_tasks.append(get_content_with_polysemantic_concepts(
                     self.lm_model, self.tokenizer, concept_genres_map, 
-                    polysemantic_meanings, concept, length=input_length))
+                    polysemantic_meanings, concept, length=input_length,
+                    api_tag="inference"))
                 tags.append(("hard negative unseen", concept, idx))
         all_eval_content = asyncio.run(run_tasks(eval_tasks))
 

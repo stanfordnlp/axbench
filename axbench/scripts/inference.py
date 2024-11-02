@@ -151,7 +151,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
         dataset_factory.prepare_concepts(
             [concept], 
             concept_genres_map=concept_genres_map,
-            contrast_concepts_map=contrast_concepts_map)
+            contrast_concepts_map=contrast_concepts_map, api_tag="inference")
     current_df = dataset_factory.create_eval_df(
         [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
         eval_contrast_concepts_map, input_length=args.input_length,
