@@ -227,7 +227,9 @@ def infer_steering(args):
     # We dont need to load dataset factory for steering, only existing datasets.
     dataset_factory = SteeringDatasetFactory(
         model, tokenizer, dump_dir, 
-        master_data_dir=args.master_data_dir, lm_client=lm_client)
+        master_data_dir=args.master_data_dir, lm_client=lm_client,
+        lm_model=args.lm_model
+    )
 
     # Pre-load inference models.
     benchmark_models = []
@@ -303,7 +305,8 @@ def infer_latent(args):
     # Load dataset factory for evals.
     dataset_factory = ReAXFactory(
         model, client, tokenizer, dump_dir,
-        use_cache=True, master_data_dir=args.master_data_dir
+        use_cache=True, master_data_dir=args.master_data_dir, 
+        lm_model=args.lm_model
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)

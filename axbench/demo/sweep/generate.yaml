@@ -1,4 +1,5 @@
 # generate dataset
+lm_model: "gpt-4o-mini"
 input_length: 32
 output_length: 10
 

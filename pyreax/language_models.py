@@ -110,8 +110,8 @@ class LanguageModel(object):
             self.cache_dir = Path(kwargs["master_data_dir"]) / "persist_lm_cache"
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             # load cache from disk
-            if (self.cache_dir / "cache.json").exists():
-                with open(self.cache_dir / "cache.json", "r") as f:
+            if (self.cache_dir / f"{self.model}_cache.json").exists():
+                with open(self.cache_dir / f"{self.model}_cache.json", "r") as f:
                     self.cache_in_mem = json.load(f)
 
     def normalize(self, text):
@@ -166,7 +166,7 @@ class LanguageModel(object):
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
 
     def save_cache(self):
-        with open(self.cache_dir / "cache.json", "w") as f:
+        with open(self.cache_dir / f"{self.model}_cache.json", "w") as f:
             json.dump(self.cache_in_mem, f)
 
     async def close(self):

@@ -27,6 +27,7 @@ class DatasetArgs:
     steering_batch_size: Optional[int] = None
     steering_output_length: Optional[int] = None
     steering_num_of_examples: Optional[int] = None
+    lm_model: Optional[str] = None
     # Add any other parameters as needed
 
     def __init__(

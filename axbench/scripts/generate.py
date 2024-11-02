@@ -98,34 +98,6 @@ def load_concepts(dump_dir):
         raise ValueError(f"Unsupported file type: {dump_dir}.")  
 
 
-def retry_with_backoff(func, *args, **kwargs):
-    """
-    Generic retry mechanism with exponential backoff.
-    
-    Args:
-        func (callable): The function to retry.
-        *args: Positional arguments for the function.
-        **kwargs: Keyword arguments for the function.
-    
-    Returns:
-        The result of the function if successful.
-    
-    Raises:
-        Exception: The last exception raised if all retries fail.
-    """
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            retries += 1
-            if retries >= MAX_RETRIES:
-                logger.warning(f"Failed after {MAX_RETRIES} retries: {e}")
-                raise
-            logger.warning(f"Retrying ({retries}/{MAX_RETRIES}) after failure: {e}")
-            time.sleep(RETRY_DELAY * retries)
-
-
 def partition_lists(list1, list2, step=2):
     """
     Partitions two lists into groups of adjacent elements based on the step.
@@ -255,7 +227,7 @@ def main():
     dataset_factory = ReAXFactory(
         model, client, tokenizer, dump_dir, 
         use_cache=True, master_data_dir=args.master_data_dir,
-        seed=args.seed
+        seed=args.seed, lm_model=args.lm_model
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
@@ -270,8 +242,7 @@ def main():
         
         # generate with retry mechanism.
         try:
-            current_df = retry_with_backoff(
-                dataset_factory.create_train_df,
+            current_df = dataset_factory.create_train_df(
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
                 input_length=args.input_length, output_length=args.output_length,
                 current_group_id=group_id
