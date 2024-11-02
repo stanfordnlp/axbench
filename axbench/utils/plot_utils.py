@@ -83,6 +83,8 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     # Get unique methods and sort them
     methods = set()
     for entry in jsonl_data:
+        if evaluator_name not in entry['results']:
+            return # no op for missing evaluator
         methods.update(entry['results'][evaluator_name].keys())
     methods = sorted(list(methods))
 
@@ -159,7 +161,7 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     plt.grid(True, linestyle='--', alpha=0.5)
     
     if write_to_path:
-        plt.savefig(write_to_path / f"{metric_name}.png", dpi=300, bbox_inches='tight')
+        plt.savefig(write_to_path / f"{y_label}.png", dpi=300, bbox_inches='tight')
     else:
         plt.show()
     

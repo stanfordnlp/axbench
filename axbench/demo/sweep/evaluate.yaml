@@ -9,10 +9,16 @@ latent_evaluators: [
   "HardNegativeEvaluator",
   # "ReciprocalRankEvaluator"
 ]
-steering_evaluators: ["PerplexityEvaluator", "LMJudgeEvaluator"]
+steering_evaluators: [
+  "PerplexityEvaluator", 
+  "LMJudgeConceptEvaluator",
+  "LMJudgeFollowingEvaluator",
+  # "LMJudgeContinuationEvaluator"
+]
 data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
 rotation_freq: 1000
 
 # Number of processes to run in parallel for steering evaluation.
 num_of_workers: 32
+lm_model: "gpt-4o-mini"
