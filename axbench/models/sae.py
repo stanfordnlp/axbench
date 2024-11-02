@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 from pyreax import (
     JumpReLUSAECollectIntervention, 
+    AdditionIntervention,
     SubspaceAdditionIntervention,
     DictionaryAdditionIntervention # please try this one
 )
@@ -49,7 +50,7 @@ class GemmaScopeSAE(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
@@ -80,12 +81,11 @@ class GemmaScopeSAE(Model):
         params = np.load(path_to_params)
         pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
-        if isinstance(self.ax, SubspaceAdditionIntervention):
+        if isinstance(self.ax, SubspaceAdditionIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
         else:
             self.ax.load_state_dict(pt_params, strict=False)
             
-    
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()

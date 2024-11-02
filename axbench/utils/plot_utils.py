@@ -106,7 +106,10 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
         if method != "PromptSteering":
             aggregated[method][metric_name] = np.mean(aggregated[method][metric_name], axis=0)
         else:
-            aggregated[method][metric_name] = np.mean(aggregated[method][metric_name])
+            if metric_name != "strength":
+                aggregated[method][metric_name] = np.mean(aggregated[method][metric_name])
+            else:
+                continue
         aggregated[method]['factor'] = aggregated[method]['factor'][0]
 
     # Create the plot

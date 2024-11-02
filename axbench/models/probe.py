@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from pyreax import (
-    SubspaceAdditionIntervention
+    AdditionIntervention
 )
 from pyreax import (
     set_decoder_norm_to_unit_norm, 
@@ -109,7 +109,7 @@ class LinearProbe(Model):
             ax.to("cuda")
             self.ax = ax
         elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )

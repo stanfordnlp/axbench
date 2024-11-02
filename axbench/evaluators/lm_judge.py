@@ -30,13 +30,15 @@ You are an impartial evaluator. Your task is to determine if the response fragme
 1. Contains clear references or terms related to the specified concept (not just superficial mentions)
 2. Presents these references within a grammatically coherent structure (not just random related words)
 
-Rate 1 if the response satisfies BOTH criteria:
+Rate 1 if the response satisfies ALL criteria:
 - The concept must be clearly and meaningfully incorporated
 - The response fragment must form a grammatically sensible phrase or sentence
+- The response fragment is related to the instruction
 
 Rate 0 if either:
 - The concept is missing or only superficially mentioned in the response fragment
 - The words are jumbled or lack basic grammatical structure in the response fragment
+- The response fragment is not related to the instruction at all
 
 First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
 Then provide your rating in exactly this format: "Rating: [[score]]"

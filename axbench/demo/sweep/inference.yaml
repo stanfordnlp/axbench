@@ -2,7 +2,9 @@ models: [
   # "LinearProbe", 
   # "IntegratedGradients", 
   # "InputXGradients",
-  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
+  # "L1LinearProbe", "ReAX", 
+  "GemmaScopeSAE", 
+  # "MeanPositiveActivation", "PromptSteering",
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
@@ -28,3 +30,4 @@ steering_num_of_examples: 20
 # master data dir is shared across all jobs.
 master_data_dir: "axbench/data"
 rotation_freq: 1000
+seed: 42
