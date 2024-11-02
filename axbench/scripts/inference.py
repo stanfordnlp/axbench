@@ -25,8 +25,9 @@ import atexit
 
 from pyreax import (
     EXAMPLE_TAG, 
-    ReAXFactory
+    ReAXFactory,
 )
+
 from args.dataset_args import DatasetArgs
 from transformers import set_seed
 
@@ -150,7 +151,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
         dataset_factory.prepare_concepts(
             [concept], 
             concept_genres_map=concept_genres_map,
-            contrast_concepts_map=contrast_concepts_map)
+            contrast_concepts_map=contrast_concepts_map, api_tag="inference")
     current_df = dataset_factory.create_eval_df(
         [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
         eval_contrast_concepts_map, input_length=args.input_length,
@@ -204,6 +205,20 @@ def infer_steering(args):
     tokenizer =  AutoTokenizer.from_pretrained(args.steering_model_name)
     tokenizer.padding_side = "right"
 
+    # Create a new OpenAI client.
+    lm_client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100, 
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
     state = load_state(args.dump_dir, "steering")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
@@ -212,8 +227,7 @@ def infer_steering(args):
     # We dont need to load dataset factory for steering, only existing datasets.
     dataset_factory = SteeringDatasetFactory(
         model, tokenizer, dump_dir, 
-        master_data_dir=args.master_data_dir
-    )
+        master_data_dir=args.master_data_dir, lm_client=lm_client)
 
     # Pre-load inference models.
     benchmark_models = []
@@ -236,7 +250,6 @@ def infer_steering(args):
         current_df, (_, sae_link, sae_id) = create_data_steering(
             dataset_factory, metadata, concept_id, num_of_examples, 
             n_steering_factors, steering_datasets, args)
-
         # Evaluate.
         for model_idx, model_name in enumerate(args.models):
             if model_name in STEERING_EXCLUDE_MODELS:

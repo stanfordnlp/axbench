@@ -87,7 +87,11 @@ class LMJudgeEvaluator(Evaluator):
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
         lm_model = kwargs.get("lm_model", "gpt-4o-mini") # gpt-4o-mini is cheaper for large-scale eval.
-        self.lm_model = LanguageModel(lm_model, kwargs.get("client", None), dump_dir=kwargs.get("dump_dir", None))
+        self.lm_model = LanguageModel(
+            lm_model, kwargs.get("client", None), 
+            dump_dir=kwargs.get("dump_dir", None), 
+            use_cache=False
+        )
         self.concept_id = kwargs.get("concept_id", None)
 
     def __str__(self):
@@ -132,6 +136,7 @@ class LMJudgeEvaluator(Evaluator):
             completions = asyncio.run(process_batch())
         
         price = round(self.lm_model.stats.get_total_price(), 3)
+        self.lm_model.stats.print_report()
         self.lm_model.dump()
         logger.warning(f"LMJudgeEvaluator API costs: ${price}")
         ratings = []
