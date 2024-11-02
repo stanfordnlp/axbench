@@ -50,7 +50,7 @@ class GemmaScopeSAE(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
