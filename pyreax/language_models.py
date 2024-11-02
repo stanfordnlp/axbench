@@ -104,6 +104,7 @@ class LanguageModel(object):
         self.cache_dir = None
         self.use_cache = use_cache
         self.cache_in_mem = {}
+        self.api_count = {}
         if self.use_cache:
             assert kwargs.get("master_data_dir", None), "master_data_dir is required for cache"
             self.cache_dir = Path(kwargs["master_data_dir"]) / "persist_lm_cache"
@@ -116,15 +117,17 @@ class LanguageModel(object):
     def normalize(self, text):
         return text.strip()
 
-    async def chat_completion(self, client, prompt):
+    async def chat_completion(self, client, prompt, api_name):
         # check if the prompt is cached
-        if prompt in self.cache_in_mem:
-            return (self.cache_in_mem[prompt], None)
+        api_count = self.api_count.get(api_name, 0)
+        self.api_count[api_name] = api_count + 1 # increment api count
+        if f"{prompt}_____{api_count}" in self.cache_in_mem:
+            return (self.cache_in_mem[f"{prompt}_____{api_count}"], None)
         raw_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model)
         raw_completion = raw_completion.to_dict()
         completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-        self.cache_in_mem[prompt] = completion
+        self.cache_in_mem[f"{prompt}_____{api_count}"] = completion
         usage = raw_completion['usage']
         return (completion, usage)
         
@@ -143,7 +146,8 @@ class LanguageModel(object):
 
             # batched calls
             async_responses = [
-                self.chat_completion(self.client, prompt) for prompt in batch_prompts]
+                self.chat_completion(self.client, prompt, api_name) 
+                for prompt, api_name in zip(batch_prompts, batch_api_names)]
             raw_completions = await asyncio.gather(*async_responses)
             # post handling for current batch
             for j, (completion, usage) in enumerate(raw_completions):

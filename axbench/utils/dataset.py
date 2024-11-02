@@ -1,12 +1,44 @@
+try:
+    # This library is our indicator that the required installs
+    # need to be done.
+    import pyreax
+
+except ModuleNotFoundError:
+    # relative import; better to pip install subctrl
+    import sys
+    sys.path.append("../../../pyreax")
+    import pyreax
+
 import pandas as pd
-import os
+import os, asyncio
+from pyreax import LanguageModel
+
 
 def OUATPrefix_steering_factors(n):
     return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
 
 
-PROMPT_STEERING_TEMPLATE = """You must answer the question with content \
+T_PROMPT_STEERING = """You must answer the question with content \
 related to %s even if it is not related to the question or it does not make sense."""
+
+
+T_GENERATE_STEERING_PROMPT = """Generate a prompt to guide a language \
+model in producing responses. 
+
+Objective: 
+Direct the model to include content related to %s (the concept) in its responses. 
+Ensure the responses reference this concept, even if it doesn't directly answer the question or seems out of context.
+Optionally, provide in-context examples to reinforce this behavior.
+        
+Return only the final prompt without any additional text."""
+
+
+async def get_steering_prompts(client, concepts):
+    prompts = []
+    for concept in concepts:
+        prompts += [T_GENERATE_STEERING_PROMPT % (concept)]
+    responses = await client.chat_completions("get_steering_prompts", prompts)
+    return responses
 
 
 class SteeringDatasetFactory(object):
@@ -15,6 +47,11 @@ class SteeringDatasetFactory(object):
         self.model = model
         self.tokenizer = tokenizer
         self.master_data_dir = kwargs.get("master_data_dir", None)
+        if kwargs.get("lm_client", None):
+            self.lm_model = LanguageModel(
+                kwargs.get("lm_model", "gpt-4o"), kwargs["lm_client"], dump_dir, 
+                use_cache=True, master_data_dir=self.master_data_dir
+            )
 
     def create_eval_df(self, concepts, subset_n, n_steering_factors, steering_datasets):
         for dataset_name in steering_datasets:
@@ -43,14 +80,19 @@ class SteeringDatasetFactory(object):
                 alpaca_eval_path = os.path.join(self.master_data_dir, "alpaca_eval.json")
                 alpaca_eval_df = pd.read_json(alpaca_eval_path)
                 common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
+
+                # get gpt-4o boosted steering prompts.
+                steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
+                steering_prompts = [prompt.strip() for prompt in steering_prompts]
                 all_examples = []
                 for idx, concept in enumerate(concepts):
                     for i in range(subset_n):
                         # sample a random example from alpaca eval dataset.
                         sampled_prompt = alpaca_eval_df.sample(1)["instruction"].tolist()[0]
                         # for prompt-based steering ONLY.
-                        steering_prompt = PROMPT_STEERING_TEMPLATE % (concept)
-                        steered_prompt = f" {steering_prompt} {sampled_prompt}"
+                        steering_prompt = steering_prompts[idx] \
+                            if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
+                        steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
                         formatted_steered_prompt = self.tokenizer.apply_chat_template(
                             [{"role": "user", "content": steered_prompt}], 
                             tokenize=False, add_generation_prompt=True)

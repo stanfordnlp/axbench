@@ -183,7 +183,9 @@ def eval_steering_single_task(args_tuple):
 
     try:
         evaluator_class = getattr(axbench, evaluator_name)
-        evaluator = evaluator_class(model_name, dump_dir=dump_dir, concept_id=concept_id, client=client)
+        evaluator = evaluator_class(
+            model_name, dump_dir=dump_dir, 
+            concept_id=concept_id, client=client)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result)
     finally:
