@@ -15,8 +15,8 @@ from pyreax import LanguageModel
 
 
 def OUATPrefix_steering_factors(n):
-    # return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 5.0, 10.0]
+    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
+    # return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 5.0, 10.0]
 
 T_PROMPT_STEERING = """You must answer the question with content \
 related to %s even if it is not related to the question or it does not make sense."""
@@ -110,6 +110,39 @@ class SteeringDatasetFactory(object):
                     columns = [
                         'dataset_name', 'concept_id', 'input_concept', 
                         'input_id', 'factor', 'original_prompt', 'steered_input', 'input'])
+                return df
+            elif dataset_name == "AlpacaEval_Suppress":
+                # load alpaca eval dataset.
+                assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
+                alpaca_eval_path = os.path.join(self.master_data_dir, "alpaca_eval.json")
+                alpaca_eval_df = pd.read_json(alpaca_eval_path)
+                common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
+                common_steering_factors = [f*-1.0 for f in common_steering_factors]
+                # get gpt-4o boosted steering prompts.
+                steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
+                steering_prompts = [prompt.strip() for prompt in steering_prompts]
+                all_examples = []
+                for idx, concept in enumerate(concepts):
+                    for i in range(subset_n):
+                        # sample a random example from alpaca eval dataset.
+                        sampled_prompt = alpaca_eval_df.sample(1)["instruction"].tolist()[0]
+                        # for prompt-based steering ONLY.
+                        steering_prompt = steering_prompts[idx] \
+                            if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
+                        steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
+                        formatted_steered_prompt = self.tokenizer.apply_chat_template(
+                            [{"role": "user", "content": steered_prompt}], 
+                            tokenize=False, add_generation_prompt=True)
+                        for factor in common_steering_factors:
+                            all_examples += [[
+                                dataset_name, idx, concept, i, factor, 
+                                sampled_prompt, formatted_steered_prompt,
+                            ]]
+                df = pd.DataFrame(
+                    all_examples, 
+                    columns = [
+                        'dataset_name', 'concept_id', 'input_concept', 
+                        'input_id', 'factor', 'original_prompt', 'input'])
                 return df
             else:
                 # not implemented yet.
