@@ -49,7 +49,7 @@ class SteeringDatasetFactory(object):
         self.master_data_dir = kwargs.get("master_data_dir", None)
         if kwargs.get("lm_client", None):
             self.lm_model = LanguageModel(
-                kwargs.get("lm_model", "gpt-4o"), kwargs["lm_client"], dump_dir, 
+                kwargs.get("lm_model", "gpt-4o-mini"), kwargs["lm_client"], dump_dir, 
                 use_cache=True, master_data_dir=self.master_data_dir
             )
 

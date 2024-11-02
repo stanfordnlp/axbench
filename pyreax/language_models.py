@@ -84,6 +84,13 @@ class LanguageModelStats(object):
         logger.warning(f"Total price: ${self.get_total_price()}")
         logger.warning("="*20)
 
+    def get_report(self):
+        return {
+            "total_calls": self.total_call,
+            "total_cache_hits": self.total_cache_hit,
+            "total_price": self.get_total_price()
+        }
+
 class LanguageModel(object):
     """Main class abstract async remote language model access"""
 

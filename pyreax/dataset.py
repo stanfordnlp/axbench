@@ -35,7 +35,7 @@ class ReAXFactory(object):
         self.tokenizer = tokenizer
 
         # prepare lm model
-        lm_model = kwargs.get("lm_model", "gpt-4o")
+        lm_model = kwargs.get("lm_model", "gpt-4o-mini")
         self.lm_model = LanguageModel(
             lm_model, client, dump_dir, 
             use_cache=use_cache, master_data_dir=master_data_dir

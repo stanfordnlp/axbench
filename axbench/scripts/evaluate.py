@@ -15,7 +15,11 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
-import os, argparse, yaml, json, glob, pickle
+from pyreax import (
+    LanguageModel
+)
+
+import os, argparse, yaml, json, glob, pickle, tempfile
 import pandas as pd
 from pathlib import Path
 from tqdm.auto import tqdm
@@ -125,13 +129,54 @@ def load_state(dump_dir, mode):
     return None
 
 
+def combine_scores(concept_data):
+    """Combine scores from concept and following evaluators for each method."""
+    concept_scores = concept_data["results"]["LMJudgeConceptEvaluator"]
+    following_scores = concept_data["results"]["LMJudgeFollowingEvaluator"]
+    combined_evaluator = {}
+    # For each method (L1LinearProbe, ReAX, etc.)
+    for method in concept_scores.keys():
+        concept_ratings = concept_scores[method]["lm_judge_rating"]
+        following_ratings = following_scores[method]["lm_judge_rating"]
+        factors = concept_scores[method]["factor"]  # factors are same in both
+        # Multiply corresponding scores
+        combined_ratings = [(c * f) for c, f in zip(concept_ratings, following_ratings)]
+        combined_evaluator[method] = {
+            "lm_judge_rating": combined_ratings,
+            "factor": factors
+        }
+    return combined_evaluator
+
+
+def process_jsonl_file(file_path):
+    temp_fd, temp_path = tempfile.mkstemp()
+    try:
+        with os.fdopen(temp_fd, 'w') as temp_file, open(file_path, 'r') as input_file:
+            for line in input_file:
+                data = json.loads(line.strip())
+                data["results"]["LMJudgeConceptFollowingEvaluator"] = combine_scores(data)
+                temp_file.write(json.dumps(data) + '\n')
+        os.replace(temp_path, file_path)
+    except Exception as e:
+        os.unlink(temp_path)
+        raise e
+
+
+def process_jsonl_file(jsonl_lines):
+    for data in jsonl_lines:
+        data["results"]["LMJudgeConceptFollowingEvaluator"] = \
+            combine_scores(data)
+    return jsonl_lines
+
+
 def plot_steering(dump_dir):
     dump_dir = Path(dump_dir) / "evaluate"
     # aggregate all results
     file_list = sorted(glob.glob(os.path.join(dump_dir, 'steering_fragment_*.jsonl')))
     aggregated_results = []
     for file_path in file_list:
-        aggregated_results += load_jsonl(file_path)
+        aggregated_results += process_jsonl_file(
+            load_jsonl(file_path))
 
     # other plot goes here
     try:
@@ -153,9 +198,25 @@ def plot_steering(dump_dir):
         )
         plot_metric(
             jsonl_data=aggregated_results, 
-            evaluator_name='LMJudgeEvaluator', 
+            evaluator_name='LMJudgeConceptEvaluator', 
             metric_name='lm_judge_rating', 
-            y_label='LM Judge Rating', 
+            y_label='Steering', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='LMJudgeFollowingEvaluator', 
+            metric_name='lm_judge_rating', 
+            y_label='Relevance', 
+            use_log_scale=False, 
+            write_to_path=dump_dir
+        )
+        plot_metric(
+            jsonl_data=aggregated_results, 
+            evaluator_name='LMJudgeConceptFollowingEvaluator', 
+            metric_name='lm_judge_rating', 
+            y_label='Steering+Relevance', 
             use_log_scale=False, 
             write_to_path=dump_dir
         )
@@ -165,9 +226,9 @@ def plot_steering(dump_dir):
 
 def eval_steering_single_task(args_tuple):
     """Helper function to evaluate a single concept-model-evaluator combination"""
-    concept_id, current_df, evaluator_name, model_name, dump_dir = args_tuple
-
-    # Create a new OpenAI client for each process
+    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model = args_tuple
+    
+    # Create LanguageModel instance within the worker process
     client = AsyncOpenAI(
         api_key=os.environ.get("OPENAI_API_KEY"),
         timeout=60.0,
@@ -180,20 +241,25 @@ def eval_steering_single_task(args_tuple):
         ),
         max_retries=3,
     )
-
+    lm_model = LanguageModel(
+        lm_model,
+        client,
+        dump_dir=dump_dir,
+        use_cache=False
+    )
+    
     try:
         evaluator_class = getattr(axbench, evaluator_name)
         evaluator = evaluator_class(
             model_name, dump_dir=dump_dir, 
-            concept_id=concept_id, client=client)
+            concept_id=concept_id, lm_model=lm_model)
         eval_result = evaluator.compute_metrics(current_df)
-        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result)
+        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report())
     finally:
         # Properly close both the HTTP client and async client
         async def cleanup():
             await client.close()
         asyncio.run(cleanup())
-
 
 def eval_steering(args):
     """
@@ -213,7 +279,7 @@ def eval_steering(args):
 
     # Create all evaluation tasks - flattened for maximum parallelization
     all_tasks = [
-        (concept_id, current_df, evaluator_name, model_name, args.dump_dir)
+        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model)
         for concept_id, current_df in df_generator
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
@@ -236,15 +302,16 @@ def eval_steering(args):
     logger.warning(f"Number of workers: {args.num_of_workers}; Number of CPUs: {multiprocessing.cpu_count()}")
     if not hasattr(args, 'num_of_workers') or args.num_of_workers is None:
         args.num_of_workers = max(1, multiprocessing.cpu_count() - 1)
-    
+    lm_reports = []
     with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-        for concept_id, evaluator_str, model_str, result in executor.map(
+        for concept_id, evaluator_str, model_str, result, lm_report in executor.map(
             eval_steering_single_task, all_tasks):
             if concept_id not in all_results:
                 all_results[concept_id] = {}
             if evaluator_str not in all_results[concept_id]:
                 all_results[concept_id][evaluator_str] = {}
             all_results[concept_id][evaluator_str][model_str] = result
+            lm_reports += [lm_report]
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
     
     # Batch save all results
@@ -258,6 +325,18 @@ def eval_steering(args):
             eval_results, 
             rotation_freq
         )
+
+    # Aggregate LM reports
+    aggregated_lm_report = {
+        "total_calls": sum([report["total_calls"] for report in lm_reports]),
+        "total_cache_hits": sum([report["total_cache_hits"] for report in lm_reports]),
+        "total_price": sum([report["total_price"] for report in lm_reports])
+    }
+    logger.warning("="*20)  
+    logger.warning(f"Total calls: {aggregated_lm_report['total_calls']}, "
+                   f"Total cache hits: {aggregated_lm_report['total_cache_hits']}")
+    logger.warning(f"Total price: ${aggregated_lm_report['total_price']}")
+    logger.warning("="*20)
 
     # Generate final plot
     logger.warning("Generating final plot...")
