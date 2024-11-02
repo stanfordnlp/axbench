@@ -45,6 +45,8 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 STATE_FILE = "evaluate_state.pkl"
+STEERING_EXCLUDE_MODELS = {}
+LATENT_EXCLUDE_MODELS = {"PromptSteering"}
 
 
 def data_generator(data_dir, mode):
@@ -214,11 +216,11 @@ def eval_steering(args):
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
         for model_name in args.models
+        if model_name not in STEERING_EXCLUDE_MODELS
     ]
     
     if not all_tasks:
         logger.warning("No tasks to evaluate")
-
         # Generate final plot
         logger.warning("Generating final plot...")
         plot_steering(dump_dir)
@@ -308,6 +310,8 @@ def eval_latent(args):
         # Initialize a dictionary for storing evaluation results for this `concept_id`
         eval_results = {}
         for model_name in args.models:
+            if model_name in LATENT_EXCLUDE_MODELS:
+                continue
             for evaluator_name in args.latent_evaluators:
                 evaluator_class = getattr(axbench, evaluator_name)
                 evaluator = evaluator_class(model_name)

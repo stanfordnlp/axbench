@@ -8,6 +8,7 @@ set_key.py
 uv.lock
 local_exp.sh
 *.sh
+axbench/data/persist_lm_cache
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

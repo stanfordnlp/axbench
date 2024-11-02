@@ -149,7 +149,7 @@ Guidelines:
 - Ensure parts of the content remain irrelevant to the concept '{CONCEPT}'.
 - Avoid any mention of '{CONTRAST_CONCEPT}' in the content, regardless of coherence.
 - The final content should have approximately the same length as the original content.
-- Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn’t entirely coherent.
+- Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn't entirely coherent.
 - Ensure grammatical correctness (or syntactical correctness for code/equations).
 - Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
 
@@ -167,7 +167,7 @@ T_CONTENT_WITH_CONCEPT = """Content Writing Task:
    - Include some commonly used words, phrases, or elements that convey the essence or themes of the concept '{CONCEPT}' in the middle of the content.
    - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
    - Position the concept-related content in the middle, avoiding the beginning or end.
-   - Ensure the content reflects the overall concept, even if its full meaning isn’t entirely clear.
+   - Ensure the content reflects the overall concept, even if its full meaning isn't entirely clear.
    - Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
 
 2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
@@ -183,7 +183,7 @@ T_CONTENT_WITH_CONTRAST_CONCEPT = """Content Writing Task:
    - Include '{WORD}' in the middle of the content, conveying meanings related to the concept '{CONCEPT}'.
    - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
    - Avoid any mention of '{CONTRAST_CONCEPT}' in the content, regardless of coherence.
-   - Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn’t entirely coherent.
+   - Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn't entirely coherent.
    - Ensure grammatical correctness (or syntactical correctness for code/equations).
 
 2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).

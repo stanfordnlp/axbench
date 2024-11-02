@@ -85,7 +85,7 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     for entry in jsonl_data:
         methods.update(entry['results'][evaluator_name].keys())
     methods = sorted(list(methods))
-    
+
     # Aggregate data across concepts
     aggregated = {method: {
         metric_name: [],
@@ -93,6 +93,7 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     } for method in methods}
     
     # Collect data from all concepts
+    prompt_steering_data = []
     for entry in jsonl_data:
         results = entry['results'][evaluator_name]
         for method in methods:
@@ -102,7 +103,13 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     
     # Average across concepts
     for method in methods:
-        aggregated[method][metric_name] = np.mean(aggregated[method][metric_name], axis=0)
+        if method != "PromptSteering":
+            aggregated[method][metric_name] = np.mean(aggregated[method][metric_name], axis=0)
+        else:
+            if metric_name != "strength":
+                aggregated[method][metric_name] = np.mean(aggregated[method][metric_name])
+            else:
+                continue
         aggregated[method]['factor'] = aggregated[method]['factor'][0]
 
     # Create the plot
@@ -110,16 +117,26 @@ def plot_metric(jsonl_data, evaluator_name, metric_name, y_label, use_log_scale=
     
     # Plot the metric with consistent colors and markers
     for idx, method in enumerate(methods):
-        plt.plot(aggregated[method]['factor'], 
-                aggregated[method][metric_name],
-                color=COLORS[idx % len(COLORS)],
-                marker=MARKERS[idx % len(MARKERS)],
-                linestyle='--',
-                linewidth=2,
-                markersize=6,
-                markeredgecolor='black',
-                markeredgewidth=1,
-                label=f'{method}')
+        if method != "PromptSteering":
+            plt.plot(aggregated[method]['factor'], 
+                    aggregated[method][metric_name],
+                    color=COLORS[idx % len(COLORS)],
+                    marker=MARKERS[idx % len(MARKERS)],
+                    linestyle='--',
+                    linewidth=2,
+                    markersize=6,
+                    markeredgecolor='black',
+                    markeredgewidth=1,
+                    label=f'{method}')
+        else:
+            if metric_name != "strength":
+                # plot a single horizontal line for PromptSteering
+                plt.plot(aggregated[method]['factor'], 
+                        aggregated[method][metric_name].repeat(len(aggregated[method]['factor'])),
+                        color=COLORS[idx % len(COLORS)],
+                        linestyle='-',
+                        linewidth=2,
+                        label=f'{method}')
     
     # Rest of the customization remains the same
     plt.xlabel('Factor', fontsize=10, color='black')

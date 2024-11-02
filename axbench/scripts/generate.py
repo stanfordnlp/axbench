@@ -25,6 +25,7 @@ import pickle
 import random
 import json
 import csv
+import atexit
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -34,6 +35,7 @@ from args.dataset_args import DatasetArgs
 from pathlib import Path
 from openai import AsyncOpenAI
 import httpx, asyncio
+from transformers import set_seed
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -192,10 +194,11 @@ def load_state(dump_dir):
     Returns:
         dict: The loaded state dictionary, or None if no state file exists.
     """
-    state_path = os.path.join(dump_dir, STATE_FILE)
+    state_path = os.path.join(Path(dump_dir) / "generate", STATE_FILE)
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
-            return pickle.load(f)
+            state = pickle.load(f)
+            return state
     return None
 
 def main():
@@ -207,16 +210,11 @@ def main():
     concept_path = args.concept_path
     num_of_examples = args.num_of_examples
     rotation_freq = args.rotation_freq
-    seed = args.seed
     max_concepts = args.max_concepts
     
     # Load and optionally shuffle concepts
     all_concepts, all_refs = load_concepts(concept_path)
-    if seed is not None:
-        random.seed(seed)
-        combined = list(zip(all_concepts, all_refs))
-        random.shuffle(combined)
-        all_concepts, all_refs = zip(*combined)
+    set_seed(args.seed)
     
     # Limit the number of concepts if specified
     if max_concepts is not None:
@@ -254,7 +252,14 @@ def main():
     )
 
     # Init the dataset factory.
-    dataset_factory = ReAXFactory(model, client, tokenizer, dump_dir)
+    dataset_factory = ReAXFactory(
+        model, client, tokenizer, dump_dir, 
+        use_cache=True, master_data_dir=args.master_data_dir,
+        seed=args.seed
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
+
     progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
     for group_id in progress_bar:
         concepts, refs = concept_groups[group_id]

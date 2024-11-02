@@ -25,7 +25,39 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 
-RATING_TEMPLATE = """[System]
+INSTRUCTION_RATING_TEMPLATE = """[System]
+You are an impartial evaluator. Your task is to determine if the response fragment both:
+1. Contains clear references or terms related to the specified concept (not just superficial mentions)
+2. Presents these references within a grammatically coherent structure (not just random related words)
+
+Rate 1 if the response satisfies ALL criteria:
+- The concept must be clearly and meaningfully incorporated
+- The response fragment must form a grammatically sensible phrase or sentence
+- The response fragment is related to the instruction
+
+Rate 0 if either:
+- The concept is missing or only superficially mentioned in the response fragment
+- The words are jumbled or lack basic grammatical structure in the response fragment
+- The response fragment is not related to the instruction at all
+
+First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
+Then provide your rating in exactly this format: "Rating: [[score]]"
+
+[The Start of the Concept]
+%s
+[The End of the Concept]
+
+[The Start of the Instruction]
+%s
+[The End of the Instruction]
+
+[The Start of the Response]
+%s
+[The End of the Response]
+"""
+
+
+GENERATION_RATING_TEMPLATE = """[System]
 You are an impartial evaluator. Your task is to determine if the sentence fragment both:
 1. Contains clear references or terms related to the specified concept (not just superficial mentions)
 2. Presents these references within a grammatically coherent structure (not just random related words)
@@ -71,9 +103,16 @@ class LMJudgeEvaluator(Evaluator):
         
         # Using OpenAI API to judge the quality of the generated data
         prompts = []
-        for _, row in data.iterrows():
-            prompts += [RATING_TEMPLATE % (
-                row["input_concept"], row["input"] + row[f"{self.model_name}_steered_generation"])]
+        if "original_prompt" in data.columns:
+            # This is an instruction-following dataset.
+            for _, row in data.iterrows():
+                prompts += [INSTRUCTION_RATING_TEMPLATE % (
+                    row["input_concept"], row["original_prompt"], row[f"{self.model_name}_steered_generation"])]
+        else:
+            # This is a generation dataset.
+            for _, row in data.iterrows():
+                prompts += [GENERATION_RATING_TEMPLATE % (
+                    row["input_concept"], row["input"] + row[f"{self.model_name}_steered_generation"])]
 
         async def process_batch():
             try:

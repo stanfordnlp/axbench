@@ -133,9 +133,6 @@ class DictionaryAdditionIntervention(
         self.threshold = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
         self.b_enc = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
         self.b_dec = nn.Parameter(torch.zeros(self.embed_dim))
-        
-        # Load pre-trained weights if necessary
-        # self.load_state_dict(torch.load('path_to_pretrained_weights.pth'))
     
     def encode(self, input_acts):
         pre_acts = torch.matmul(input_acts, self.W_enc) + self.b_enc  # Shape: [batch_size, seq_len, low_rank_dimension]
@@ -157,8 +154,8 @@ class DictionaryAdditionIntervention(
         error_x = base - SAE_x
         
         acts_modified = acts.clone()
-        acts_modified[:, :, subspaces['idx']] = \
-            subspaces['mag'] * subspaces["max_act"]
+        feature_acts = subspaces['mag'] * subspaces["max_act"]
+        acts_modified[:, :, subspaces['idx']] = feature_acts
 
         modified_SAE_x = self.decode(acts_modified)
         x_new = modified_SAE_x + error_x 

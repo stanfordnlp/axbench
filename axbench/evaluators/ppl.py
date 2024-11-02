@@ -22,9 +22,9 @@ class PerplexityEvaluator(Evaluator):
         grouped = data.groupby("factor")
         for factor, group in grouped:
             perplexity = group[f"{self.model_name}_perplexity"].mean()
-            strength = group[f"{self.model_name}_strength"].mean()
             metrics["perplexity"].append(perplexity)
-            metrics["strength"].append(strength)
             metrics["factor"].append(factor)
-            
+            if f"{self.model_name}_strength" in group.columns:
+                strength = group[f"{self.model_name}_strength"].mean()
+                metrics["strength"].append(strength)
         return metrics

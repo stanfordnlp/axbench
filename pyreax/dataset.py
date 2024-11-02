@@ -29,21 +29,27 @@ class ReAXFactory(object):
     """Main class of async generating training pairs for two subspaces"""
 
     def __init__(
-        self, model, client, tokenizer, dump_dir, **kwargs):
+        self, model, client, tokenizer, dump_dir, 
+        use_cache=True, master_data_dir=None, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
 
         # prepare lm model
         lm_model = kwargs.get("lm_model", "gpt-4o")
-        self.lm_model = LanguageModel(lm_model, client, dump_dir)
+        self.lm_model = LanguageModel(
+            lm_model, client, dump_dir, 
+            use_cache=use_cache, master_data_dir=master_data_dir
+        )
+        self.seed = kwargs.get("seed", 42)
 
-    def get_total_price(self):
-        """Estimate API costs"""
-        return round(self.lm_model.stats.get_total_price(), 3)
+    def save_cache(self):
+        """Save the language model cache before exiting"""
+        self.lm_model.save_cache()
 
     def reset_stats(self):
         """Reset API costs"""
         self.lm_model.dump()
+        self.lm_model.stats.print_report()
         self.lm_model.stats.reset()
 
     def prepare_concepts(self, concepts, **kwargs):
@@ -65,12 +71,10 @@ class ReAXFactory(object):
 
         end = time.time()
         elapsed = round(end - start, 3)
-        total_price = self.get_total_price()
         for concept in concepts:
             logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
         logger.warning(
-            f"Init finished in {elapsed} sec. (current cost: ${total_price})"
-        )
+            f"Init finished in {elapsed} sec.")
         return concept_genres_map, contrast_concepts_map
 
     def create_eval_df(self, concepts, subset_n, concept_genres_map, train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
@@ -126,10 +130,7 @@ class ReAXFactory(object):
         df = df[df["input"].str.strip() != ""]
         end = time.time()
         elapsed = round(end-start, 3)
-        total_price = self.get_total_price()
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec. (current cost: ${total_price})")
-        # reset the cost.
-        self.reset_stats()
+        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
@@ -238,10 +239,7 @@ class ReAXFactory(object):
             ])
         end = time.time()
         elapsed = round(end-start, 3)
-        total_price = self.get_total_price()
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec. (current cost: ${total_price})")
-        # reset the cost.
-        self.reset_stats()
+        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
         
 

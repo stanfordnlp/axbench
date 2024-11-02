@@ -6,3 +6,7 @@ num_of_examples: 72
 rotation_freq: 1000
 concept_path: "axbench/demo/concepts.csv"
 dump_dir: "axbench/demo"
+
+# master data dir is shared across all jobs.
+master_data_dir: "axbench/data"
+seed: 42

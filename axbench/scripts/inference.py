@@ -21,12 +21,14 @@ from tqdm.auto import tqdm
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
+import atexit
 
 from pyreax import (
     EXAMPLE_TAG, 
     ReAXFactory
 )
 from args.dataset_args import DatasetArgs
+from transformers import set_seed
 
 # all supported methods
 import axbench
@@ -46,6 +48,8 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 DEFAULT_ROTATION_FREQ = 1000
+STEERING_EXCLUDE_MODELS = {}
+LATENT_EXCLUDE_MODELS = {"PromptSteering"}
 
 
 def load_config(config_path):
@@ -167,7 +171,7 @@ def create_data_steering(
     sae_id = int(sae_link.split("/")[-1]) 
 
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, n_steering_factors, steering_datasets
+        [concept], num_of_examples, n_steering_factors, steering_datasets,
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -190,11 +194,14 @@ def infer_steering(args):
     steering_datasets = args.steering_datasets
     
     # Load lm.
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map="cpu")
+    model = AutoModelForCausalLM.from_pretrained(
+        args.steering_model_name if args.steering_model_name else args.model_name, 
+        device_map="cpu"
+    )
     model.config.use_cache = False
     model = model.cuda()    
     model = model.eval()
-    tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer =  AutoTokenizer.from_pretrained(args.steering_model_name)
     tokenizer.padding_side = "right"
 
     state = load_state(args.dump_dir, "steering")
@@ -203,7 +210,10 @@ def infer_steering(args):
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
 
     # We dont need to load dataset factory for steering, only existing datasets.
-    dataset_factory = SteeringDatasetFactory(model, tokenizer, dump_dir)
+    dataset_factory = SteeringDatasetFactory(
+        model, tokenizer, dump_dir, 
+        master_data_dir=args.master_data_dir
+    )
 
     # Pre-load inference models.
     benchmark_models = []
@@ -229,6 +239,8 @@ def infer_steering(args):
 
         # Evaluate.
         for model_idx, model_name in enumerate(args.models):
+            if model_name in STEERING_EXCLUDE_MODELS:
+                continue
             results = benchmark_models[model_idx].predict_steer(
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
                 batch_size=args.steering_batch_size, 
@@ -276,7 +288,12 @@ def infer_latent(args):
     )
 
     # Load dataset factory for evals.
-    dataset_factory = ReAXFactory(model, client, tokenizer, dump_dir)
+    dataset_factory = ReAXFactory(
+        model, client, tokenizer, dump_dir,
+        use_cache=True, master_data_dir=args.master_data_dir
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
 
     # Pre-load inference models.
     benchmark_models = []
@@ -303,6 +320,8 @@ def infer_latent(args):
 
         # Evaluate.
         for model_idx, model_name in enumerate(args.models):
+            if model_name in LATENT_EXCLUDE_MODELS:
+                continue
             results = benchmark_models[model_idx].predict_latent(current_df)
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
@@ -310,7 +329,6 @@ def infer_latent(args):
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
             current_df, rotation_freq)
-
 
 def main():
     custom_args = [
@@ -326,6 +344,7 @@ def main():
     args = DatasetArgs(custom_args=custom_args)
     logger.warning("Inferencing with following configuration:")
     logger.warning(args)
+    set_seed(args.seed)
     
     def check_latent_eval_done(args):
         # Check if at least one latent eval fragment exists.
