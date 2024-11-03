@@ -58,7 +58,7 @@ class ReAX(Model):
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
-        self.ax = ax
+        self.ax = ax.to(self.device)
         self.ax.train()
         ax_config = IntervenableConfig(representations=[{
             "layer": l,
@@ -66,7 +66,7 @@ class ReAX(Model):
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
             "intervention": self.ax} for l in [self.layer]])
         ax_model = IntervenableModel(ax_config, self.model)
-        ax_model.set_device("cuda")
+        ax_model.set_device(self.device)
         self.ax_model = ax_model
     
     def make_dataloader(self, examples, **kwargs):
@@ -156,14 +156,14 @@ class ReAX(Model):
             # Batch encode all inputs
             inputs = self.tokenizer(
                 batch["input"].tolist(), return_tensors="pt", 
-                add_special_tokens=True, padding=True, truncation=True).to("cuda")
+                add_special_tokens=True, padding=True, truncation=True).to(self.device)
             
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
             _, ax_acts = self.ax.encode(
                 gather_acts[:, 1:],  # no bos token
                 subspaces={
-                    "input_subspaces": torch.tensor(batch["concept_id"].tolist())
+                    "input_subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device)
                 }, k=1)
             seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
             # Process each sequence in the batch

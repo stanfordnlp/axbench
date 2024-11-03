@@ -61,7 +61,7 @@ class GemmaScopeSAE(Model):
             "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
             "intervention": ax} for l in [self.layer]])
         ax_model = IntervenableModel(ax_config, self.model)
-        ax_model.set_device("cuda")
+        ax_model.set_device(self.device)
         self.ax = ax
         self.ax_model = ax_model
 
@@ -79,7 +79,7 @@ class GemmaScopeSAE(Model):
             force_download=False,
         )
         params = np.load(path_to_params)
-        pt_params = {k: torch.from_numpy(v).cuda() for k, v in params.items()}
+        pt_params = {k: torch.from_numpy(v).to(self.device) for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
         if isinstance(self.ax, SubspaceAdditionIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
@@ -99,7 +99,7 @@ class GemmaScopeSAE(Model):
             batch = examples.iloc[i:i + batch_size]
             inputs = self.tokenizer(
                 batch["input"].tolist(), return_tensors="pt", 
-                add_special_tokens=True, padding=True, truncation=True).to("cuda")
+                add_special_tokens=True, padding=True, truncation=True).to(self.device)
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
             ax_acts = self.ax.encode(

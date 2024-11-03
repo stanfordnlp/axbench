@@ -158,7 +158,7 @@ class IntegratedGradients(Model):
         steps = kwargs.get('steps', 10)  # Default to 10 steps if not specified
 
         # Get the token embedding of a single space, excluding special tokens
-        space_input = self.tokenizer(" ", return_tensors="pt", add_special_tokens=False).to("cuda")
+        space_input = self.tokenizer(" ", return_tensors="pt", add_special_tokens=False).to(self.device)
         space_embedding = self.model.get_input_embeddings()(space_input.input_ids)
 
         all_pred_label = []
@@ -169,7 +169,7 @@ class IntegratedGradients(Model):
         correct = 0
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
-                row["input"], return_tensors="pt", add_special_tokens=True).to("cuda")
+                row["input"], return_tensors="pt", add_special_tokens=True).to(self.device)
             act_in = gather_residual_activations(
                 self.model, self.layer, {"input_ids": inputs})
             
@@ -253,7 +253,7 @@ class InputXGradients(IntegratedGradients):
                 return_tensors="pt",
                 padding=True,
                 add_special_tokens=True
-            ).to("cuda")
+            ).to(self.device)
 
             act_in = gather_residual_activations(
                 self.model, self.layer, inputs)
