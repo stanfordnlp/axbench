@@ -318,7 +318,7 @@ def make_data_module(
         # logger.warning("tokens with lm loss:")
         # logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
 
-        intervention_locations = torch.tensor([[i for i in range(1, base_prompt_length)]])
+        intervention_locations = torch.tensor([[i for i in range(1, base_length)]])
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
         all_output_ids.append(output_ids)

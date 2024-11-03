@@ -18,7 +18,7 @@ class Model(object):
         self.training_args = training_args
         self.max_activations = {}
         # Set default device to GPU if available, otherwise CPU
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = kwargs.get("device", "cuda" if torch.cuda.is_available() else "cpu")
 
     def make_model(self, **kwargs):
         pass
@@ -226,6 +226,6 @@ class Model(object):
         self.device = device
         if hasattr(self, 'ax'):
             self.ax = self.ax.to(device)
-            if isinstance(self.ax, IntervenableModel):
-                self.ax.set_device(device)
+            if isinstance(self.ax_model, IntervenableModel):
+                self.ax_model.set_device(device)
         return self

@@ -22,6 +22,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pyreax import (
     EXAMPLE_TAG, 
@@ -191,19 +192,8 @@ def infer_steering(args):
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"]
-    n_steering_factors = args.n_steering_factors
+    steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
-    
-    # Load lm.
-    model = AutoModelForCausalLM.from_pretrained(
-        args.steering_model_name if args.steering_model_name else args.model_name, 
-        device_map="cpu"
-    )
-    model.config.use_cache = False
-    model = model.cuda()    
-    model = model.eval()
-    tokenizer =  AutoTokenizer.from_pretrained(args.steering_model_name)
-    tokenizer.padding_side = "right"
 
     # Create a new OpenAI client.
     lm_client = AsyncOpenAI(
@@ -211,7 +201,7 @@ def infer_steering(args):
         timeout=60.0,
         http_client=httpx.AsyncClient(
             limits=httpx.Limits(
-                max_keepalive_connections=100, 
+                max_keepalive_connections=100,
                 max_connections=1000
             ),
             headers={"Connection": "close"},
@@ -224,49 +214,92 @@ def infer_steering(args):
     logger.warning(f"Starting concept index: {start_concept_id}")
     progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
 
-    # We dont need to load dataset factory for steering, only existing datasets.
+    # Initialize the dataset factory with the tokenizer.
+    tokenizer = AutoTokenizer.from_pretrained(args.steering_model_name)
+    tokenizer.padding_side = "right"
     dataset_factory = SteeringDatasetFactory(
-        model, tokenizer, dump_dir, 
+        tokenizer, dump_dir,
         master_data_dir=args.master_data_dir, lm_client=lm_client,
         lm_model=args.lm_model
     )
 
-    # Pre-load inference models.
-    benchmark_models = []
-    for model_name in args.models:
-        model_class = getattr(axbench, model_name)
-        logger.warning(f"Loading {model_class} from disk for inference.\n")
-        benchmark_model = model_class(
-            model, tokenizer, layer=layer, 
-            low_rank_dimension=len(metadata))
-        benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering")
-        benchmark_models += [benchmark_model]
-        # Pre-compute mean activations for steering eval based on latent eval.
-        benchmark_model.pre_compute_mean_activations(
-            os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir)
+    available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
+    num_devices = len(available_devices)
+
+    # Pre-load model_instance per device
+    device_models = {}
+    for device in available_devices:
+        model_instance = AutoModelForCausalLM.from_pretrained(
+            args.steering_model_name if args.steering_model_name else args.model_name
+        )
+        model_instance.config.use_cache = False
+        model_instance = model_instance.eval()
+        model_instance = model_instance.to(device)
+        device_models[device] = model_instance
 
     torch.cuda.empty_cache()
     for concept_id in progress_bar:
-        # Create.
+        # Create the dataset shared across all models.
         current_df, (_, sae_link, sae_id) = create_data_steering(
-            dataset_factory, metadata, concept_id, num_of_examples, 
-            n_steering_factors, steering_datasets, args)
-        # Evaluate.
-        for model_idx, model_name in enumerate(args.models):
-            if model_name in STEERING_EXCLUDE_MODELS:
-                continue
-            results = benchmark_models[model_idx].predict_steer(
-                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
-                batch_size=args.steering_batch_size, 
-                eval_output_length=args.steering_output_length
-            )
-            for k, v in results.items():
-                current_df[f"{model_name}_{k}"] = v
+            dataset_factory, metadata, concept_id, num_of_examples,
+            steering_factors, steering_datasets, args
+        )
 
-        # Save.
+        # Process models in batches equal to the number of available GPUs.
+        model_indices = list(range(len(args.models)))
+        for i in range(0, len(model_indices), num_devices):
+            batch_indices = model_indices[i:i + num_devices]
+            batch_devices = available_devices[:len(batch_indices)]
+
+            def run_predict_steer(model_idx, device):
+                model_name = args.models[model_idx]
+                if model_name in STEERING_EXCLUDE_MODELS:
+                    return None
+                model_class = getattr(axbench, model_name)
+                logger.warning(f"Using {model_class} on {device}.\n")
+                # Use the pre-loaded model_instance
+                model_instance = device_models[device]
+                # Reuse the tokenizer
+                benchmark_model = model_class(
+                    model_instance, tokenizer, layer=layer,
+                    low_rank_dimension=len(metadata),
+                    device=device
+                )
+                benchmark_model.load(
+                    dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
+                )
+                benchmark_model.to(device)
+                # Pre-compute mean activations for steering evaluation.
+                benchmark_model.pre_compute_mean_activations(
+                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+                )
+                # Run prediction
+                results = benchmark_model.predict_steer(
+                    current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
+                    batch_size=args.steering_batch_size,
+                    eval_output_length=args.steering_output_length
+                )
+                # Clean up
+                del benchmark_model
+                torch.cuda.empty_cache()
+                return model_name, results
+
+            # Run the models in parallel on available GPUs
+            with ThreadPoolExecutor(max_workers=len(batch_indices)) as executor:
+                futures = {
+                    executor.submit(run_predict_steer, model_idx, device): model_idx
+                    for model_idx, device in zip(batch_indices, batch_devices)
+                }
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result is not None:
+                        model_name, results = result
+                        for k, v in results.items():
+                            current_df[f"{model_name}_{k}"] = v
+
+        # Save the results.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "steering",
-            current_df, rotation_freq)
+             current_df, rotation_freq)
 
 
 def infer_latent(args):
@@ -345,6 +378,7 @@ def infer_latent(args):
         # Save.
         save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
             current_df, rotation_freq)
+
 
 def main():
     custom_args = [
