@@ -342,6 +342,11 @@ class SingleGPUModelExecutor(ModelExecutor):
         # Create all benchmark models
         self.models_or_workers = {}  # benchmark_models
         for model_name in self.model_names:
+            if self.mode == "latent" and model_name in LATENT_EXCLUDE_MODELS:
+                continue
+            if self.mode == "steering" and model_name in STEERING_EXCLUDE_MODELS:
+                continue
+
             model_class = getattr(axbench, model_name)
             model = setup_benchmark_model(
                 model_class, self.base_model, tokenizer, self.layer,

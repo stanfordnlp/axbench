@@ -54,7 +54,7 @@ class PromptSteering(Model):
             # tokenize input_strings
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
-            ).to("cuda")
+            ).to(self.device)
             generations = self.model.generate(
                 **inputs, max_new_tokens=eval_output_length, do_sample=True, 
                 # following neuronpedia, we use temperature=0.5 and repetition_penalty=2.0
@@ -71,7 +71,7 @@ class PromptSteering(Model):
 
             # Calculate perplexity for each sequence
             batch_input_ids = self.tokenizer(
-                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
+                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to(self.device)
             batch_attention_mask = (batch_input_ids != self.tokenizer.pad_token_id).float()
             
             # Forward pass without labels to get logits
