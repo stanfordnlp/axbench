@@ -224,7 +224,7 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
     
     # Save or show the plot
     if write_to_path:
-        p.save(filename=str(write_to_path / "accuracy_comparison.png"), dpi=300, bbox_inches='tight')
+        p.save(filename=str(write_to_path / "hard_negative_accuracy.png"), dpi=300, bbox_inches='tight')
     else:
         print(p)
 

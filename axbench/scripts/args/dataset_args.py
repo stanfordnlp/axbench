@@ -23,6 +23,7 @@ class DatasetArgs:
     model_name: Optional[str] = None
     steering_model_name: Optional[str] = None
     n_steering_factors: Optional[int] = None
+    steering_factors: Optional[List[str]] = None
     master_data_dir: Optional[str] = None # this syncs across all jobs.
     steering_batch_size: Optional[int] = None
     steering_output_length: Optional[int] = None

@@ -343,20 +343,33 @@ def eval_steering(args):
             if model_name != args.winrate_baseline
         ]
 
-        winrate_dfs = []
+        winrate_dfs = {}
+        model_strs = set()
         with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-            for concept_id, __builtins__, model_str, result, lm_report, current_df in executor.map(
+            for concept_id, _, model_str, result, lm_report, current_df in executor.map(
                 eval_steering_single_task, winrate_tasks):
                 if concept_id not in winrate_results:
                     winrate_results[concept_id] = {}
+                    winrate_dfs[concept_id] = {}
                 winrate_results[concept_id][model_str] = result
                 lm_reports += [lm_report]
-                winrate_dfs += [current_df]
+                winrate_dfs[concept_id][model_str] = current_df
+                model_strs.add(model_str)
                 logger.warning(f"Completed winrate task for concept_id: {concept_id}, model: {model_str}")
-
-        if len(winrate_dfs) > 0:
-            winrate_df = pd.concat(winrate_dfs)
-            winrate_df.to_parquet(Path(dump_dir) / "evaluate" / f"winrate_df.parquet", engine='pyarrow')
+        model_strs = list(model_strs)
+        if winrate_dfs:
+            vertical_concat = []
+            for concept_id, winrate_df in winrate_dfs.items():
+                # Take the first DataFrame as base and only keep unique columns from others
+                base_df = winrate_dfs[concept_id][model_strs[0]]
+                for model_str in model_strs[1:]:
+                    # Only keep the win_result column from other DataFrames
+                    win_col = f"{model_str}_win_result"
+                    if win_col in winrate_dfs[concept_id][model_str].columns:
+                        base_df[win_col] = winrate_dfs[concept_id][model_str][win_col]
+                vertical_concat.append(base_df)
+            winrate_df = pd.concat(vertical_concat, axis=0)
+            winrate_df.to_parquet(Path(dump_dir) / "evaluate" / f"winrate.parquet", engine='pyarrow')
 
         for concept_id, winrate_result in winrate_results.items():
             aggregated_results[concept_id]["results"]["WinRateEvaluator"] = winrate_result

@@ -23,5 +23,5 @@ rotation_freq: 1000
 # Number of processes to run in parallel for steering evaluation.
 num_of_workers: 32
 lm_model: "gpt-4o-mini"
-run_winrate: true
-winrate_baseline: "PromptSteering"
+run_winrate: false
+# winrate_baseline: "PromptSteering"

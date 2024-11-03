@@ -43,8 +43,7 @@ async def get_steering_prompts(client, concepts):
 
 class SteeringDatasetFactory(object):
     def __init__(
-        self, model, tokenizer, dump_dir, **kwargs):
-        self.model = model
+        self, tokenizer, dump_dir, **kwargs):
         self.tokenizer = tokenizer
         self.master_data_dir = kwargs.get("master_data_dir", None)
         if kwargs.get("lm_client", None):
@@ -53,10 +52,9 @@ class SteeringDatasetFactory(object):
                 use_cache=True, master_data_dir=self.master_data_dir
             )
 
-    def create_eval_df(self, concepts, subset_n, n_steering_factors, steering_datasets):
+    def create_eval_df(self, concepts, subset_n, steering_factors, steering_datasets):
         for dataset_name in steering_datasets:
             if dataset_name == "OUATPrefix":
-                common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
                 # we generate subset_n * n_steering_factors examples for OUATPrefix.
                 # OUATPrefix is basically a prefix dataset.
                 # "Once upon a time, " is the prefix, and there is no other labels.
@@ -65,7 +63,7 @@ class SteeringDatasetFactory(object):
                 all_examples = []
                 for idx, concept in enumerate(concepts):
                     for i in range(subset_n):
-                        for factor in common_steering_factors:
+                        for factor in steering_factors:
                             all_examples += [
                                 [dataset_name, idx, concept, i, factor, "Once upon a time, there was a ", ]
                             ]
@@ -79,7 +77,6 @@ class SteeringDatasetFactory(object):
                 assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
                 alpaca_eval_path = os.path.join(self.master_data_dir, "alpaca_eval.json")
                 alpaca_eval_df = pd.read_json(alpaca_eval_path)
-                common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
 
                 # get gpt-4o boosted steering prompts.
                 steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
@@ -100,7 +97,7 @@ class SteeringDatasetFactory(object):
                         formatted_prompt = self.tokenizer.apply_chat_template(
                             [{"role": "user", "content": sampled_prompt}], 
                             tokenize=False, add_generation_prompt=True)
-                        for factor in common_steering_factors:
+                        for factor in steering_factors:
                             all_examples += [[
                                 dataset_name, idx, concept, i, factor, 
                                 sampled_prompt, formatted_steered_prompt, formatted_prompt
@@ -116,7 +113,7 @@ class SteeringDatasetFactory(object):
                 assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
                 alpaca_eval_path = os.path.join(self.master_data_dir, "alpaca_eval.json")
                 alpaca_eval_df = pd.read_json(alpaca_eval_path)
-                common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
+                common_steering_factors = steering_factors
                 if dataset_name == "AlpacaEval_Suppress":
                     common_steering_factors = [f*-1.0 for f in common_steering_factors]
                 # get gpt-4o boosted steering prompts.
