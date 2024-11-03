@@ -5,7 +5,7 @@ axbench/demo/
 *.out
 axbench/results/
 local_exp.sh
-*.sh
+exp*.sh
 axbench/data/persist_lm_cache
 
 # Byte-compiled / optimized / DLL files

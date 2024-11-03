@@ -21,8 +21,8 @@ latent_num_of_examples: 50
 # steering related params
 steering_model_name: "google/gemma-2-2b-it"
 n_steering_factors: 10
-steering_datasets: ["AlpacaEval_Suppress"]
-# "OUATPrefix", "AlpacaEval", "AlpacaEval_Suppress", "MMLU", "BBQ"
+steering_datasets: ["AlpacaEval"]
+# "OUATPrefix", "AlpacaEval", "AlpacaEval_Suppress", "AlpacaEval_Synergy", "MMLU", "BBQ"
 steering_batch_size: 32
 steering_output_length: 128
 steering_num_of_examples: 20

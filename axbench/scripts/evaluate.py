@@ -169,16 +169,7 @@ def process_jsonl_file(jsonl_lines):
     return jsonl_lines
 
 
-def plot_steering(dump_dir):
-    dump_dir = Path(dump_dir) / "evaluate"
-    # aggregate all results
-    file_list = sorted(glob.glob(os.path.join(dump_dir, 'steering_fragment_*.jsonl')))
-    aggregated_results = []
-    for file_path in file_list:
-        aggregated_results += process_jsonl_file(
-            load_jsonl(file_path))
-
-    # other plot goes here
+def plot_steering(aggregated_results, dump_dir):
     try:
         plot_metric(
             jsonl_data=aggregated_results, 
@@ -254,7 +245,7 @@ def eval_steering_single_task(args_tuple):
             model_name, dump_dir=dump_dir, 
             concept_id=concept_id, lm_model=lm_model)
         eval_result = evaluator.compute_metrics(current_df)
-        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report())
+        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report(), current_df)
     finally:
         # Properly close both the HTTP client and async client
         async def cleanup():
@@ -286,14 +277,6 @@ def eval_steering(args):
         for model_name in args.models
         if model_name not in STEERING_EXCLUDE_MODELS
     ]
-    
-    if not all_tasks:
-        logger.warning("No tasks to evaluate")
-        # Generate final plot
-        logger.warning("Generating final plot...")
-        plot_steering(dump_dir)
-        logger.warning("Evaluation completed!")
-        return
 
     # Group results by concept_id
     all_results = {}
@@ -303,8 +286,9 @@ def eval_steering(args):
     if not hasattr(args, 'num_of_workers') or args.num_of_workers is None:
         args.num_of_workers = max(1, multiprocessing.cpu_count() - 1)
     lm_reports = []
+    all_dfs = []
     with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-        for concept_id, evaluator_str, model_str, result, lm_report in executor.map(
+        for concept_id, evaluator_str, model_str, result, lm_report, current_df in executor.map(
             eval_steering_single_task, all_tasks):
             if concept_id not in all_results:
                 all_results[concept_id] = {}
@@ -312,8 +296,9 @@ def eval_steering(args):
                 all_results[concept_id][evaluator_str] = {}
             all_results[concept_id][evaluator_str][model_str] = result
             lm_reports += [lm_report]
+            all_dfs += [current_df]
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
-    
+
     # Batch save all results
     logger.warning("Saving all results...")
     for concept_id, eval_results in sorted(all_results.items()):
@@ -325,6 +310,46 @@ def eval_steering(args):
             eval_results, 
             rotation_freq
         )
+
+    dump_dir = Path(dump_dir) / "evaluate"
+    file_list = sorted(glob.glob(os.path.join(dump_dir, 'steering_fragment_*.jsonl')))
+    aggregated_results = []
+    for file_path in file_list:
+        aggregated_results += process_jsonl_file(
+            load_jsonl(file_path))
+    
+    # Do the optional second round of scoring
+    if args.run_elo:
+        best_factors = {}
+        for result in aggregated_results:
+            best_factors[result["concept_id"]] = {}
+            # pick the best factor each method
+            for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
+                best_factor = scores["factor"][np.argmax(scores["lm_judge_rating"])]
+                # one caveat here is the best factor for prompt steering is the 0th element
+                best_factors[result["concept_id"]][method] = best_factor
+        
+        df_generator = data_generator(args.data_dir, mode="steering")
+        _include_columns = ["dataset_name", "concept_id", "input_id", "factor", "original_prompt"]
+        for concept_id, current_df in df_generator:
+            # if concept_id >= start_concept_id:
+            concept_best_dfs = {}
+            for method, factor in best_factors[concept_id].items():
+                include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
+                method_df = current_df[include_columns]
+                method_best_df = method_df[method_df["factor"]==factor]
+                concept_best_dfs[method] = method_best_df.copy()
+                concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
+            for method in best_factors[concept_id].keys():
+                # Use merge instead of direct assignment to ensure proper alignment
+                concept_best_df = concept_best_df.merge(
+                    concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
+                    on=['concept_id', 'input_concept', 'input_id'],
+                    how='left')
+            print(concept_best_df)
+            # now we run pairise ELO against prompt steering.
+            ELO_baseline = "ReAX_steered_generation"
+            FAIL()
 
     # Aggregate LM reports
     aggregated_lm_report = {
@@ -340,7 +365,7 @@ def eval_steering(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_steering(dump_dir)
+    plot_steering(aggregated_results, dump_dir)
     logger.warning("Evaluation completed!")
 
 

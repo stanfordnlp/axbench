@@ -133,12 +133,12 @@ class LMJudgeEvaluator(Evaluator):
             f"Starting task for concept_id: {self.concept_id}, "
             f"model: {self.model_name}, evaluator: {self.__str__()}")
 
-        data = data.copy()
+        data_copy = data.copy()
         
         # Using OpenAI API to judge the quality of the generated data
         prompts = []
         # This is a generation dataset.
-        for _, row in data.iterrows():
+        for _, row in data_copy.iterrows():
             if self.template == GENERATION_RATING_TEMPLATE:
                 prompts += [self.template % (
                     row["input_concept"], row["input"] + row[f"{self.model_name}_steered_generation"])]
@@ -166,16 +166,17 @@ class LMJudgeEvaluator(Evaluator):
             # If no event loop exists, create one
             completions = asyncio.run(process_batch())
 
-        data[f"{self.model_name}_lm_judge_rating"] = self._get_ratings_from_completions(
-            completions)
-
+        ratings = self._get_ratings_from_completions(completions)
+        data_copy[f"{self.model_name}_lm_judge_rating"] = ratings
+        # overwrite the original data to add new ratings.
+        data[f"{self.model_name}_lm_judge_rating"] = ratings
         metrics = {
             "lm_judge_rating": [],
             "factor": []
         }
         
         # group by factor only and compute means
-        grouped = data.groupby("factor")
+        grouped = data_copy.groupby("factor")
         for factor, group in grouped:
             lm_judge_rating = group[f"{self.model_name}_lm_judge_rating"].mean()
             metrics["lm_judge_rating"].append(lm_judge_rating)

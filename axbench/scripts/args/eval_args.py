@@ -15,6 +15,7 @@ class EvalArgs:
     dump_dir: Optional[str] = None
     num_of_workers: Optional[int] = 16
     lm_model: Optional[str] = None
+    run_elo: Optional[bool] = None
     # Add any other parameters as needed
 
     def __init__(
