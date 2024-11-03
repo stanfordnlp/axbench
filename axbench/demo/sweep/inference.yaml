@@ -2,9 +2,7 @@ models: [
   # "LinearProbe", 
   # "IntegratedGradients", 
   # "InputXGradients",
-  # "L1LinearProbe",
-  "ReAX", "GemmaScopeSAE", 
-  # "MeanPositiveActivation", "PromptSteering",
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
@@ -20,7 +18,6 @@ latent_num_of_examples: 50
 
 # steering related params
 steering_model_name: "google/gemma-2-2b-it"
-n_steering_factors: 10
 steering_datasets: ["AlpacaEval"]
 # "OUATPrefix", "AlpacaEval", "AlpacaEval_Suppress", "AlpacaEval_Synergy", "MMLU", "BBQ"
 steering_batch_size: 32

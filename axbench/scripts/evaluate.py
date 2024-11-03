@@ -33,8 +33,9 @@ import httpx, asyncio
 import axbench
 from axbench import (
     plot_aggregated_roc, 
-    plot_metric,
-    plot_accuracy_bars
+    plot_metrics,
+    plot_accuracy_bars,
+    plot_win_rates
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -87,7 +88,37 @@ def data_generator(data_dir, mode):
         yield (concept_id, df_subset)
 
 
-def save_results(dump_dir, state, concept_id, partition, eval_results, rotation_freq):
+def winrate_data_generator(data_dir, aggregated_results):
+    best_factors = {}
+    for result in aggregated_results:
+        best_factors[result["concept_id"]] = {}
+        # pick the best factor each method
+        for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
+            best_factor = scores["factor"][np.argmax(scores["lm_judge_rating"])]
+            # one caveat here is the best factor for prompt steering is the 0th element
+            best_factors[result["concept_id"]][method] = best_factor
+    
+    df_generator = data_generator(data_dir, mode="steering")
+    best_dfs = []
+    for concept_id, current_df in df_generator:
+        # if concept_id >= start_concept_id:
+        concept_best_dfs = {}
+        for method, factor in best_factors[concept_id].items():
+            include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
+            method_df = current_df[include_columns]
+            method_best_df = method_df[method_df["factor"]==factor]
+            concept_best_dfs[method] = method_best_df.copy()
+            concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
+        for method in best_factors[concept_id].keys():
+            # Use merge instead of direct assignment to ensure proper alignment
+            concept_best_df = concept_best_df.merge(
+                concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
+                on=['concept_id', 'input_concept', 'input_id'],
+                how='left')
+        yield (concept_id, concept_best_df)
+
+
+def save_results(dump_dir, state, concept_id, partition, eval_results):
     """
     Save the results dictionary to a .jsonl file.
     Each line in the file represents one concept_id's evaluation results.
@@ -102,8 +133,7 @@ def save_results(dump_dir, state, concept_id, partition, eval_results, rotation_
         pickle.dump(state, f)
     
     # Define the output file path for JSON Lines
-    fragment_index = concept_id // rotation_freq
-    result_path = Path(dump_dir) / f"{partition}_fragment_{fragment_index}.jsonl"
+    result_path = Path(dump_dir) / f"{partition}.jsonl"
     result_entry = {
         "concept_id": int(concept_id),
         "results": eval_results
@@ -148,20 +178,6 @@ def combine_scores(concept_data):
     return combined_evaluator
 
 
-def process_jsonl_file(file_path):
-    temp_fd, temp_path = tempfile.mkstemp()
-    try:
-        with os.fdopen(temp_fd, 'w') as temp_file, open(file_path, 'r') as input_file:
-            for line in input_file:
-                data = json.loads(line.strip())
-                data["results"]["LMJudgeConceptFollowingEvaluator"] = combine_scores(data)
-                temp_file.write(json.dumps(data) + '\n')
-        os.replace(temp_path, file_path)
-    except Exception as e:
-        os.unlink(temp_path)
-        raise e
-
-
 def process_jsonl_file(jsonl_lines):
     for data in jsonl_lines:
         data["results"]["LMJudgeConceptFollowingEvaluator"] = \
@@ -171,45 +187,46 @@ def process_jsonl_file(jsonl_lines):
 
 def plot_steering(aggregated_results, dump_dir):
     try:
-        plot_metric(
-            jsonl_data=aggregated_results, 
-            evaluator_name='PerplexityEvaluator', 
-            metric_name='perplexity', 
-            y_label='Perplexity', 
-            use_log_scale=True, 
+        configs = [
+            {
+                'evaluator_name': 'PerplexityEvaluator',
+                'metric_name': 'perplexity',
+                'y_label': 'Perplexity',
+                'use_log_scale': True
+            },
+            {
+                'evaluator_name': 'PerplexityEvaluator',
+                'metric_name': 'strength',
+                'y_label': 'Strength',
+                'use_log_scale': False
+            },
+            {
+                'evaluator_name': 'LMJudgeConceptEvaluator',
+                'metric_name': 'lm_judge_rating',
+                'y_label': 'Steering',
+                'use_log_scale': False
+            },
+            {
+                'evaluator_name': 'LMJudgeFollowingEvaluator',
+                'metric_name': 'lm_judge_rating',
+                'y_label': 'Relevance',
+                'use_log_scale': False
+            },
+            {
+                'evaluator_name': 'LMJudgeConceptFollowingEvaluator',
+                'metric_name': 'lm_judge_rating',
+                'y_label': 'Steering*Relevance',
+                'use_log_scale': False
+            }
+        ]
+        plot_metrics(
+            jsonl_data=aggregated_results,
+            configs=configs,
             write_to_path=dump_dir
         )
-        plot_metric(
-            jsonl_data=aggregated_results, 
-            evaluator_name='PerplexityEvaluator', 
-            metric_name='strength', 
-            y_label='Strength', 
-            use_log_scale=False, 
-            write_to_path=dump_dir
-        )
-        plot_metric(
-            jsonl_data=aggregated_results, 
-            evaluator_name='LMJudgeConceptEvaluator', 
-            metric_name='lm_judge_rating', 
-            y_label='Steering', 
-            use_log_scale=False, 
-            write_to_path=dump_dir
-        )
-        plot_metric(
-            jsonl_data=aggregated_results, 
-            evaluator_name='LMJudgeFollowingEvaluator', 
-            metric_name='lm_judge_rating', 
-            y_label='Relevance', 
-            use_log_scale=False, 
-            write_to_path=dump_dir
-        )
-        plot_metric(
-            jsonl_data=aggregated_results, 
-            evaluator_name='LMJudgeConceptFollowingEvaluator', 
-            metric_name='lm_judge_rating', 
-            y_label='Steering+Relevance', 
-            use_log_scale=False, 
-            write_to_path=dump_dir
+        plot_win_rates(
+            jsonl_data=aggregated_results,
+            write_to_path=dump_dir  # Replace with your desired output directory
         )
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
@@ -217,7 +234,7 @@ def plot_steering(aggregated_results, dump_dir):
 
 def eval_steering_single_task(args_tuple):
     """Helper function to evaluate a single concept-model-evaluator combination"""
-    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model = args_tuple
+    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model, winrate_baseline = args_tuple
     
     # Create LanguageModel instance within the worker process
     client = AsyncOpenAI(
@@ -243,7 +260,7 @@ def eval_steering_single_task(args_tuple):
         evaluator_class = getattr(axbench, evaluator_name)
         evaluator = evaluator_class(
             model_name, dump_dir=dump_dir, 
-            concept_id=concept_id, lm_model=lm_model)
+            concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report(), current_df)
     finally:
@@ -251,6 +268,7 @@ def eval_steering_single_task(args_tuple):
         async def cleanup():
             await client.close()
         asyncio.run(cleanup())
+
 
 def eval_steering(args):
     """
@@ -270,7 +288,7 @@ def eval_steering(args):
 
     # Create all evaluation tasks - flattened for maximum parallelization
     all_tasks = [
-        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model)
+        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model, args.winrate_baseline)
         for concept_id, current_df in df_generator
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
@@ -298,58 +316,52 @@ def eval_steering(args):
             lm_reports += [lm_report]
             all_dfs += [current_df]
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
-
+    
     # Batch save all results
-    logger.warning("Saving all results...")
     for concept_id, eval_results in sorted(all_results.items()):
         save_results(
             dump_dir, 
             {"concept_id": concept_id + 1}, 
             concept_id, 
             'steering', 
-            eval_results, 
-            rotation_freq
+            eval_results,
         )
 
-    dump_dir = Path(dump_dir) / "evaluate"
-    file_list = sorted(glob.glob(os.path.join(dump_dir, 'steering_fragment_*.jsonl')))
-    aggregated_results = []
-    for file_path in file_list:
-        aggregated_results += process_jsonl_file(
-            load_jsonl(file_path))
-    
-    # Do the optional second round of scoring
-    if args.run_elo:
-        best_factors = {}
-        for result in aggregated_results:
-            best_factors[result["concept_id"]] = {}
-            # pick the best factor each method
-            for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
-                best_factor = scores["factor"][np.argmax(scores["lm_judge_rating"])]
-                # one caveat here is the best factor for prompt steering is the 0th element
-                best_factors[result["concept_id"]][method] = best_factor
-        
-        df_generator = data_generator(args.data_dir, mode="steering")
-        _include_columns = ["dataset_name", "concept_id", "input_id", "factor", "original_prompt"]
-        for concept_id, current_df in df_generator:
-            # if concept_id >= start_concept_id:
-            concept_best_dfs = {}
-            for method, factor in best_factors[concept_id].items():
-                include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
-                method_df = current_df[include_columns]
-                method_best_df = method_df[method_df["factor"]==factor]
-                concept_best_dfs[method] = method_best_df.copy()
-                concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
-            for method in best_factors[concept_id].keys():
-                # Use merge instead of direct assignment to ensure proper alignment
-                concept_best_df = concept_best_df.merge(
-                    concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
-                    on=['concept_id', 'input_concept', 'input_id'],
-                    how='left')
-            print(concept_best_df)
-            # now we run pairise ELO against prompt steering.
-            ELO_baseline = "ReAX_steered_generation"
-            FAIL()
+    # Reload for plotting and optional winrate
+    aggregated_results = process_jsonl_file(
+            load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
+
+    if args.run_winrate:
+        winrate_results = {}
+        winrate_df_generator = winrate_data_generator(data_dir, aggregated_results)
+        # Create all winrate evaluation tasks - flattened for maximum parallelization
+        winrate_tasks = [
+            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline)
+            for concept_id, current_df in winrate_df_generator
+            if concept_id >= start_concept_id
+            for model_name in args.models
+            if model_name != args.winrate_baseline
+        ]
+
+        winrate_dfs = []
+        with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
+            for concept_id, __builtins__, model_str, result, lm_report, current_df in executor.map(
+                eval_steering_single_task, winrate_tasks):
+                if concept_id not in winrate_results:
+                    winrate_results[concept_id] = {}
+                winrate_results[concept_id][model_str] = result
+                lm_reports += [lm_report]
+                winrate_dfs += [current_df]
+                logger.warning(f"Completed winrate task for concept_id: {concept_id}, model: {model_str}")
+
+        for concept_id, winrate_result in winrate_results.items():
+            aggregated_results[concept_id]["results"]["WinRateEvaluator"] = winrate_result
+
+        # update the winrate jsonl file
+        result_path = Path(dump_dir) / "evaluate" / f"steering.jsonl"
+        with open(result_path, "w") as f:
+            for result_entry in aggregated_results:
+                f.write(json.dumps(result_entry) + "\n")
 
     # Aggregate LM reports
     aggregated_lm_report = {
@@ -365,7 +377,7 @@ def eval_steering(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_steering(aggregated_results, dump_dir)
+    plot_steering(aggregated_results, Path(dump_dir) / "evaluate")
     logger.warning("Evaluation completed!")
 
 
@@ -384,17 +396,12 @@ def load_jsonl(jsonl_path):
 def plot_latent(dump_dir):
     dump_dir = Path(dump_dir) / "evaluate"
     # aggregate all results
-    file_list = sorted(glob.glob(os.path.join(dump_dir, 'latent_fragment_*.jsonl')))
-    aggregated_results = []
-    for file_path in file_list:
-        aggregated_results += load_jsonl(file_path)
+    aggregated_results = load_jsonl(os.path.join(dump_dir, 'latent.jsonl'))
     try:
         plot_aggregated_roc(aggregated_results, write_to_path=dump_dir)
         plot_accuracy_bars(aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir)
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
-
-    # other plot goes here
 
 
 def eval_latent(args):
@@ -428,7 +435,7 @@ def eval_latent(args):
                 eval_results[evaluator.__str__()][model_name.__str__()] = eval_result
         save_results(
             dump_dir, {"concept_id": concept_id + 1}, 
-            concept_id, 'latent', eval_results, rotation_freq)
+            concept_id, 'latent', eval_results)
 
     # Generate final plot
     logger.warning("Generating final plot...")
