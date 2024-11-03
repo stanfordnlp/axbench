@@ -170,7 +170,7 @@ def combine_scores(concept_data):
         following_ratings = following_scores[method]["lm_judge_rating"]
         factors = concept_scores[method]["factor"]  # factors are same in both
         # Multiply corresponding scores
-        combined_ratings = [(c * f) for c, f in zip(concept_ratings, following_ratings)]
+        combined_ratings = [(c*f) for c, f in zip(concept_ratings, following_ratings)]
         combined_evaluator[method] = {
             "lm_judge_rating": combined_ratings,
             "factor": factors
@@ -353,6 +353,10 @@ def eval_steering(args):
                 lm_reports += [lm_report]
                 winrate_dfs += [current_df]
                 logger.warning(f"Completed winrate task for concept_id: {concept_id}, model: {model_str}")
+
+        if len(winrate_dfs) > 0:
+            winrate_df = pd.concat(winrate_dfs)
+            winrate_df.to_parquet(Path(dump_dir) / "evaluate" / f"winrate_df.parquet", engine='pyarrow')
 
         for concept_id, winrate_result in winrate_results.items():
             aggregated_results[concept_id]["results"]["WinRateEvaluator"] = winrate_result

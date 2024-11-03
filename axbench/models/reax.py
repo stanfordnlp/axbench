@@ -22,6 +22,7 @@ from pyvene import (
 from pyreax import (
     EXAMPLE_TAG, 
     MaxReLUIntervention, 
+    AdditionIntervention,
     SubspaceAdditionIntervention,
     make_data_module, 
 )
@@ -54,7 +55,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )

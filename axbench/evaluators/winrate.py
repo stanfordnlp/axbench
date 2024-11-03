@@ -63,14 +63,15 @@ class WinRateEvaluator(Evaluator):
 
     def _get_final_verdict(self, text):
         # Try to find text inside either [[...]] or [...]
-        verdict = re.search(r'\[{1,2}(.*?)\]{1,2}', text)
+        verdict = re.search(r'\[\[(.*?)\]\]$', text.strip())
         try:
             if verdict:
                 return verdict.group(1)
             else:
                 # If no verdict in brackets, return the last letter of the text
-                if text.strip()[-1].upper() in ["A", "B", "C"]:
-                    return text.strip()[-1].upper()
+                pred_answers = re.findall(r'A|B|C', text.strip())
+                if pred_answers:
+                    return pred_answers[-1]
                 else:
                     return "C" # default to a tie
         except Exception as e:

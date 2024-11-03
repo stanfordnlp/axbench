@@ -6,9 +6,8 @@ output_length: 10
 num_of_examples: 72
 rotation_freq: 1000
 # concept_path: "axbench/demo/concepts.csv"
-# dump_dir: "axbench/demo"
 concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k"
+dump_dir: "axbench/demo"
 max_concepts: 6
 
 # master data dir is shared across all jobs.

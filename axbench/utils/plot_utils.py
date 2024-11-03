@@ -164,6 +164,7 @@ def plot_metrics(jsonl_data, configs, write_to_path=None):
 
 
 def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
+    
     # Get unique methods and sort them
     methods = set()
     for entry in jsonl_data:
@@ -205,22 +206,20 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
             position=position_dodge(width=0.8),
             va='bottom',
             size=8,
-            format_string='{:.2f}',
-            nudge_y=0.01
+            format_string='{:.2f}'
         ) +
+        ylim(0, 1) +  # Set y-axis limits from 0 to 1
         theme_bw() +
-        labs(x='Method', y='Accuracy', title='Hard Negative Accuracy Comparison') +
+        labs(x='Method', y='Accuracy') +
         theme(
-            axis_text_x=element_text(rotation=45, hjust=1),
-            figure_size=(6, 4),
+            figure_size=(5, 2),
             legend_position='right',
-            legend_title=element_text(size=8),
-            legend_text=element_text(size=6),
-            axis_title=element_text(size=10),
-            axis_text=element_text(size=8),
-            plot_title=element_text(size=12)
-        ) +
-        ylim(0, 1.05)  # Set y-axis limits from 0 to 1 with 5% headroom
+            legend_title=element_text(size=5),
+            legend_text=element_text(size=5),
+            axis_title=element_text(size=5),
+            axis_text=element_text(size=5),
+            plot_title=element_text(size=5)
+        )
     )
     
     # Save or show the plot
@@ -324,7 +323,7 @@ def plot_win_rates(jsonl_data, write_to_path=None):
             axis_title=element_text(size=4),
             legend_title=element_text(size=4),
             legend_text=element_text(size=4),
-            figure_size=(4, len(sorted_methods) * 0.4 + 0.5)
+            figure_size=(3, len(sorted_methods) * 0.2 + 0.3)
         ) +
         scale_fill_manual(
             values={'Win': '#a6cee3', 'Tie': '#bdbdbd', 'Loss': '#fbb4ae'},

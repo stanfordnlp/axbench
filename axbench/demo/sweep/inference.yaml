@@ -6,7 +6,6 @@ models: [
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
-# for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
 model_name: "google/gemma-2-2b"
 data_dir: "axbench/demo/generate"
 train_dir: "axbench/demo/train"
