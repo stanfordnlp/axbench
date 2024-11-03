@@ -4,6 +4,8 @@ axbench/data/*.json
 axbench/demo/
 *.out
 axbench/results/
+set_key.py
+uv.lock
 local_exp.sh
 exp*.sh
 axbench/data/persist_lm_cache

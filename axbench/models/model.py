@@ -3,6 +3,9 @@ import pandas as pd
 from pyreax import (
     gather_residual_activations, 
 )
+from pyvene import (
+    IntervenableModel,
+)
 
 
 class Model(object):
@@ -14,6 +17,8 @@ class Model(object):
         self.layer = layer
         self.training_args = training_args
         self.max_activations = {}
+        # Set default device to GPU if available, otherwise CPU
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     def make_model(self, **kwargs):
         pass
@@ -47,8 +52,8 @@ class Model(object):
             f"{dump_dir}/{model_name}_bias.pt"
         )
         self.make_model(low_rank_dimension=weight.shape[1], **kwargs)
-        self.ax.proj.weight.data = weight.cuda()
-        self.ax.proj.bias.data = bias.cuda()
+        self.ax.proj.weight.data = weight.to(self.device)
+        self.ax.proj.bias.data = bias.to(self.device)
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
@@ -63,13 +68,13 @@ class Model(object):
         # Process in batches
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
-            # Batch encode all inputs
+            # Batch encode all inputs and send to model's device
             inputs = self.tokenizer(
                 batch["input"].tolist(),
                 return_tensors="pt",
                 padding=True,
                 add_special_tokens=True
-            ).to("cuda")
+            ).to(self.device)  # Use model's device
             
             act_in = gather_residual_activations(
                 self.model, self.layer, inputs)
@@ -117,15 +122,15 @@ class Model(object):
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
             input_strings = batch_examples['input'].tolist()
-            mag = torch.tensor(batch_examples['factor'].tolist()).to("cuda")
-            idx = torch.tensor(batch_examples[concept_id_col].tolist()).to("cuda")
+            mag = torch.tensor(batch_examples['factor'].tolist()).to(self.device)
+            idx = torch.tensor(batch_examples[concept_id_col].tolist()).to(self.device)
             max_acts = torch.tensor([
                 self.max_activations.get(id, 1.0) 
-                for id in batch_examples[concept_id_col].tolist()]).to("cuda")
+                for id in batch_examples[concept_id_col].tolist()]).to(self.device)
             # tokenize input_strings
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
-            ).to("cuda")
+            ).to(self.device)
             _, generations = self.ax_model.generate(
                 inputs, 
                 unit_locations=None, intervene_on_prompt=True, 
@@ -145,7 +150,7 @@ class Model(object):
 
             # Calculate perplexity for each sequence
             batch_input_ids = self.tokenizer(
-                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to("cuda")
+                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to(self.device)
             batch_attention_mask = (batch_input_ids != self.tokenizer.pad_token_id).float()
             
             # Forward pass without labels to get logits
@@ -215,3 +220,12 @@ class Model(object):
                     max_activations[concept_id] = max_act
         self.max_activations = max_activations
         return max_activations  
+
+    def to(self, device):
+        """Move model to specified device"""
+        self.device = device
+        if hasattr(self, 'ax'):
+            self.ax = self.ax.to(device)
+            if isinstance(self.ax, IntervenableModel):
+                self.ax.set_device(device)
+        return self
