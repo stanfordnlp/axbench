@@ -13,7 +13,7 @@ models: [
 model_name: "google/gemma-2-2b"
 data_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/generate"
 train_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/train"
-dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k/"
+dump_dir: "axbench/results/gemma-2-2b_20-gemmascope-res-16k"
 
 # latent related params
 input_length: 32
@@ -23,7 +23,7 @@ latent_num_of_examples: 100
 n_steering_factors: 10
 steering_datasets: ["OUATPrefix"]
 # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
-steering_batch_size: 256
+steering_batch_size: 16
 steering_output_length: 128
 steering_num_of_examples: 20
 
