@@ -2,13 +2,10 @@ models: [
   # "LinearProbe", 
   # "IntegratedGradients", 
   # "InputXGradients",
-  # "L1LinearProbe",
-  "ReAX", "GemmaScopeSAE", 
-  # "MeanPositiveActivation", "PromptSteering",
+  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
-# for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
 model_name: "google/gemma-2-2b"
 data_dir: "axbench/demo/generate"
 train_dir: "axbench/demo/train"
@@ -20,9 +17,8 @@ latent_num_of_examples: 50
 
 # steering related params
 steering_model_name: "google/gemma-2-2b-it"
-n_steering_factors: 10
-steering_datasets: ["AlpacaEval_Suppress"]
-# "OUATPrefix", "AlpacaEval", "AlpacaEval_Suppress", "MMLU", "BBQ"
+steering_datasets: ["AlpacaEval"]
+# "OUATPrefix", "AlpacaEval", "AlpacaEval_Suppress", "AlpacaEval_Synergy", "MMLU", "BBQ"
 steering_batch_size: 32
 steering_output_length: 128
 steering_num_of_examples: 20

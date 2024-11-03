@@ -15,8 +15,8 @@ from pyreax import LanguageModel
 
 
 def OUATPrefix_steering_factors(n):
-    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-    # return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 5.0, 10.0]
+    # return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
+    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 5.0, 10.0]
 
 T_PROMPT_STEERING = """You must answer the question with content \
 related to %s even if it is not related to the question or it does not make sense."""
@@ -111,13 +111,14 @@ class SteeringDatasetFactory(object):
                         'dataset_name', 'concept_id', 'input_concept', 
                         'input_id', 'factor', 'original_prompt', 'steered_input', 'input'])
                 return df
-            elif dataset_name == "AlpacaEval_Suppress":
+            elif dataset_name == "AlpacaEval_Suppress" or dataset_name == "AlpacaEval_Synergy":
                 # load alpaca eval dataset.
                 assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
                 alpaca_eval_path = os.path.join(self.master_data_dir, "alpaca_eval.json")
                 alpaca_eval_df = pd.read_json(alpaca_eval_path)
                 common_steering_factors = OUATPrefix_steering_factors(n_steering_factors)
-                common_steering_factors = [f*-1.0 for f in common_steering_factors]
+                if dataset_name == "AlpacaEval_Suppress":
+                    common_steering_factors = [f*-1.0 for f in common_steering_factors]
                 # get gpt-4o boosted steering prompts.
                 steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
                 steering_prompts = [prompt.strip() for prompt in steering_prompts]
