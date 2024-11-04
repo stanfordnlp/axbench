@@ -18,6 +18,7 @@ from .utils.model_utils import *
 from .utils.prompt_utils import *
 from .language_models import *
 
+from dataset_dspy import Reaxoor
 
 async def run_tasks(tasks):
     # Gather and run all provided tasks concurrently, and collect their results
@@ -137,8 +138,15 @@ class ReAXFactory(object):
         elapsed = round(end-start, 3)
         logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
+    
+    def create_train_df_dspy(self, concepts, n):
+        reaxoor = Reaxoor()
+        return reaxoor(concepts, n)
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
+        if kwargs.get("dspy", False):
+            return self.create_train_df_dspy(concepts, n)
+
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()
