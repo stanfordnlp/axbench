@@ -184,7 +184,7 @@ class Model(object):
             "strength": all_strenghts,
         }
 
-    def get_logits(self, concept_id):
+    def get_logits(self, concept_id, k=10):
         top_logits, neg_logits = [None], [None]
         if concept_id is not None:
             W_U = self.model.lm_head.weight.T
@@ -195,11 +195,11 @@ class Model(object):
             )
 
             vocab_logits = self.ax.proj.weight.data[concept_id] @ W_U
-            top_values, top_indices = vocab_logits.topk(k=10, sorted=True)
+            top_values, top_indices = vocab_logits.topk(k=k, sorted=True)
             top_tokens = self.tokenizer.batch_decode(top_indices.unsqueeze(dim=-1))
             top_logits = [list(zip(top_tokens, top_values.tolist()))]
             
-            neg_values, neg_indices = vocab_logits.topk(k=10, largest=False, sorted=True)
+            neg_values, neg_indices = vocab_logits.topk(k=k, largest=False, sorted=True)
             neg_tokens = self.tokenizer.batch_decode(neg_indices.unsqueeze(dim=-1))
             neg_logits = [list(zip(neg_tokens, neg_values.tolist()))]
         return top_logits, neg_logits

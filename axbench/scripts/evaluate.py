@@ -169,7 +169,7 @@ def combine_scores(concept_data):
         following_ratings = following_scores[method]["lm_judge_rating"]
         factors = concept_scores[method]["factor"]  # factors are same in both
         # Multiply corresponding scores
-        combined_ratings = [(c*f) for c, f in zip(concept_ratings, following_ratings)]
+        combined_ratings = [(c) for c, f in zip(concept_ratings, following_ratings)]
         combined_evaluator[method] = {
             "lm_judge_rating": combined_ratings,
             "factor": factors
@@ -503,6 +503,42 @@ def main():
         eval_steering(args)
 
     if args.report_to is not None and "wandb" in args.report_to:
+        if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file() and \
+            (Path(args.dump_dir) / "evaluate" / "latent.jsonl").is_file():
+            # log more metadata into wandb for visualization
+            metadata_path = Path(args.dump_dir) / "generate" / "metadata.jsonl"
+            metadata = load_jsonl(metadata_path)
+            steering_path = Path(args.dump_dir) / "evaluate" / "steering.jsonl"
+            steering_results = load_jsonl(steering_path)
+            latent_path = Path(args.dump_dir) / "evaluate" / "latent.jsonl"
+            latent_results = load_jsonl(latent_path)
+            top_logits_path = Path(args.dump_dir) / "inference" / "top_logits.jsonl"
+            top_logits_results = load_jsonl(top_logits_path)
+
+            concepts = []
+            idx = 0
+            for metadata_entry in metadata:
+                for concept in metadata_entry["concepts"]:
+                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
+                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
+                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
+                    top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
+                    neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
+                    concepts += [[
+                        idx, concept, winrate, auc, max_act, 
+                    ]]
+                    top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
+                    neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
+                    wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
+                                                    title=f"{concept} ({idx})")})
+                    wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
+                                                    title=f"{concept} ({idx})")})
+                    idx += 1
+            wandb.log({
+                "concept_table":  wandb.Table(
+                    columns=[
+                        "concept_id", "concept", "winrate", "auc", 
+                        "max_act"], data=concepts)})
         run.finish()
 
 

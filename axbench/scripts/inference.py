@@ -462,6 +462,33 @@ def infer_latent(args):
         # Save the combined results
         save(dump_dir, {"concept_id": concept_id + 1}, "latent",
              current_df)
+    
+    logger.warning("Saving top logits...")
+    for concept_id in concept_ids:
+        all_top_logits = {}
+        for model_name in args.models:
+            if model_name in LATENT_EXCLUDE_MODELS:
+                continue
+            # calculate the logit lens results
+            model_class = getattr(axbench, model_name)
+            benchmark_model = model_class(
+                device_lm_models[available_devices[0]], tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=available_devices[0]
+            )
+            benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
+            benchmark_model.to(available_devices[0])
+            top_logits, neg_logits = benchmark_model.get_logits(concept_id, k=10)
+            all_top_logits[model_name] = {
+                "top_logits": top_logits,
+                "neg_logits": neg_logits
+            }
+        top_logits_entry = {
+            "concept_id": int(concept_id),
+            "results": all_top_logits
+        }
+        with open(Path(dump_dir) / "inference" / "top_logits.jsonl", "a") as f:
+            f.write(json.dumps(top_logits_entry) + "\n")
 
 
 def main():

@@ -60,7 +60,7 @@ class TrainingArgs:
         # Define global and hierarchical parameters
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
-            'data_dir', 'dump_dir'
+            'data_dir', 'dump_dir',
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'k_latent_null_loss',

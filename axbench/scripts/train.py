@@ -147,7 +147,7 @@ def main():
 
     dump_dir = Path(args.dump_dir) / "train"
     dump_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"
