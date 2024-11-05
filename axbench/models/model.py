@@ -1,5 +1,6 @@
 import torch, einops, os
 import pandas as pd
+from tqdm.auto import tqdm
 from pyreax import (
     gather_residual_activations, 
 )
@@ -119,6 +120,8 @@ class Model(object):
         all_generations = []
         all_perplexities = []
         all_strenghts = []
+
+        progress_bar = tqdm(range(0, len(examples), batch_size))
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
             input_strings = batch_examples['input'].tolist()
@@ -173,6 +176,7 @@ class Model(object):
             seq_perplexities = torch.exp(seq_losses).tolist()
             all_perplexities.extend(seq_perplexities)
             all_strenghts.extend((mag*max_acts).tolist())
+            progress_bar.update(1)
 
         return {
             "steered_generation": all_generations,
@@ -211,13 +215,8 @@ class Model(object):
                 # loop through unique sorted concept_id
                 for concept_id in sorted(latent["concept_id"].unique()):
                     concept_latent = latent[latent["concept_id"] == concept_id]
-                    # group id if this concept
-                    group_id = concept_latent["group_id"].iloc[0]
-                    # get the mean activation of this group but not with this concept_id
-                    group_latent = latent[latent["group_id"] == group_id]
-                    group_latent = group_latent[group_latent["concept_id"] != concept_id]
-                    max_act = group_latent["ReAX_max_act"].max()
-                    max_activations[concept_id] = max_act
+                    max_act = concept_latent["ReAX_max_act"].max()
+                    max_activations[concept_id] = max_act if max_act > 0 else 50
         self.max_activations = max_activations
         return max_activations  
 
@@ -226,6 +225,9 @@ class Model(object):
         self.device = device
         if hasattr(self, 'ax'):
             self.ax = self.ax.to(device)
-            if isinstance(self.ax_model, IntervenableModel):
-                self.ax_model.set_device(device)
+            if hasattr(self, 'ax_model'):
+                if isinstance(self.ax_model, IntervenableModel):
+                    self.ax_model.set_device(device)
+                else:
+                    self.ax_model = self.ax_model.to(device)
         return self

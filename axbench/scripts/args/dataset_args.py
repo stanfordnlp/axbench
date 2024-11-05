@@ -17,6 +17,7 @@ class DatasetArgs:
     concept_path: Optional[str] = None
     num_of_examples: Optional[int] = None
     latent_num_of_examples: Optional[int] = None
+    latent_batch_size: Optional[int] = None
     rotation_freq: Optional[int] = 1_000
     seed: Optional[int] = None
     max_concepts: Optional[int] = None

@@ -6,6 +6,7 @@ axbench/demo/
 axbench/results/
 set_key.py
 uv.lock
+wandb/
 local_exp.sh
 exp*.sh
 axbench/data/persist_lm_cache

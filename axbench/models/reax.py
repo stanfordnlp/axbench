@@ -55,7 +55,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
@@ -94,7 +94,7 @@ class ReAX(Model):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 unit_locations={"sources->base": (
                     None,
                     inputs["intervention_locations"].permute(1, 0, 2).tolist()

@@ -100,7 +100,7 @@ class IntegratedGradients(Model):
         # Freeze the language model parameters
         for param in ax.lm_model.parameters():
             param.requires_grad = False
-        ax.to("cuda")
+        ax.to(self.device)
         self.ax = ax
 
     def make_dataloader(self, examples, **kwargs):
@@ -128,7 +128,7 @@ class IntegratedGradients(Model):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 preds = self.ax(
                     {"input_ids": inputs["input_ids"], 
                      "attention_mask": inputs["attention_mask"]})

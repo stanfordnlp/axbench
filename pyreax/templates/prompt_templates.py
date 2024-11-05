@@ -107,10 +107,6 @@ T_RANDOM_CONTENT = """Content Generation and Modification Task:
 2. Rewrite the content to ensure it strictly avoids any words, phrases, or ideas associated with the following concepts:
 '{CONCEPTS}'
 
-   - Do not include any words or phrases related to the concepts mentioned above.
-   - Avoid both direct and indirect references to these concepts.
-   - Ensure that parts of the content remain irrelevant to the concepts mentioned above.
-
 3. Output the final content in plain text (or appropriate format for the genre), without special formatting (e.g., no quotation marks or hyphens at the beginning).
 
 Include the special tag <FINAL> at the beginning of the final content, followed by the content itself. Return only this tagged content, with no additional text."""

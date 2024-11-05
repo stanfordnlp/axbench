@@ -10,6 +10,7 @@ class EvalArgs:
     models: field(default_factory = lambda: [])
     latent_evaluators: field(default_factory = lambda: [])
     steering_evaluators: field(default_factory = lambda: [])
+    report_to: field(default_factory = lambda: [])
     rotation_freq: Optional[int] = 1_000
     data_dir: Optional[str] = None
     dump_dir: Optional[str] = None
@@ -17,6 +18,8 @@ class EvalArgs:
     lm_model: Optional[str] = None
     run_winrate: Optional[bool] = None
     winrate_baseline: Optional[str] = None
+    wandb_entity: Optional[str] = None
+    wandb_name: Optional[str] = None
     # Add any other parameters as needed
 
     def __init__(

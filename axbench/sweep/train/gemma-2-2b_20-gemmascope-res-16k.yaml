@@ -23,6 +23,3 @@ models:
     lr: 0.003
     coeff_l1_loss_null: 0.5
     coeff_l1_loss: 0.1
-  MeanPositiveActivation:
-    batch_size: 128
-    n_epochs: 1

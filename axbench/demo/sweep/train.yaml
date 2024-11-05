@@ -1,4 +1,3 @@
-data_dir: "axbench/demo/generate"
 dump_dir: "axbench/demo"
 
 # interpreting model
@@ -15,16 +14,16 @@ models:
     lr: 0.003
     coeff_l1_loss_null: 0.05
     coeff_l1_loss: 0.001
-  L1LinearProbe:
-    batch_size: 6
-    n_epochs: 12
-    k_latent_null_loss: 1
-    lr: 0.003
-    coeff_l1_loss_null: 0.5
-    coeff_l1_loss: 0.1
-  MeanPositiveActivation:
-    batch_size: 128
-    n_epochs: 1
+  # L1LinearProbe:
+  #   batch_size: 6
+  #   n_epochs: 12
+  #   k_latent_null_loss: 1
+  #   lr: 0.003
+  #   coeff_l1_loss_null: 0.5
+  #   coeff_l1_loss: 0.1
+  # MeanPositiveActivation:
+  #   batch_size: 128
+  #   n_epochs: 1
   # Random:
   #   batch_size: 128
   #   n_epochs: 1

@@ -15,6 +15,7 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
+import shutil
 from pyreax import (
     LanguageModel
 )
@@ -29,6 +30,8 @@ from pathlib import Path
 import numpy as np
 from openai import AsyncOpenAI
 import httpx, asyncio
+import datetime
+import yaml
 
 import axbench
 from axbench import (
@@ -66,18 +69,14 @@ def data_generator(data_dir, mode):
     Yields:
         (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
     """
-    # Get list of files sorted by index
-    file_list = sorted(glob.glob(os.path.join(data_dir, f'{mode}_data_fragment_*.parquet')))
-    
     # Pre-load and organize data by concept_id
     concept_data = {}
-    for file_path in tqdm(file_list, desc="Loading data"):
-        df = pd.read_parquet(file_path)
-        # Group by concept_id and store in dictionary
-        for concept_id, group in df.groupby('concept_id'):
-            if concept_id not in concept_data:
-                concept_data[concept_id] = []
-            concept_data[concept_id].append(group)
+    df = pd.read_parquet(os.path.join(data_dir, f'{mode}_data.parquet'))
+    # Group by concept_id and store in dictionary
+    for concept_id, group in df.groupby('concept_id'):
+        if concept_id not in concept_data:
+            concept_data[concept_id] = []
+        concept_data[concept_id].append(group)
     
     # Yield concatenated data for each concept_id
     for concept_id in sorted(concept_data.keys()):
@@ -185,7 +184,7 @@ def process_jsonl_file(jsonl_lines):
     return jsonl_lines
 
 
-def plot_steering(aggregated_results, dump_dir):
+def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
     try:
         configs = [
             {
@@ -222,11 +221,15 @@ def plot_steering(aggregated_results, dump_dir):
         plot_metrics(
             jsonl_data=aggregated_results,
             configs=configs,
-            write_to_path=dump_dir
+            write_to_path=dump_dir, 
+            report_to=report_to,
+            wandb_name=wandb_name
         )
         plot_win_rates(
             jsonl_data=aggregated_results,
-            write_to_path=dump_dir  # Replace with your desired output directory
+            write_to_path=dump_dir,  # Replace with your desired output directory
+            report_to=report_to,
+            wandb_name=wandb_name
         )
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
@@ -276,7 +279,6 @@ def eval_steering(args):
     """
     data_dir = args.data_dir
     dump_dir = args.dump_dir
-    rotation_freq = args.rotation_freq
 
     # Initialize data generator
     df_generator = data_generator(args.data_dir, mode="steering")
@@ -394,7 +396,7 @@ def eval_steering(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_steering(aggregated_results, Path(dump_dir) / "evaluate")
+    plot_steering(aggregated_results, Path(dump_dir) / "evaluate", args.report_to, args.wandb_name)
     logger.warning("Evaluation completed!")
 
 
@@ -410,13 +412,16 @@ def load_jsonl(jsonl_path):
     return jsonl_data
     
 
-def plot_latent(dump_dir):
+def plot_latent(dump_dir, report_to=[], wandb_name=None):
     dump_dir = Path(dump_dir) / "evaluate"
     # aggregate all results
     aggregated_results = load_jsonl(os.path.join(dump_dir, 'latent.jsonl'))
     try:
-        plot_aggregated_roc(aggregated_results, write_to_path=dump_dir)
-        plot_accuracy_bars(aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir)
+        plot_aggregated_roc(
+            aggregated_results, write_to_path=dump_dir, report_to=report_to, wandb_name=wandb_name)
+        plot_accuracy_bars(
+            aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir, 
+            report_to=report_to, wandb_name=wandb_name)
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
 
@@ -425,7 +430,6 @@ def eval_latent(args):
 
     data_dir = args.data_dir
     dump_dir = args.dump_dir
-    rotation_freq = args.rotation_freq
     df_generator = data_generator(args.data_dir, mode="latent")
 
     state = load_state(args.dump_dir, mode="latent")
@@ -456,7 +460,7 @@ def eval_latent(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_latent(dump_dir)
+    plot_latent(dump_dir, args.report_to, args.wandb_name)
     logger.warning("Evaluation completed!")
 
 def main():
@@ -471,13 +475,40 @@ def main():
         }
     ]
     args = EvalArgs(custom_args=custom_args)
+    args.data_dir = f"{args.dump_dir}/inference"
     logger.warning("Evaluating generations with the following configuration:")
     logger.warning(args)
     
+    # copy the config yaml file to the dump dir
+    shutil.copy(args.config_file, f"{args.dump_dir}/evaluate/config.yaml")
+
+    # now = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+    # start wandb logging
+    if "wandb" in args.report_to:
+        import wandb
+        wandb_name = f"{args.dump_dir.split('/')[-1]}"
+        run = wandb.init(
+            project="AxBench", 
+            entity=f"{args.wandb_entity}",
+            name=f"{wandb_name}_{args.mode}",
+        )
+        run.summary.update(vars(args))
+
+        # log all other confis
+        for folder in ["generate", "train", "inference"]:
+            yaml_file_path = f"{args.dump_dir}/{folder}/config.yaml"  # Update with your actual file path
+            with open(yaml_file_path, 'r') as file:
+                additional_args = yaml.safe_load(file)  # Load YAML into a dictionary
+                # Log additional args to wandb summary
+                run.summary.update({folder:additional_args})
+
     if args.mode == "latent":
         eval_latent(args)
     elif args.mode == "steering":
         eval_steering(args)
+
+    if "wandb" in args.report_to:
+        run.finish()
 
 
 if __name__ == "__main__":

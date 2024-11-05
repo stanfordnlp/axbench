@@ -17,6 +17,7 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
+import shutil
 import sys
 import argparse
 import time
@@ -51,7 +52,6 @@ MAX_RETRIES = 5
 RETRY_DELAY = 1  # in seconds
 STATE_FILE = "generate_state.pkl"
 METADATA_FILE = "metadata.jsonl"
-DEFAULT_ROTATION_FREQ = 1000
 
 
 def load_concepts(dump_dir):
@@ -120,7 +120,7 @@ def partition_lists(list1, list2, step=2):
 def save(
     dump_dir, state, group_id, 
     concepts, concept_genres_map, contrast_concepts_map, 
-    refs, partition, current_df, rotation_freq):
+    refs, partition, current_df):
     """
     Save the current state, metadata, and DataFrame using Parquet format.
     """
@@ -146,8 +146,7 @@ def save(
         f.write(json.dumps(metadata_entry) + "\n")
     
     # Save DataFrame using Parquet
-    fragment_index = group_id // rotation_freq
-    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.parquet")
+    df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
     if os.path.exists(df_path):
         existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
@@ -181,12 +180,14 @@ def main():
     dump_dir = args.dump_dir
     concept_path = args.concept_path
     num_of_examples = args.num_of_examples
-    rotation_freq = args.rotation_freq
     max_concepts = args.max_concepts
     
+    # copy the config yaml file to the dump dir
+    shutil.copy(args.config_file, f"{dump_dir}/generate/config.yaml")
+
     # Load and optionally shuffle concepts
-    all_concepts, all_refs = load_concepts(concept_path)
     set_seed(args.seed)
+    all_concepts, all_refs = load_concepts(concept_path)
     
     # Limit the number of concepts if specified
     if max_concepts is not None:
@@ -196,19 +197,14 @@ def main():
     concept2id = {concept: i for i, concept in enumerate(all_concepts)}
     concept_groups = partition_lists(all_concepts, all_refs)
 
-    # Load lm and tokenizer.
-    model_name = model_name_map[all_refs[0].split("/")[3]]
-    model = AutoModelForCausalLM.from_pretrained(model_name, device_map="cpu")
-    model.config.use_cache = False
-    model = model.cuda()
-    tokenizer =  AutoTokenizer.from_pretrained(model_name)
-    tokenizer.padding_side = "right"
-
     # Load the state if it exists.
     state = load_state(dump_dir)
     start_group_id = state.get("group_id", 0) if state else 0
     logger.warning(f"Starting group index: {start_group_id}")
-    
+    if start_group_id >= len(concept_groups):
+        logger.warning(f"All groups have been generated. Exiting.")
+        return
+
     # Create a new OpenAI client.
     client = AsyncOpenAI(
         api_key=os.environ.get("OPENAI_API_KEY"),
@@ -223,6 +219,14 @@ def main():
         max_retries=3,
     )
 
+    # Load lm and tokenizer.
+    model_name = model_name_map[all_refs[0].split("/")[3]]
+    model = AutoModelForCausalLM.from_pretrained(model_name, device_map="cpu")
+    model.config.use_cache = False
+    model = model.cuda()
+    tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
+    tokenizer.padding_side = "right"
+
     # Init the dataset factory.
     dataset_factory = ReAXFactory(
         model, client, tokenizer, dump_dir, 
@@ -233,6 +237,7 @@ def main():
     atexit.register(dataset_factory.reset_stats)
 
     progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
+    data_group_id = start_group_id
     for group_id in progress_bar:
         concepts, refs = concept_groups[group_id]
         
@@ -245,18 +250,19 @@ def main():
             current_df = dataset_factory.create_train_df(
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
                 input_length=args.input_length, output_length=args.output_length,
-                current_group_id=group_id
+                current_group_id=data_group_id
             )
-            current_df["group_id"] = group_id
+            current_df["group_id"] = data_group_id
         except Exception as e:
             logger.warning(f"Failed to create training data for group {group_id}: {e}")
-            return
+            continue # continue to the next group.
         
         # Save the generated DataFrame, metadata, and current state
         save(
-            dump_dir, {"group_id": group_id + 1}, group_id, 
+            dump_dir, {"group_id": group_id + 1}, data_group_id,
             concepts, concept_genres_map, contrast_concepts_map, 
-            refs, "train", current_df, rotation_freq)
+            refs, "train", current_df)
+        data_group_id += 1
 
     logger.warning(f"Finished creating dataset.")
 

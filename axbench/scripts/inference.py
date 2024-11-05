@@ -15,7 +15,8 @@ except ModuleNotFoundError:
     import pyreax
 
 
-import os, argparse, yaml, json, glob, pickle, time
+import os, argparse, yaml, json, glob, pickle, time, itertools
+import shutil
 import pandas as pd
 from tqdm.auto import tqdm
 import torch
@@ -23,6 +24,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue
 
 from pyreax import (
     EXAMPLE_TAG, 
@@ -49,7 +51,6 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
-DEFAULT_ROTATION_FREQ = 1000
 STEERING_EXCLUDE_MODELS = {}
 LATENT_EXCLUDE_MODELS = {"PromptSteering"}
 
@@ -106,19 +107,8 @@ def load_metadata_flatten(metadata_path):
 
 
 def save(
-    dump_dir, state, concept_id, partition,
-    current_df, rotation_freq):
-    """
-    Save the current state, metadata, and DataFrame using Parquet format.
-    
-    Args:
-        dump_dir (str): Directory to save the files
-        state (dict): State dictionary to save
-        concept_id (int): Current concept ID
-        partition (str): Partition name (e.g., 'latent' or 'steering')
-        current_df (pd.DataFrame): Current DataFrame to save
-        rotation_freq (int): Frequency to rotate fragment files
-    """
+    dump_dir, state, partition,
+    current_df):
     dump_dir = Path(dump_dir) / "inference"
     dump_dir.mkdir(parents=True, exist_ok=True)
     
@@ -128,8 +118,7 @@ def save(
         pickle.dump(state, f)
     
     # Save DataFrame
-    fragment_index = concept_id // rotation_freq
-    df_path = os.path.join(dump_dir, f"{partition}_data_fragment_{fragment_index}.parquet")
+    df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
     
     if os.path.exists(df_path):
         existing_df = pd.read_parquet(df_path)
@@ -188,7 +177,6 @@ def infer_steering(args):
     train_dir = args.train_dir
     dump_dir = args.dump_dir
     num_of_examples = args.steering_num_of_examples
-    rotation_freq = args.rotation_freq
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"]
@@ -212,10 +200,13 @@ def infer_steering(args):
     state = load_state(args.dump_dir, "steering")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
-    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
-
+    concept_ids = list(range(start_concept_id, len(metadata)))
+    if len(concept_ids) == 0:
+        logger.warning(f"No concept ids to infer. Exiting.")
+        return
+    
     # Initialize the dataset factory with the tokenizer.
-    tokenizer = AutoTokenizer.from_pretrained(args.steering_model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.steering_model_name, use_fast=False)
     tokenizer.padding_side = "right"
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
@@ -223,11 +214,13 @@ def infer_steering(args):
         lm_model=args.lm_model
     )
 
+    # Initialize the available devices queue.
     available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-    num_devices = len(available_devices)
+    device_queue = queue.Queue()
+    for device in available_devices:
+        device_queue.put(device)
 
-    # Pre-load model_instance per device
-    device_models = {}
+    device_lm_models = {}
     for device in available_devices:
         model_instance = AutoModelForCausalLM.from_pretrained(
             args.steering_model_name if args.steering_model_name else args.model_name
@@ -235,91 +228,108 @@ def infer_steering(args):
         model_instance.config.use_cache = False
         model_instance = model_instance.eval()
         model_instance = model_instance.to(device)
-        device_models[device] = model_instance
+        device_lm_models[device] = model_instance
 
-    torch.cuda.empty_cache()
-    for concept_id in progress_bar:
-        # Create the dataset shared across all models.
+    # Combine datasets, sae_links, and sae_ids into a single dictionary
+    data_per_concept = {}
+    for concept_id in concept_ids:
         current_df, (_, sae_link, sae_id) = create_data_steering(
             dataset_factory, metadata, concept_id, num_of_examples,
             steering_factors, steering_datasets, args
         )
+        data_per_concept[concept_id] = (current_df, sae_link, sae_id)
 
-        # Process models in batches equal to the number of available GPUs.
-        model_indices = list(range(len(args.models)))
-        for i in range(0, len(model_indices), num_devices):
-            batch_indices = model_indices[i:i + num_devices]
-            batch_devices = available_devices[:len(batch_indices)]
+    # Prepare tasks: list of (model_idx, model_name, concept_id)
+    tasks = []
+    for concept_id in concept_ids:
+        for model_idx, model_name in enumerate(args.models):
+            if model_name in STEERING_EXCLUDE_MODELS:
+                continue
+            tasks.append((model_idx, model_name, concept_id))
 
-            def run_predict_steer(model_idx, device):
-                model_name = args.models[model_idx]
-                if model_name in STEERING_EXCLUDE_MODELS:
-                    return None
-                model_class = getattr(axbench, model_name)
-                logger.warning(f"Using {model_class} on {device}.\n")
-                # Use the pre-loaded model_instance
-                model_instance = device_models[device]
-                # Reuse the tokenizer
-                benchmark_model = model_class(
-                    model_instance, tokenizer, layer=layer,
-                    low_rank_dimension=len(metadata),
-                    device=device
-                )
-                benchmark_model.load(
-                    dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
-                )
-                benchmark_model.to(device)
-                # Pre-compute mean activations for steering evaluation.
-                benchmark_model.pre_compute_mean_activations(
-                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
-                )
-                # Run prediction
-                results = benchmark_model.predict_steer(
-                    current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
-                    batch_size=args.steering_batch_size,
-                    eval_output_length=args.steering_output_length
-                )
-                # Clean up
-                del benchmark_model
-                torch.cuda.empty_cache()
-                return model_name, results
+    # Dictionary to collect results per concept_id and model_name
+    torch.cuda.empty_cache()
+    results_per_concept = {}
+    def run_predict_steer(task):
+        model_idx, model_name, concept_id = task
+        # Get an available device from the queue
+        device = device_queue.get()
+        try:
+            model_class = getattr(axbench, model_name)
+            logger.warning(f"Inference steering with {model_class} on {device} for concept {concept_id}.\n")
+            # Use the pre-loaded model_instance
+            model_instance = device_lm_models[device]
+            # Instantiate a new tokenizer inside the thread to avoid sharing across threads
+            thread_tokenizer = AutoTokenizer.from_pretrained(
+                args.steering_model_name, use_fast=False
+            )
+            thread_tokenizer.padding_side = "right"
+            benchmark_model = model_class(
+                model_instance, thread_tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=device
+            )
+            benchmark_model.load(
+                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
+            )
+            benchmark_model.to(device)
+            # Pre-compute mean activations for steering evaluation.
+            benchmark_model.pre_compute_mean_activations(
+                os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+            )
+            # Get the data for this concept_id
+            current_df, sae_link, sae_id = data_per_concept[concept_id]
+            # Run prediction
+            results = benchmark_model.predict_steer(
+                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
+                batch_size=args.steering_batch_size,
+                eval_output_length=args.steering_output_length
+            )
+            # Collect results
+            return (concept_id, model_name, results)
+        finally:
+            # Release the device back to the queue
+            device_queue.put(device)
+            # Clean up
+            del benchmark_model
+            torch.cuda.empty_cache()
 
-            # Run the models in parallel on available GPUs
-            with ThreadPoolExecutor(max_workers=len(batch_indices)) as executor:
-                futures = {
-                    executor.submit(run_predict_steer, model_idx, device): model_idx
-                    for model_idx, device in zip(batch_indices, batch_devices)
-                }
-                for future in as_completed(futures):
-                    result = future.result()
-                    if result is not None:
-                        model_name, results = result
-                        for k, v in results.items():
-                            current_df[f"{model_name}_{k}"] = v
+    # Run the tasks in parallel using ThreadPoolExecutor
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(run_predict_steer, task): task
+            for task in tasks
+        }
+        for future in as_completed(futures):
+            task = futures[future]
+            model_idx, model_name, concept_id = task
+            concept_id_result, model_name_result, results = future.result()
+            # Store the results
+            if concept_id_result not in results_per_concept:
+                results_per_concept[concept_id_result] = {}
+            results_per_concept[concept_id_result][model_name_result] = results
 
-        # Save the results.
-        save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "steering",
-             current_df, rotation_freq)
+    # After all tasks are done, update datasets with results and save
+    for concept_id in concept_ids:
+        current_df, _, _ = data_per_concept[concept_id]
+        # Get the results for this concept_id
+        model_results = results_per_concept[concept_id]
+        for model_name, results in model_results.items():
+            for k, v in results.items():
+                current_df[f"{model_name}_{k}"] = v
+        # Save the combined results
+        save(dump_dir, {"concept_id": concept_id + 1}, "steering",
+             current_df)
 
 
 def infer_latent(args):
-    
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
     num_of_examples = args.latent_num_of_examples
-    rotation_freq = args.rotation_freq
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"]
-    
-    # Load lm.
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map="cpu")
-    model.config.use_cache = False
-    model = model.cuda()    
-    model = model.eval()
-    tokenizer =  AutoTokenizer.from_pretrained(args.model_name)
-    tokenizer.padding_side = "right"
 
     # Create a new OpenAI client.
     client = AsyncOpenAI(
@@ -327,7 +337,7 @@ def infer_latent(args):
         timeout=60.0,
         http_client=httpx.AsyncClient(
             limits=httpx.Limits(
-                max_keepalive_connections=100, 
+                max_keepalive_connections=100,
                 max_connections=1000
             ),
             headers={"Connection": "close"},
@@ -335,49 +345,123 @@ def infer_latent(args):
         max_retries=3,
     )
 
+    state = load_state(args.dump_dir, "latent")
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting concept index: {start_concept_id}")
+    concept_ids = list(range(start_concept_id, len(metadata)))
+    if len(concept_ids) == 0:
+        logger.warning(f"No concept ids to infer. Exiting.")
+        return
+
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, model_max_length=512)
+    tokenizer.padding_side = "right"
+
     # Load dataset factory for evals.
     dataset_factory = ReAXFactory(
-        model, client, tokenizer, dump_dir,
-        use_cache=True, master_data_dir=args.master_data_dir, 
+        None, client, tokenizer, dump_dir,
+        use_cache=True, master_data_dir=args.master_data_dir,
         lm_model=args.lm_model
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
-    # Pre-load inference models.
-    benchmark_models = []
-    for model_name in args.models:
-        model_class = getattr(axbench, model_name)
-        logger.warning(f"Loading {model_class} from disk for inference.\n")
-        benchmark_model = model_class(
-            model, tokenizer, layer=layer, 
-            low_rank_dimension=len(metadata))
-        benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"])
-        benchmark_models += [benchmark_model]
+    # Initialize the available devices.
+    available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
+    num_devices = len(available_devices)
+    device_queue = queue.Queue()
+    for device in available_devices:
+        device_queue.put(device)
 
-    state = load_state(args.dump_dir, "latent")
-    start_concept_id = state.get("concept_id", 0) if state else 0
-    logger.warning(f"Starting concept index: {start_concept_id}")
-    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Inferencing with concepts")
-    
-    torch.cuda.empty_cache()
-    for concept_id in progress_bar:
-        # Create.
+    # Pre-load model instances per device
+    device_lm_models = {}
+    for device in available_devices:
+        model_instance = AutoModelForCausalLM.from_pretrained(args.model_name)
+        model_instance.config.use_cache = False
+        model_instance = model_instance.eval()
+        model_instance = model_instance.to(device)
+        device_lm_models[device] = model_instance
+
+    # Prepare tasks: list of (model_name, concept_id)
+    datasets = {}
+    tasks = []
+    for concept_id in concept_ids:
         current_df = create_data_latent(
             dataset_factory, metadata, concept_id, num_of_examples, args)
-
-        # Evaluate.
-        for model_idx, model_name in enumerate(args.models):
+        datasets[concept_id] = current_df
+    for concept_id in concept_ids:
+        for model_name in args.models:
             if model_name in LATENT_EXCLUDE_MODELS:
                 continue
-            results = benchmark_models[model_idx].predict_latent(current_df)
+            tasks.append((model_name, concept_id))
+
+    # Dictionary to collect results per concept_id and model_name
+    torch.cuda.empty_cache()
+    results_per_concept = {}
+    def run_predict_latent(task):
+        try:
+            model_name, concept_id = task
+            # Get an available device from the queue
+            device = device_queue.get()
+
+            model_class = getattr(axbench, model_name)
+            logger.warning(f"Inference latent with {model_class} on {device} for concept {concept_id}.")
+            # Use the pre-loaded model_instance
+            model_instance = device_lm_models[device]
+            # Instantiate a new tokenizer inside the thread to avoid sharing across threads
+            thread_tokenizer = AutoTokenizer.from_pretrained(
+                args.model_name, model_max_length=512)
+            thread_tokenizer.padding_side = "right"
+            benchmark_model = model_class(
+                model_instance, thread_tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=device
+            )
+            benchmark_model.load(
+                dump_dir=train_dir, sae_path=metadata[0]["ref"]
+            )
+            benchmark_model.to(device)
+            # Get the dataset for this concept_id
+            current_df = datasets[concept_id]
+            # Run prediction
+            results = benchmark_model.predict_latent(
+                current_df, batch_size=args.latent_batch_size
+            )
+            return (concept_id, model_name, results)
+        finally:
+            # Release the device back to the queue
+            device_queue.put(device)
+            # Clean up
+            del benchmark_model
+            torch.cuda.empty_cache()
+
+    # Run the tasks in parallel on available GPUs
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(run_predict_latent, task): task
+            for task in tasks
+        }
+        for future in as_completed(futures):
+            task = futures[future]
+            model_name, concept_id = task
+            concept_id_result, model_name_result, results = future.result()
+            # Store the results
+            if concept_id_result not in results_per_concept:
+                results_per_concept[concept_id_result] = {}
+            results_per_concept[concept_id_result][model_name_result] = results
+
+    # After all tasks are done, update datasets with results and save
+    for concept_id in concept_ids:
+        current_df = datasets[concept_id]
+        # Get the results for this concept_id
+        model_results = results_per_concept[concept_id]
+        for model_name, results in model_results.items():
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
-        
-        # Save.
-        save(dump_dir, {"concept_id": concept_id + 1}, concept_id, "latent",
-            current_df, rotation_freq)
+        # Save the combined results
+        save(dump_dir, {"concept_id": concept_id + 1}, "latent",
+             current_df)
 
 
 def main():
@@ -392,14 +476,19 @@ def main():
         }
     ]
     args = DatasetArgs(custom_args=custom_args)
+    args.data_dir = f"{args.dump_dir}/generate"
+    args.train_dir = f"{args.dump_dir}/train"
     logger.warning("Inferencing with following configuration:")
     logger.warning(args)
     set_seed(args.seed)
     
+    # copy the config yaml file to the dump dir
+    shutil.copy(args.config_file, f"{args.dump_dir}/inference/config.yaml")
+
     def check_latent_eval_done(args):
         # Check if at least one latent eval fragment exists.
         if os.path.exists(os.path.join(
-            args.dump_dir, "inference", "latent_data_fragment_0.parquet")):
+            args.dump_dir, "inference", "latent_data.parquet")):
             return True
         return False
 

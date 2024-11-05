@@ -1,6 +1,8 @@
 models: [
   # "LinearProbe", "IntegratedGradients", "InputXGradients",
-  "L1LinearProbe", "ReAX", "GemmaScopeSAE", "MeanPositiveActivation", "PromptSteering",
+  # "L1LinearProbe", 
+  "ReAX", "PromptSteering",
+  # "GemmaScopeSAE", "MeanPositiveActivation",
   # "Random", "MeanEmbedding", "MeanActivation"
 ] 
 
@@ -14,12 +16,13 @@ steering_evaluators: [
   "LMJudgeFollowingEvaluator",
   # "LMJudgeContinuationEvaluator"
 ]
-data_dir: "axbench/demo/inference"
 dump_dir: "axbench/demo"
-rotation_freq: 1000
 
 # Number of processes to run in parallel for steering evaluation.
 num_of_workers: 32
 lm_model: "gpt-4o-mini"
 run_winrate: true
 winrate_baseline: "PromptSteering"
+
+report_to: ["wandb"]
+wandb_entity: "wuzhengx"
