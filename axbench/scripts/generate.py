@@ -161,7 +161,7 @@ def load_state(dump_dir):
     Returns:
         dict: The loaded state dictionary, or None if no state file exists.
     """
-    state_path = os.path.join(Path(dump_dir) / "generate", STATE_FILE)
+    state_path = os.path.join(Path(dump_dir), STATE_FILE)
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
             state = pickle.load(f)
@@ -235,6 +235,7 @@ def main():
     progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
     data_group_id = start_group_id
     for group_id in progress_bar:
+        print(f"Generating group {group_id}...")
         concepts, refs = concept_groups[group_id]
         
         # prepare concept related data.
