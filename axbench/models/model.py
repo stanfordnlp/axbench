@@ -1,5 +1,6 @@
 import torch, einops, os
 import pandas as pd
+from tqdm.auto import tqdm
 from pyreax import (
     gather_residual_activations, 
 )
@@ -64,7 +65,7 @@ class Model(object):
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
-        
+        all_tokens = []
         # Process in batches
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
@@ -97,12 +98,14 @@ class Model(object):
                 all_max_act.append(max_act)
                 all_max_act_idx.append(max_act_idx)
                 all_max_token.append(max_token)
+                all_tokens.append(tokens)
 
         return {
             "acts": all_acts,
             "max_act": all_max_act,
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token
+            "max_token": all_max_token,
+            "tokens": all_tokens
         }
 
     @torch.no_grad()
@@ -119,6 +122,8 @@ class Model(object):
         all_generations = []
         all_perplexities = []
         all_strenghts = []
+
+        progress_bar = tqdm(range(0, len(examples), batch_size))
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
             input_strings = batch_examples['input'].tolist()
@@ -173,6 +178,7 @@ class Model(object):
             seq_perplexities = torch.exp(seq_losses).tolist()
             all_perplexities.extend(seq_perplexities)
             all_strenghts.extend((mag*max_acts).tolist())
+            progress_bar.update(1)
 
         return {
             "steered_generation": all_generations,
@@ -180,7 +186,7 @@ class Model(object):
             "strength": all_strenghts,
         }
 
-    def get_logits(self, concept_id):
+    def get_logits(self, concept_id, k=10):
         top_logits, neg_logits = [None], [None]
         if concept_id is not None:
             W_U = self.model.lm_head.weight.T
@@ -191,11 +197,11 @@ class Model(object):
             )
 
             vocab_logits = self.ax.proj.weight.data[concept_id] @ W_U
-            top_values, top_indices = vocab_logits.topk(k=10, sorted=True)
+            top_values, top_indices = vocab_logits.topk(k=k, sorted=True)
             top_tokens = self.tokenizer.batch_decode(top_indices.unsqueeze(dim=-1))
             top_logits = [list(zip(top_tokens, top_values.tolist()))]
             
-            neg_values, neg_indices = vocab_logits.topk(k=10, largest=False, sorted=True)
+            neg_values, neg_indices = vocab_logits.topk(k=k, largest=False, sorted=True)
             neg_tokens = self.tokenizer.batch_decode(neg_indices.unsqueeze(dim=-1))
             neg_logits = [list(zip(neg_tokens, neg_values.tolist()))]
         return top_logits, neg_logits
@@ -211,13 +217,8 @@ class Model(object):
                 # loop through unique sorted concept_id
                 for concept_id in sorted(latent["concept_id"].unique()):
                     concept_latent = latent[latent["concept_id"] == concept_id]
-                    # group id if this concept
-                    group_id = concept_latent["group_id"].iloc[0]
-                    # get the mean activation of this group but not with this concept_id
-                    group_latent = latent[latent["group_id"] == group_id]
-                    group_latent = group_latent[group_latent["concept_id"] != concept_id]
-                    max_act = group_latent["ReAX_max_act"].max()
-                    max_activations[concept_id] = max_act
+                    max_act = concept_latent["ReAX_max_act"].max()
+                    max_activations[concept_id] = max_act if max_act > 0 else 50
         self.max_activations = max_activations
         return max_activations  
 
@@ -226,6 +227,9 @@ class Model(object):
         self.device = device
         if hasattr(self, 'ax'):
             self.ax = self.ax.to(device)
-            if isinstance(self.ax_model, IntervenableModel):
-                self.ax_model.set_device(device)
+            if hasattr(self, 'ax_model'):
+                if isinstance(self.ax_model, IntervenableModel):
+                    self.ax_model.set_device(device)
+                else:
+                    self.ax_model = self.ax_model.to(device)
         return self

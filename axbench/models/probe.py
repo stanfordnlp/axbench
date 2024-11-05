@@ -106,7 +106,7 @@ class LinearProbe(Model):
         if mode == "latent":
             ax = LogisticRegressionModel(
                 self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to("cuda")
+            ax.to(self.device)
             self.ax = ax
         elif mode == "steering":
             ax = AdditionIntervention(
@@ -121,7 +121,7 @@ class LinearProbe(Model):
                 "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
                 "intervention": self.ax} for l in [self.layer]])
             ax_model = IntervenableModel(ax_config, self.model)
-            ax_model.set_device("cuda")
+            ax_model.set_device(self.device)
             self.ax_model = ax_model
 
     def make_dataloader(self, examples, **kwargs):
@@ -149,7 +149,7 @@ class LinearProbe(Model):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 activations = gather_residual_activations(
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
@@ -202,7 +202,7 @@ class L1LinearProbe(LinearProbe):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 nonbos_mask = inputs["attention_mask"][:,1:]
                 activations = gather_residual_activations(
                     self.model, self.layer, 

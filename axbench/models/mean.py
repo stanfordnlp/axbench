@@ -105,7 +105,7 @@ class MeanEmbedding(Model):
         if mode == "latent":
             ax = LogisticRegressionModel(
                 self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to("cuda")
+            ax.to(self.device)
             self.ax = ax
         elif mode == "steering":
             ax = AdditionIntervention(
@@ -157,7 +157,7 @@ class MeanActivation(MeanEmbedding):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 activations = gather_residual_activations(
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}

@@ -1,15 +1,14 @@
 from dataclasses import dataclass, field
 import argparse
 import yaml
-import sys
-from typing import Optional, List, Any, Dict, Type
+from typing import Optional, List, Type
 
 @dataclass
 class EvalArgs:
-    # Define all parameters with type annotations and optional default values
-    models: field(default_factory = lambda: [])
-    latent_evaluators: field(default_factory = lambda: [])
-    steering_evaluators: field(default_factory = lambda: [])
+    models: field(default_factory=lambda: [])
+    latent_evaluators: field(default_factory=lambda: [])
+    steering_evaluators: field(default_factory=lambda: [])
+    report_to: field(default_factory=lambda: [])
     rotation_freq: Optional[int] = 1_000
     data_dir: Optional[str] = None
     dump_dir: Optional[str] = None
@@ -17,11 +16,15 @@ class EvalArgs:
     lm_model: Optional[str] = None
     run_winrate: Optional[bool] = None
     winrate_baseline: Optional[str] = None
-    # Add any other parameters as needed
+    wandb_entity: Optional[str] = None
+    wandb_name: Optional[str] = None
+    run_name: Optional[bool] = None
 
     def __init__(
         self,
         description: str = "Evaluation Script",
+        config_file: str = None,
+        section: str = "train",  # Specify section to load
         custom_args: Optional[List[dict]] = None,
         override_config: bool = True
     ):
@@ -34,15 +37,14 @@ class EvalArgs:
         parser.add_argument(
             '--config',
             type=str,
-            required=True,
+            default=config_file,
             help='Path to the YAML configuration file.'
         )
 
         # Add arguments corresponding to the dataclass fields
         fields = self.__dataclass_fields__
         for field_name, field_def in fields.items():
-            # Skip fields that should not be parsed from the command line
-            if field_name in ['config_file']:
+            if field_name == 'config_file':
                 continue
 
             arg_type = self._get_argparse_type(field_def.type)
@@ -61,21 +63,28 @@ class EvalArgs:
 
         # Load the YAML configuration file
         config_file_path = args.config
+        if not config_file_path:
+            raise ValueError("A config file must be provided.")
         with open(config_file_path, 'r') as file:
             config = yaml.safe_load(file)
 
-        # Initialize attributes from config
+        # Select the specified section
+        section_data = config.get(section, {})
+        if not section_data:
+            raise ValueError(f"Section '{section}' not found in the YAML configuration.")
+
+        # Initialize attributes from the selected section
         for field_name in fields:
             if field_name == 'config_file':
                 continue
-            value = config.get(field_name, None)
+            value = section_data.get(field_name, None)
             setattr(self, field_name, value)
 
         # Overwrite with command-line arguments if provided
         if override_config:
             for field_name in vars(args):
                 if field_name in ['config']:
-                    continue  # Skip the config file argument itself
+                    continue
                 arg_value = getattr(args, field_name)
                 if arg_value is not None:
                     setattr(self, field_name, arg_value)

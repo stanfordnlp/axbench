@@ -61,7 +61,7 @@ class Random(Model):
         if mode == "latent":
             ax = LogisticRegressionModel(
                 self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to("cuda")
+            ax.to(self.device)
             self.ax = ax
         elif mode == "steering":
             ax = AdditionIntervention(
@@ -76,7 +76,7 @@ class Random(Model):
                 "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
                 "intervention": self.ax} for l in [self.layer]])
             ax_model = IntervenableModel(ax_config, self.model)
-            ax_model.set_device("cuda")
+            ax_model.set_device(self.device)
             self.ax_model = ax_model
     
     def train(self, examples, **kwargs):

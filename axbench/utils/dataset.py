@@ -14,10 +14,6 @@ import os, asyncio
 from pyreax import LanguageModel
 
 
-def OUATPrefix_steering_factors(n):
-    # return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-    return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3.0, 5.0, 10.0]
-
 T_PROMPT_STEERING = """You must answer the question with content \
 related to %s even if it is not related to the question or it does not make sense."""
 

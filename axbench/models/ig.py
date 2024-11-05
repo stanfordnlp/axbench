@@ -100,7 +100,7 @@ class IntegratedGradients(Model):
         # Freeze the language model parameters
         for param in ax.lm_model.parameters():
             param.requires_grad = False
-        ax.to("cuda")
+        ax.to(self.device)
         self.ax = ax
 
     def make_dataloader(self, examples, **kwargs):
@@ -128,7 +128,7 @@ class IntegratedGradients(Model):
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
-                inputs = {k: v.to("cuda") for k, v in batch.items()}
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
                 preds = self.ax(
                     {"input_ids": inputs["input_ids"], 
                      "attention_mask": inputs["attention_mask"]})
@@ -166,6 +166,7 @@ class IntegratedGradients(Model):
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
+        all_tokens = []
         correct = 0
         for _, row in examples.iterrows():
             inputs = self.tokenizer.encode(
@@ -209,6 +210,7 @@ class IntegratedGradients(Model):
             max_ax_act = max(ax_acts)
             max_ax_act_idx = ax_acts.index(max_ax_act)
             max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
+            all_tokens.append(self.tokenizer.tokenize(row["input"]))
 
             all_pred_label += [pred_label]
             all_acts += [ax_acts]
@@ -222,7 +224,9 @@ class IntegratedGradients(Model):
             "acts": all_acts,
             "max_act": all_max_act, 
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token}
+            "max_token": all_max_token,
+            "tokens": all_tokens
+        }
 
 
 class InputXGradients(IntegratedGradients):
@@ -244,6 +248,7 @@ class InputXGradients(IntegratedGradients):
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
+        all_tokens = []
         correct = 0
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
@@ -297,6 +302,7 @@ class InputXGradients(IntegratedGradients):
                 all_max_act.append(max_ax_act)
                 all_max_act_idx.append(max_ax_act_idx)
                 all_max_token.append(max_token)
+                all_tokens.append(self.tokenizer.tokenize(row.input))
         acc = correct / len(examples)
         logger.warning(f"InputXGradients classification accuracy: {acc}")
         return {
@@ -304,4 +310,6 @@ class InputXGradients(IntegratedGradients):
             "acts": all_acts,
             "max_act": all_max_act, 
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token}
+            "max_token": all_max_token,
+            "tokens": all_tokens
+        }

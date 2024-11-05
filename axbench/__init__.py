@@ -1,5 +1,6 @@
 from .utils.plot_utils import *
 from .utils.dataset import *
+from .utils.html_templates import *
 
 from .evaluators.aucroc import *
 from .evaluators.ppl import *
