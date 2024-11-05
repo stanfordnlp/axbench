@@ -458,7 +458,10 @@ def infer_latent(args):
         model_results = results_per_concept[concept_id]
         for model_name, results in model_results.items():
             for k, v in results.items():
-                current_df[f"{model_name}_{k}"] = v
+                if k == "tokens" and "tokens" not in current_df:
+                    current_df["tokens"] = v # for tokens, they are global
+                else:
+                    current_df[f"{model_name}_{k}"] = v
         # Save the combined results
         save(dump_dir, {"concept_id": concept_id + 1}, "latent",
              current_df)
@@ -497,7 +500,7 @@ def main():
             'args': ['--mode'],
             'kwargs': {
                 'type': str,
-                'default': "latent",
+                'default': "all",
                 'help': 'The inference mode.'
             }
         }
@@ -523,7 +526,9 @@ def main():
         if not check_latent_eval_done(args):
             raise ValueError("Latent eval must be done before steering eval.")
         infer_steering(args)
-
+    elif args.mode == "all":
+        infer_latent(args)
+        infer_steering(args)
 
 if __name__ == "__main__":
     main()

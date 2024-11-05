@@ -55,7 +55,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
@@ -150,7 +150,7 @@ class ReAX(Model):
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
-        
+        all_tokens = []
         # Process in batches
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
@@ -181,9 +181,11 @@ class ReAX(Model):
                 all_max_act.append(max_act)
                 all_max_act_idx.append(max_act_idx)
                 all_max_token.append(max_token)
+                all_tokens.append(tokens)
         return {
             "acts": all_acts,
             "max_act": all_max_act,
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token
+            "max_token": all_max_token,
+            "tokens": all_tokens
         }

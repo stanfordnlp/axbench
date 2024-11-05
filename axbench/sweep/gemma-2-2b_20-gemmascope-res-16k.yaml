@@ -18,8 +18,8 @@ train:
       n_epochs: 12
       k_latent_null_loss: 1
       lr: 0.003
-      coeff_l1_loss_null: 0.05
-      coeff_l1_loss: 0.001
+      coeff_l1_loss_null: 0.03
+      coeff_l1_loss: 0.0005
 
 inference:
   models: [

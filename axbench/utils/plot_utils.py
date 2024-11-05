@@ -102,7 +102,7 @@ def plot_aggregated_roc(jsonl_data, write_to_path=None, report_to=[], wandb_name
         xs = common_fpr.tolist()
         ys = [np.mean(tprs[model], axis=0).tolist() for model in tprs]
         keys = [f"{model} (AUC = {np.mean(aucs[model]):.2f})" for model in tprs]
-        wandb.log({"Aggregated ROC Curve" : wandb.plot.line_series(
+        wandb.log({"latent/roc_curve" : wandb.plot.line_series(
             xs=xs,
             ys=ys,
             keys=keys,
@@ -187,7 +187,7 @@ def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_na
             ys = [metric_data[metric_data['Method'] == method]['TransformedValue'].tolist() for method in metric_data['Method'].unique()]
             keys = [f"{method}" for method in metric_data['Method'].unique()]
             
-            line_series_plots[metric] = wandb.plot.line_series(
+            line_series_plots[f"steering/{metric}"] = wandb.plot.line_series(
                 xs=xs,
                 ys=ys,
                 keys=keys,
@@ -263,7 +263,7 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to
         print(p)
 
     if report_to is not None and "wandb" in report_to:
-        wandb.log({"hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
+        wandb.log({"latent/hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
 
 
 def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):    
@@ -376,4 +376,4 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
         print(p)
 
     if report_to is not None and "wandb" in report_to:
-        wandb.log({"winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})
+        wandb.log({"steering/winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})

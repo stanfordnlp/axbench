@@ -54,12 +54,6 @@ highlight_text_html_template = """
             background-color: #4CAF50;
             color: white;
         }
-        .sae-highlight {
-            background-color: rgba(255, 99, 132, {{ opacity }});
-            font-size: 1em;
-            padding: 2px 5px;
-            border-radius: 5px;
-        }
         .reax-highlight {
             background-color: rgba(54, 162, 235, {{ opacity }});
             font-size: 1em;
@@ -83,23 +77,20 @@ highlight_text_html_template = """
         }
     </style>
     <script>
-        function updateTable(reax_id, id_sae_link_map) {
+        function updateTable(concept_id) {
             const rows = document.querySelectorAll(".table-row");
             let concept = "";
-            let link = "";
             rows.forEach(row => {
-                if (row.dataset.reaxId === reax_id) {
+                if (row.dataset.reaxId === concept_id) {
                     row.style.display = "";
                     if (!concept) {
                         concept = row.dataset.inputConcept;
-                        link = id_sae_link_map[reax_id];
                     }
                 } else {
                     row.style.display = "none";
                 }
             });
             document.getElementById("current-concept").innerText = concept ? concept : "No concept available";
-            document.getElementById("sae-link").innerText = link ? link : "No sae link available";
         }
     </script>
 </head>
@@ -108,7 +99,7 @@ highlight_text_html_template = """
     
     <div class="dropdown">
         <label for="reax-select">Select ReAX ID:</label>
-        <select id="reax-select" onchange="updateTable(this.value, {{ id_sae_link_map }})">
+        <select id="reax-select" onchange="updateTable(this.value)">
             {% for id in reax_ids %}
                 <option value="{{ id }}" {% if id == default_reax_id %}selected{% endif %}>{{ id }}</option>
             {% endfor %}
@@ -119,22 +110,19 @@ highlight_text_html_template = """
         <p>Concept: <span id="current-concept">{{ initial_concept }}</span></p>
     </div>
 
-    <h3>SAE: <a href="{{ initial_sae_link }}" target="_blank"><span id="sae-link">{{ initial_sae_link }}</span></a></h3>
     <table>
         <thead>
             <tr>
                 <th>Input Concept</th>
                 <th>Category</th>
-                <th>Tokenized Text (SAE)</th>
                 <th>Tokenized Text (ReAX)</th>
             </tr>
         </thead>
         <tbody>
         {% for row in rows %}
-            <tr class="table-row" data-reax-id="{{ row.reax_id }}" data-input-concept="{{ row.input_concept }}" {% if row.reax_id != default_reax_id %}style="display: none;"{% endif %}>
+            <tr class="table-row" data-reax-id="{{ row.concept_id }}" data-input-concept="{{ row.input_concept }}" {% if row.concept_id != default_reax_id %}style="display: none;"{% endif %}>
                 <td>{{ row.input_concept }}</td>
                 <td>{{ row.category }}</td>
-                <td>{{ row.sae_text | safe }}</td>
                 <td>{{ row.reax_text | safe }}</td>
             </tr>
         {% endfor %}
@@ -145,59 +133,46 @@ highlight_text_html_template = """
 """
 
 # Function to generate HTML content with dropdown for selecting ReAX ID and displaying the current concept
-def generate_html_with_highlight_text(id_sae_link_map, data, tokenizer):
+def generate_html_with_highlight_text(data):
     rows = []
     
     # Get unique ReAX IDs for the dropdown
-    reax_ids = sorted(data['reax_id'].unique())
+    reax_ids = sorted(data['concept_id'].unique())
     
     # Select a random ReAX ID for the default selection
     default_reax_id = random.choice(reax_ids)
     
     # Find the first valid concept
-    initial_concept = get_valid_concept(data[data['reax_id'] == default_reax_id])
-    initial_sae_link = id_sae_link_map[default_reax_id]
+    initial_concept = get_valid_concept(data[data['concept_id'] == default_reax_id])
 
     # Iterate through the DataFrame rows to generate the initial table
     for _, row in data.iterrows():
-        sae_link = row['sae_link']  # All rows will have the same sae_link in this case
-        tokens = tokenizer.tokenize(row['input'])  # Tokenizer is fixed
-        reax_id = row['reax_id']
-        max_sae_act = data[data['reax_id'] == reax_id]['max_sae_act'].max()
-        max_reax_act = data[data['reax_id'] == reax_id]['max_reax_act'].max()
-        # Highlighting based on sae_acts and reax_acts with opacity scaling and raw values on hover
-        sae_highlighted = [
-            f'<span class="sae-highlight highlight" title="SAE Activation: {act:.3f}" style="background-color: rgba(255, 99, 132, {scale_opacity(act, max_sae_act)});">{token}</span>'
-            if act > 0 else token
-            for token, act in zip(tokens, eval(row['sae_acts']))
-        ]
-        
+        tokens = row['tokens']
+        concept_id = row['concept_id']
+        ReAX_max_act = data[data['concept_id'] == concept_id]['ReAX_max_act'].max()
+        # Highlighting based on ReAX_acts with opacity scaling and raw values on hover
         reax_highlighted = [
-            f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, max_reax_act)});">{token}</span>'
+            f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, ReAX_max_act)});">{token}</span>'
             if act > 0 else token
-            for token, act in zip(tokens, eval(row['reax_acts']))
+            for token, act in zip(tokens, row['ReAX_acts'])
         ]
         
         # Join highlighted tokens into a single string
-        sae_text = ' '.join(sae_highlighted)
         reax_text = ' '.join(reax_highlighted)
         
         # Append the processed row
         rows.append({
             'input_concept': row['input_concept'],
             'category': row['category'],
-            'sae_text': sae_text,
             'reax_text': reax_text,
-            'reax_id': row['reax_id'],
-            'sae_link': row['sae_link']
+            'concept_id': row['concept_id']
         })
     
     # Render the HTML using Jinja2
     template = Template(highlight_text_html_template)
     html_content = template.render(
         rows=rows, 
-        id_sae_link_map=id_sae_link_map,
-        initial_sae_link=initial_sae_link, 
-        reax_ids=reax_ids, initial_concept=initial_concept, 
+        reax_ids=reax_ids, 
+        initial_concept=initial_concept, 
         default_reax_id=default_reax_id)
     return html_content

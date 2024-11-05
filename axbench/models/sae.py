@@ -95,6 +95,7 @@ class GemmaScopeSAE(Model):
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
+        all_tokens = []
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
             inputs = self.tokenizer(
@@ -120,11 +121,14 @@ class GemmaScopeSAE(Model):
                 all_max_act.append(max_act)
                 all_max_act_idx.append(max_act_idx)
                 all_max_token.append(max_token)
+                all_tokens.append(tokens)
         return {
             "acts": all_acts,
             "max_act": all_max_act, 
             "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token}
+            "max_token": all_max_token,
+            "tokens": all_tokens
+        }
     
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
         # Loop over all praqut files in dump_dir.

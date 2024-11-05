@@ -38,7 +38,8 @@ from axbench import (
     plot_aggregated_roc, 
     plot_metrics,
     plot_accuracy_bars,
-    plot_win_rates
+    plot_win_rates,
+    generate_html_with_highlight_text
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -475,7 +476,7 @@ def main():
             'args': ['--mode'],
             'kwargs': {
                 'type': str,
-                'default': "latent",
+                'default': "all",
                 'help': 'The evaluation mode.'
             }
         }
@@ -507,6 +508,9 @@ def main():
         eval_latent(args)
     elif args.mode == "steering":
         eval_steering(args)
+    elif args.mode == "all":
+        eval_latent(args)
+        eval_steering(args)
 
     if args.report_to is not None and "wandb" in args.report_to:
         if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file() and \
@@ -524,14 +528,15 @@ def main():
             concepts = []
             idx = 0
             for metadata_entry in metadata:
-                for concept in metadata_entry["concepts"]:
+                for concept_idx, concept in enumerate(metadata_entry["concepts"]):
+                    sae_link = metadata_entry["refs"][concept_idx]
                     winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
                     auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
                     max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
                     top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
                     neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
                     concepts += [[
-                        idx, concept, winrate, auc, max_act, 
+                        idx, concept, winrate, auc, max_act, sae_link
                     ]]
                     top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
                     neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
@@ -544,7 +549,20 @@ def main():
                 "concept_table":  wandb.Table(
                     columns=[
                         "concept_id", "concept", "winrate", "auc", 
-                        "max_act"], data=concepts)})
+                        "max_act", "sae_link"], data=concepts)})
+            
+            # log token level heatmaps
+            inference_path = Path(args.dump_dir) / "inference" / "latent_data.parquet"
+            inference_df = pd.read_parquet(inference_path)
+            heatmap_html = generate_html_with_highlight_text(inference_df)
+            wandb.log({"latent/token_heatmap": wandb.Html(heatmap_html)})
+
+            # win-rate table logging
+            steering_path = Path(args.dump_dir) / "evaluate" / "winrate.parquet"
+            winrate_df = pd.read_parquet(steering_path)
+            wandb.log({
+                "steering/winrate": wandb.Table(dataframe=winrate_df)})
+
         run.finish()
 
 
