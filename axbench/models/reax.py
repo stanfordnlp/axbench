@@ -55,7 +55,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )

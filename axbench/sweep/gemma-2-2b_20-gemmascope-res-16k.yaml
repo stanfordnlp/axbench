@@ -45,7 +45,7 @@ inference:
   steering_batch_size: 32
   steering_output_length: 128
   steering_num_of_examples: 3 # number of examples per concept
-  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0] # number of steering factors per example
+  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0] # number of steering factors per example
 
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"

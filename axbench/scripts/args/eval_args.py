@@ -18,6 +18,7 @@ class EvalArgs:
     winrate_baseline: Optional[str] = None
     wandb_entity: Optional[str] = None
     wandb_name: Optional[str] = None
+    run_name: Optional[bool] = None
 
     def __init__(
         self,

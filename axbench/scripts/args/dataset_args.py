@@ -28,6 +28,7 @@ class DatasetArgs:
     steering_output_length: Optional[int] = None
     steering_num_of_examples: Optional[int] = None
     lm_model: Optional[str] = None
+    run_name: Optional[str] = None
 
     def __init__(
         self,

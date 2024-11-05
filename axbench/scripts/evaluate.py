@@ -88,27 +88,33 @@ def data_generator(data_dir, mode):
 
 
 def winrate_data_generator(data_dir, aggregated_results):
-    best_factors = {}
+    avg_scores = {}
     for result in aggregated_results:
-        best_factors[result["concept_id"]] = {}
         # pick the best factor each method
         for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
-            best_factor = scores["factor"][np.argmax(scores["lm_judge_rating"])]
+            any_factor = scores["factor"]
             # one caveat here is the best factor for prompt steering is the 0th element
-            best_factors[result["concept_id"]][method] = best_factor
-    
+            if method in avg_scores:
+                avg_scores[method].append(scores["lm_judge_rating"])
+            else:
+                avg_scores[method] = [scores["lm_judge_rating"]]
+    best_factors = {}
+    for method, scores in avg_scores.items():
+        mean_score = np.mean(scores, axis=0)
+        best_factors[method] = any_factor[np.argmax(mean_score)]
+
     df_generator = data_generator(data_dir, mode="steering")
     best_dfs = []
     for concept_id, current_df in df_generator:
         # if concept_id >= start_concept_id:
         concept_best_dfs = {}
-        for method, factor in best_factors[concept_id].items():
+        for method, factor in best_factors.items():
             include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
             method_df = current_df[include_columns]
             method_best_df = method_df[method_df["factor"]==factor]
             concept_best_dfs[method] = method_best_df.copy()
             concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
-        for method in best_factors[concept_id].keys():
+        for method in best_factors.keys():
             # Use merge instead of direct assignment to ensure proper alignment
             concept_best_df = concept_best_df.merge(
                 concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
@@ -169,7 +175,7 @@ def combine_scores(concept_data):
         following_ratings = following_scores[method]["lm_judge_rating"]
         factors = concept_scores[method]["factor"]  # factors are same in both
         # Multiply corresponding scores
-        combined_ratings = [(c) for c, f in zip(concept_ratings, following_ratings)]
+        combined_ratings = [(c*f) for c, f in zip(concept_ratings, following_ratings)]
         combined_evaluator[method] = {
             "lm_judge_rating": combined_ratings,
             "factor": factors
@@ -490,7 +496,7 @@ def main():
         run = wandb.init(
             project="AxBench", 
             entity=f"{args.wandb_entity}",
-            name=f"{wandb_name}_{args.mode}",
+            name=f"{wandb_name}_{args.mode}" if args.run_name is None else f"{args.run_name}_{wandb_name}_{args.mode}",
         )
         
         with open(args.config_file, 'r') as file:
