@@ -97,7 +97,7 @@ def plot_aggregated_roc(jsonl_data, write_to_path=None, report_to=[], wandb_name
         print(p)
 
     # Report to wandb if wandb_name is provided
-    if "wandb" in report_to:
+    if report_to is not None and "wandb" in report_to:
         # Prepare data for wandb.plot.line_series
         xs = common_fpr.tolist()
         ys = [np.mean(tprs[model], axis=0).tolist() for model in tprs]
@@ -177,7 +177,7 @@ def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_na
         print(p)
 
     # Report to wandb if wandb_name is provided
-    if "wandb" in report_to:
+    if report_to is not None and "wandb" in report_to:
         # Separate data by metrics to prepare for wandb line series plotting
         line_series_plots = {}
         for metric in df['Metric'].unique():
@@ -262,7 +262,7 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to
     else:
         print(p)
 
-    if "wandb" in report_to:
+    if report_to is not None and "wandb" in report_to:
         wandb.log({"hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
 
 
@@ -375,5 +375,5 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
     else:
         print(p)
 
-    if "wandb" in report_to:
+    if report_to is not None and "wandb" in report_to:
         wandb.log({"winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})

@@ -79,5 +79,3 @@ evaluate:
   run_winrate: true
   winrate_baseline: "PromptSteering"
 
-  report_to: ["wandb"]
-  wandb_entity: "wuzhengx"

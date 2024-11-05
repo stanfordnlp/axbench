@@ -46,9 +46,11 @@ To evaluate inference results for latent activations:
 ```bash
 python axbench/scripts/evaluate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode latent
 ```
+To enable `wandb` logging, you need to pass in additional arguments, `--report_to ["wandb"] --wandb_entity "<your wandb entity>"`
 
 #### steering
 To evaluate inference results for steering:
 ```bash
 python axbench/scripts/evaluate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode steering
 ```
+To enable `wandb` logging, you need to pass in additional arguments, `--report_to ["wandb"] --wandb_entity "<your wandb entity>"`

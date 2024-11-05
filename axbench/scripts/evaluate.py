@@ -484,7 +484,7 @@ def main():
 
     # now = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
     # start wandb logging
-    if "wandb" in args.report_to:
+    if args.report_to is not None and "wandb" in args.report_to:
         import wandb
         wandb_name = f"{args.dump_dir.split('/')[-1]}"
         run = wandb.init(
@@ -492,22 +492,17 @@ def main():
             entity=f"{args.wandb_entity}",
             name=f"{wandb_name}_{args.mode}",
         )
-        run.summary.update(vars(args))
-
-        # log all other confis
-        for folder in ["generate", "train", "inference"]:
-            yaml_file_path = f"{args.dump_dir}/{folder}/config.yaml"  # Update with your actual file path
-            with open(yaml_file_path, 'r') as file:
-                additional_args = yaml.safe_load(file)  # Load YAML into a dictionary
-                # Log additional args to wandb summary
-                run.summary.update({folder:additional_args})
+        
+        with open(args.config_file, 'r') as file:
+            additional_args = yaml.safe_load(file)
+            run.summary.update(additional_args)
 
     if args.mode == "latent":
         eval_latent(args)
     elif args.mode == "steering":
         eval_steering(args)
 
-    if "wandb" in args.report_to:
+    if args.report_to is not None and "wandb" in args.report_to:
         run.finish()
 
 
