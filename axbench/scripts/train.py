@@ -137,7 +137,7 @@ def binarize_df(original_df, concept, model_name):
 
 
 def main():
-    args = TrainingArgs()
+    args = TrainingArgs(section="train")
     args.data_dir = f"{args.dump_dir}/generate"
     # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
@@ -145,9 +145,9 @@ def main():
     df_generator = data_generator(args.data_dir)
     df_list = list(df_generator)  # Collect all (group_id, group_df) pairs
 
-    # copy the config yaml file to the dump dir
-    shutil.copy(args.config_file, f"{args.dump_dir}/train/config.yaml")
-
+    dump_dir = Path(args.dump_dir) / "train"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"

@@ -474,13 +474,13 @@ def main():
             }
         }
     ]
-    args = EvalArgs(custom_args=custom_args)
+    args = EvalArgs(custom_args=custom_args, section="evaluate")
     args.data_dir = f"{args.dump_dir}/inference"
     logger.warning("Evaluating generations with the following configuration:")
     logger.warning(args)
     
-    # copy the config yaml file to the dump dir
-    shutil.copy(args.config_file, f"{args.dump_dir}/evaluate/config.yaml")
+    dump_dir = Path(args.dump_dir) / "evaluate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
 
     # now = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
     # start wandb logging

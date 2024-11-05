@@ -475,15 +475,12 @@ def main():
             }
         }
     ]
-    args = DatasetArgs(custom_args=custom_args)
+    args = DatasetArgs(custom_args=custom_args, section="inference")
     args.data_dir = f"{args.dump_dir}/generate"
     args.train_dir = f"{args.dump_dir}/train"
     logger.warning("Inferencing with following configuration:")
     logger.warning(args)
     set_seed(args.seed)
-    
-    # copy the config yaml file to the dump dir
-    shutil.copy(args.config_file, f"{args.dump_dir}/inference/config.yaml")
 
     def check_latent_eval_done(args):
         # Check if at least one latent eval fragment exists.

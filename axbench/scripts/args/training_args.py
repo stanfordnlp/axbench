@@ -3,7 +3,6 @@ import argparse
 import yaml
 from typing import Optional, List
 
-
 class ModelContainer:
     def __init__(self):
         self._models = {}
@@ -13,7 +12,6 @@ class ModelContainer:
         if name.isidentifier():
             setattr(self, name, params)
         else:
-            # Handle model names that are not valid identifiers
             print(f"Warning: Model name '{name}' is not a valid Python identifier. Use dictionary access.")
     
     def __getitem__(self, key):
@@ -44,6 +42,8 @@ class TrainingArgs:
     def __init__(
         self,
         description: str = "Training Script",
+        config_file: str = None,
+        section: str = "train",  # Specify section to load
         custom_args: Optional[List[dict]] = None,
         override_config: bool = True
     ):
@@ -53,7 +53,7 @@ class TrainingArgs:
         parser.add_argument(
             '--config',
             type=str,
-            required=True,
+            default=config_file,
             help='Path to the YAML configuration file.'
         )
 
@@ -81,30 +81,37 @@ class TrainingArgs:
 
         # Load the YAML configuration file
         config_file_path = args.config
+        if not config_file_path:
+            raise ValueError("A config file must be provided.")
         with open(config_file_path, 'r') as file:
             config = yaml.safe_load(file)
+
+        # Select the specified section
+        section_data = config.get(section, {})
+        if not section_data:
+            raise ValueError(f"Section '{section}' not found in the YAML configuration.")
 
         # Initialize global parameters
         for param in global_params:
             arg_value = getattr(args, param, None)
-            config_value = config.get(param, None)
+            config_value = section_data.get(param, None)
             setattr(self, param, arg_value if arg_value is not None else config_value)
 
         # Initialize hierarchical parameters with global defaults
         for param in hierarchical_params:
             arg_value = getattr(args, param, None)
-            config_value = config.get(param, None)
+            config_value = section_data.get(param, None)
             setattr(self, param, arg_value if arg_value is not None else config_value)
 
         # Initialize models list
         self.models_list = []
         self.model_params = {}
-        if 'models' in config:
-            if isinstance(config['models'], dict):
-                self.models_list = list(config['models'].keys())
-                self.model_params = config['models']
-            elif isinstance(config['models'], list):
-                self.models_list = config['models']
+        if 'models' in section_data:
+            if isinstance(section_data['models'], dict):
+                self.models_list = list(section_data['models'].keys())
+                self.model_params = section_data['models']
+            elif isinstance(section_data['models'], list):
+                self.models_list = section_data['models']
             else:
                 raise ValueError("Invalid format for 'models' in config")
         else:
@@ -144,10 +151,6 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        """
-        Infer the type of the parameter based on its name.
-        """
-        # Define parameter types
         int_params = ['layer', 'batch_size', 'n_epochs', 'k_latent_null_loss']
         float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss']
         str_params = ['concept_path', 'model_name', 'component', 'data_dir', 'dump_dir']
@@ -159,4 +162,5 @@ class TrainingArgs:
         elif param_name in str_params:
             return str
         else:
-            return str  # Default to string
+            return str
+

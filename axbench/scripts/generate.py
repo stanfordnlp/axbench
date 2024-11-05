@@ -123,11 +123,7 @@ def save(
     refs, partition, current_df):
     """
     Save the current state, metadata, and DataFrame using Parquet format.
-    """
-    # handle training df first
-    dump_dir = Path(dump_dir) / "generate"
-    dump_dir.mkdir(parents=True, exist_ok=True)
-    
+    """    
     # Save state
     state_path = os.path.join(dump_dir, STATE_FILE)
     with open(state_path, "wb") as f:
@@ -173,17 +169,17 @@ def load_state(dump_dir):
     return None
 
 def main():
-    args = DatasetArgs()
+    args = DatasetArgs(section="generate")
     logger.warning("Generating datasets with the following configuration:")
     logger.warning(args)
 
     dump_dir = args.dump_dir
+    dump_dir = Path(dump_dir) / "generate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
     concept_path = args.concept_path
     num_of_examples = args.num_of_examples
     max_concepts = args.max_concepts
-    
-    # copy the config yaml file to the dump dir
-    shutil.copy(args.config_file, f"{dump_dir}/generate/config.yaml")
 
     # Load and optionally shuffle concepts
     set_seed(args.seed)

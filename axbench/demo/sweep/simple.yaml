@@ -1,0 +1,57 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  input_length: 32
+  output_length: 32
+  num_of_examples: 72
+  concept_path: "axbench/demo/concepts.csv"
+  master_data_dir: "axbench/data"
+  seed: 42
+
+train:
+  model_name: "google/gemma-2-2b"
+  layer: 20
+  component: "res"
+  models: 
+    ReAX:
+      batch_size: 6
+      n_epochs: 12
+      k_latent_null_loss: 1
+      lr: 0.003
+      coeff_l1_loss_null: 0.05
+      coeff_l1_loss: 0.001
+
+inference:
+  models: [
+    "ReAX", "PromptSteering",
+  ] 
+  model_name: "google/gemma-2-2b"
+  input_length: 32
+  latent_num_of_examples: 50
+  latent_batch_size: 128
+  steering_model_name: "google/gemma-2-2b-it"
+  steering_datasets: ["AlpacaEval"]
+  steering_batch_size: 32
+  steering_output_length: 128
+  steering_num_of_examples: 3 # number of examples per concept
+  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0] # number of steering factors per example
+  master_data_dir: "axbench/data"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+
+evaluate:
+  models: [
+    "ReAX", "PromptSteering",
+  ] 
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeConceptEvaluator",
+    "LMJudgeFollowingEvaluator",
+  ]
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: true
+  winrate_baseline: "PromptSteering"
