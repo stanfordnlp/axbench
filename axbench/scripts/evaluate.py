@@ -92,7 +92,7 @@ def winrate_data_generator(data_dir, aggregated_results):
     avg_scores = {}
     for result in aggregated_results:
         # pick the best factor each method
-        for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
+        for method, scores in result["results"]["GlobalLMJudgeConceptFollowingEvaluator"].items():
             any_factor = scores["factor"]
             # one caveat here is the best factor for prompt steering is the 0th element
             if method in avg_scores:
@@ -165,7 +165,28 @@ def load_state(dump_dir, mode):
     return None
 
 
-def combine_scores(concept_data):
+def combine_scores(jsonl_lines):
+    concept_scores = jsonl_lines[0]["results"]["LMJudgeConceptEvaluator"]
+    combined_evaluator = {}
+    # For each method (L1LinearProbe, ReAX, etc.)
+    for method in concept_scores.keys():
+        all_concept_ratings = []
+        all_following_ratings = []
+        for id in range(len(jsonl_lines)):
+            c = jsonl_lines[id]["results"]["LMJudgeConceptEvaluator"][method]["lm_judge_rating"]
+            f = jsonl_lines[id]["results"]["LMJudgeFollowingEvaluator"][method]["lm_judge_rating"]
+            all_concept_ratings += [c]
+            all_following_ratings += [f]
+        combined_ratings = np.mean(all_concept_ratings, axis=0) * np.mean(all_following_ratings, axis=0)
+        combined_ratings = combined_ratings.tolist()
+        combined_evaluator[method] = {
+            "lm_judge_rating": combined_ratings,
+            "factor": concept_scores[method]["factor"]
+        }
+    return combined_evaluator
+
+
+def combine_scores_per_concept(concept_data):
     """Combine scores from concept and following evaluators for each method."""
     concept_scores = concept_data["results"]["LMJudgeConceptEvaluator"]
     following_scores = concept_data["results"]["LMJudgeFollowingEvaluator"]
@@ -185,9 +206,13 @@ def combine_scores(concept_data):
 
 
 def process_jsonl_file(jsonl_lines):
+    global_combined_ratings = combine_scores(jsonl_lines)
+
     for data in jsonl_lines:
         data["results"]["LMJudgeConceptFollowingEvaluator"] = \
-            combine_scores(data)
+            combine_scores_per_concept(data)
+        data["results"]["GlobalLMJudgeConceptFollowingEvaluator"] = \
+            global_combined_ratings
     return jsonl_lines
 
 
@@ -221,7 +246,13 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
             {
                 'evaluator_name': 'LMJudgeConceptFollowingEvaluator',
                 'metric_name': 'lm_judge_rating',
-                'y_label': 'Steering*Relevance',
+                'y_label': 'Steering*Relevance (Concept-level)',
+                'use_log_scale': False
+            },
+            {
+                'evaluator_name': 'GlobalLMJudgeConceptFollowingEvaluator',
+                'metric_name': 'lm_judge_rating',
+                'y_label': 'Steering*Relevance (Global)',
                 'use_log_scale': False
             }
         ]

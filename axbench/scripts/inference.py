@@ -283,7 +283,8 @@ def infer_steering(args):
             results = benchmark_model.predict_steer(
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
                 batch_size=args.steering_batch_size,
-                eval_output_length=args.steering_output_length
+                eval_output_length=args.steering_output_length, 
+                temperature=args.temperature
             )
             # Collect results
             return (concept_id, model_name, results)

@@ -64,7 +64,7 @@ class MaxReLUIntervention(
 
         return InterventionOutput(
             output=output.to(base.dtype),
-            latent=latent
+            latent=[latent, output, base.clone()] # latent, output, input
         )
 
 
@@ -99,6 +99,8 @@ class SubspaceAdditionIntervention(
             self.embed_dim, kwargs["low_rank_dimension"], bias=True)
     
     def forward(self, base, source=None, subspaces=None):
+        if base.shape[1] > 1:
+            cls_token = base[:, 0, :].clone()
         # Get the normalized subspace vector (unit vector)
         v = self.proj.weight[subspaces["idx"]].unsqueeze(1)
         proj_coeff = (base * v).sum(dim=-1, keepdim=True)
@@ -110,6 +112,8 @@ class SubspaceAdditionIntervention(
         
         # Replace the projection component with the steering vector
         output = (base - proj_vec) + steering_vec
+        if base.shape[1] > 1:
+            output[:, 0, :] = cls_token
         return output
 
 

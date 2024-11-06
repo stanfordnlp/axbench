@@ -376,4 +376,4 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
         print(p)
 
     if report_to is not None and "wandb" in report_to:
-        wandb.log({"steering/winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})
+        wandb.log({"steering/winrate_plot": wandb.Image(str(write_to_path / "winrate_plot.png"))})
