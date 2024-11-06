@@ -15,6 +15,7 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
+import shutil
 from pyreax import (
     LanguageModel
 )
@@ -29,13 +30,16 @@ from pathlib import Path
 import numpy as np
 from openai import AsyncOpenAI
 import httpx, asyncio
+import datetime
+import yaml
 
 import axbench
 from axbench import (
     plot_aggregated_roc, 
     plot_metrics,
     plot_accuracy_bars,
-    plot_win_rates
+    plot_win_rates,
+    generate_html_with_highlight_text
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -66,18 +70,14 @@ def data_generator(data_dir, mode):
     Yields:
         (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
     """
-    # Get list of files sorted by index
-    file_list = sorted(glob.glob(os.path.join(data_dir, f'{mode}_data_fragment_*.parquet')))
-    
     # Pre-load and organize data by concept_id
     concept_data = {}
-    for file_path in tqdm(file_list, desc="Loading data"):
-        df = pd.read_parquet(file_path)
-        # Group by concept_id and store in dictionary
-        for concept_id, group in df.groupby('concept_id'):
-            if concept_id not in concept_data:
-                concept_data[concept_id] = []
-            concept_data[concept_id].append(group)
+    df = pd.read_parquet(os.path.join(data_dir, f'{mode}_data.parquet'))
+    # Group by concept_id and store in dictionary
+    for concept_id, group in df.groupby('concept_id'):
+        if concept_id not in concept_data:
+            concept_data[concept_id] = []
+        concept_data[concept_id].append(group)
     
     # Yield concatenated data for each concept_id
     for concept_id in sorted(concept_data.keys()):
@@ -89,27 +89,33 @@ def data_generator(data_dir, mode):
 
 
 def winrate_data_generator(data_dir, aggregated_results):
-    best_factors = {}
+    avg_scores = {}
     for result in aggregated_results:
-        best_factors[result["concept_id"]] = {}
         # pick the best factor each method
         for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
-            best_factor = scores["factor"][np.argmax(scores["lm_judge_rating"])]
+            any_factor = scores["factor"]
             # one caveat here is the best factor for prompt steering is the 0th element
-            best_factors[result["concept_id"]][method] = best_factor
-    
+            if method in avg_scores:
+                avg_scores[method].append(scores["lm_judge_rating"])
+            else:
+                avg_scores[method] = [scores["lm_judge_rating"]]
+    best_factors = {}
+    for method, scores in avg_scores.items():
+        mean_score = np.mean(scores, axis=0)
+        best_factors[method] = any_factor[np.argmax(mean_score)]
+
     df_generator = data_generator(data_dir, mode="steering")
     best_dfs = []
     for concept_id, current_df in df_generator:
         # if concept_id >= start_concept_id:
         concept_best_dfs = {}
-        for method, factor in best_factors[concept_id].items():
+        for method, factor in best_factors.items():
             include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
             method_df = current_df[include_columns]
             method_best_df = method_df[method_df["factor"]==factor]
             concept_best_dfs[method] = method_best_df.copy()
             concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
-        for method in best_factors[concept_id].keys():
+        for method in best_factors.keys():
             # Use merge instead of direct assignment to ensure proper alignment
             concept_best_df = concept_best_df.merge(
                 concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
@@ -185,7 +191,7 @@ def process_jsonl_file(jsonl_lines):
     return jsonl_lines
 
 
-def plot_steering(aggregated_results, dump_dir):
+def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
     try:
         configs = [
             {
@@ -222,11 +228,15 @@ def plot_steering(aggregated_results, dump_dir):
         plot_metrics(
             jsonl_data=aggregated_results,
             configs=configs,
-            write_to_path=dump_dir
+            write_to_path=dump_dir, 
+            report_to=report_to,
+            wandb_name=wandb_name
         )
         plot_win_rates(
             jsonl_data=aggregated_results,
-            write_to_path=dump_dir  # Replace with your desired output directory
+            write_to_path=dump_dir,  # Replace with your desired output directory
+            report_to=report_to,
+            wandb_name=wandb_name
         )
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
@@ -276,7 +286,6 @@ def eval_steering(args):
     """
     data_dir = args.data_dir
     dump_dir = args.dump_dir
-    rotation_freq = args.rotation_freq
 
     # Initialize data generator
     df_generator = data_generator(args.data_dir, mode="steering")
@@ -394,7 +403,7 @@ def eval_steering(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_steering(aggregated_results, Path(dump_dir) / "evaluate")
+    plot_steering(aggregated_results, Path(dump_dir) / "evaluate", args.report_to, args.wandb_name)
     logger.warning("Evaluation completed!")
 
 
@@ -410,13 +419,16 @@ def load_jsonl(jsonl_path):
     return jsonl_data
     
 
-def plot_latent(dump_dir):
+def plot_latent(dump_dir, report_to=[], wandb_name=None):
     dump_dir = Path(dump_dir) / "evaluate"
     # aggregate all results
     aggregated_results = load_jsonl(os.path.join(dump_dir, 'latent.jsonl'))
     try:
-        plot_aggregated_roc(aggregated_results, write_to_path=dump_dir)
-        plot_accuracy_bars(aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir)
+        plot_aggregated_roc(
+            aggregated_results, write_to_path=dump_dir, report_to=report_to, wandb_name=wandb_name)
+        plot_accuracy_bars(
+            aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir, 
+            report_to=report_to, wandb_name=wandb_name)
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
 
@@ -425,7 +437,6 @@ def eval_latent(args):
 
     data_dir = args.data_dir
     dump_dir = args.dump_dir
-    rotation_freq = args.rotation_freq
     df_generator = data_generator(args.data_dir, mode="latent")
 
     state = load_state(args.dump_dir, mode="latent")
@@ -456,7 +467,7 @@ def eval_latent(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_latent(dump_dir)
+    plot_latent(dump_dir, args.report_to, args.wandb_name)
     logger.warning("Evaluation completed!")
 
 def main():
@@ -465,19 +476,94 @@ def main():
             'args': ['--mode'],
             'kwargs': {
                 'type': str,
-                'default': "latent",
+                'default': "all",
                 'help': 'The evaluation mode.'
             }
         }
     ]
-    args = EvalArgs(custom_args=custom_args)
+    args = EvalArgs(custom_args=custom_args, section="evaluate")
+    args.data_dir = f"{args.dump_dir}/inference"
     logger.warning("Evaluating generations with the following configuration:")
     logger.warning(args)
     
+    dump_dir = Path(args.dump_dir) / "evaluate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    # now = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+    # start wandb logging
+    if args.report_to is not None and "wandb" in args.report_to:
+        import wandb
+        wandb_name = f"{args.dump_dir.split('/')[-1]}"
+        run = wandb.init(
+            project="AxBench", 
+            entity=f"{args.wandb_entity}",
+            name=f"{wandb_name}_{args.mode}" if args.run_name is None else f"{args.run_name}_{wandb_name}_{args.mode}",
+        )
+        
+        with open(args.config_file, 'r') as file:
+            additional_args = yaml.safe_load(file)
+            run.summary.update(additional_args)
+
     if args.mode == "latent":
         eval_latent(args)
     elif args.mode == "steering":
         eval_steering(args)
+    elif args.mode == "all":
+        eval_latent(args)
+        eval_steering(args)
+
+    if args.report_to is not None and "wandb" in args.report_to:
+        if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file() and \
+            (Path(args.dump_dir) / "evaluate" / "latent.jsonl").is_file():
+            # log more metadata into wandb for visualization
+            metadata_path = Path(args.dump_dir) / "generate" / "metadata.jsonl"
+            metadata = load_jsonl(metadata_path)
+            steering_path = Path(args.dump_dir) / "evaluate" / "steering.jsonl"
+            steering_results = load_jsonl(steering_path)
+            latent_path = Path(args.dump_dir) / "evaluate" / "latent.jsonl"
+            latent_results = load_jsonl(latent_path)
+            top_logits_path = Path(args.dump_dir) / "inference" / "top_logits.jsonl"
+            top_logits_results = load_jsonl(top_logits_path)
+
+            concepts = []
+            idx = 0
+            for metadata_entry in metadata:
+                for concept_idx, concept in enumerate(metadata_entry["concepts"]):
+                    sae_link = metadata_entry["refs"][concept_idx]
+                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
+                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
+                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
+                    top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
+                    neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
+                    concepts += [[
+                        idx, concept, winrate, auc, max_act, sae_link
+                    ]]
+                    top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
+                    neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
+                    wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
+                                                    title=f"{concept} ({idx})")})
+                    wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
+                                                    title=f"{concept} ({idx})")})
+                    idx += 1
+            wandb.log({
+                "concept_table":  wandb.Table(
+                    columns=[
+                        "concept_id", "concept", "winrate", "auc", 
+                        "max_act", "sae_link"], data=concepts)})
+            
+            # log token level heatmaps
+            inference_path = Path(args.dump_dir) / "inference" / "latent_data.parquet"
+            inference_df = pd.read_parquet(inference_path)
+            heatmap_html = generate_html_with_highlight_text(inference_df)
+            wandb.log({"latent/token_heatmap": wandb.Html(heatmap_html)})
+
+            # win-rate table logging
+            steering_path = Path(args.dump_dir) / "evaluate" / "winrate.parquet"
+            winrate_df = pd.read_parquet(steering_path)
+            wandb.log({
+                "steering/winrate": wandb.Table(dataframe=winrate_df)})
+
+        run.finish()
 
 
 if __name__ == "__main__":

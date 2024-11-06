@@ -7,16 +7,22 @@ git clone git@github.com:frankaging/pyreax.git
 cd pyreax
 ```
 
+### demo
+To run a complete demo with a single config file:
+```bash
+bash axbench/demo/demo.sh
+```
+
 ### generate
 Generate training dataset for representation abstractions:
 ```bash
-python axbench/scripts/generate.py --config axbench/demo/sweep/generate.yaml
+python axbench/scripts/generate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
 ```
 
 ### train
 Train and save representation abstractions with generated datasets:
 ```bash
-python axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
+python axbench/scripts/train.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
 ```
 
 ### inference
@@ -24,13 +30,13 @@ python axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
 #### latent
 Inference with latent activations with representation abstractions:
 ```bash
-python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
+python axbench/scripts/inference.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode latent
 ```
 
 #### steering
 Inference with model steering with representation abstractions:
 ```bash
-python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode steering
+python axbench/scripts/inference.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode steering
 ```
 
 ### evaluate
@@ -38,15 +44,13 @@ python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml -
 #### latent
 To evaluate inference results for latent activations:
 ```bash
-python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
+python axbench/scripts/evaluate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode latent
 ```
+To enable `wandb` logging, you need to pass in additional arguments, `--report_to ["wandb"] --wandb_entity "<your wandb entity>"`
 
 #### steering
 To evaluate inference results for steering:
 ```bash
-python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode steering
+python axbench/scripts/evaluate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode steering
 ```
-
-### (optional) plot
-
-We provide a plot notebook (`axbench/scripts/plots.ipynb`) for generating various figures.
+To enable `wandb` logging, you need to pass in additional arguments, `--report_to ["wandb"] --wandb_entity "<your wandb entity>"`

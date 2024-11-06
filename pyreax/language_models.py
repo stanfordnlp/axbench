@@ -149,7 +149,6 @@ class LanguageModel(object):
         for i in range(0, len(prompts), batch_size):
             batch_prompts = prompts[i:i + batch_size]
             batch_api_names = api_names[i:i + batch_size]
-            print(f"Processing batch {i} of {api_names[0]} with {len(batch_prompts)} prompts")
 
             # batched calls
             async_responses = [

@@ -1,0 +1,81 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  input_length: 32
+  output_length: 32
+  num_of_examples: 72
+  concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
+  max_concepts: 10
+  master_data_dir: "axbench/data"
+  seed: 42
+
+train:
+  model_name: "google/gemma-2-2b"
+  layer: 20
+  component: "res"
+  models: 
+    ReAX:
+      batch_size: 6
+      n_epochs: 12
+      k_latent_null_loss: 1
+      lr: 0.003
+      coeff_l1_loss_null: 0.03
+      coeff_l1_loss: 0.0005
+
+inference:
+  models: [
+    # "LinearProbe", "IntegratedGradients", "InputXGradients",
+    # "L1LinearProbe", 
+    "ReAX", "PromptSteering",
+    # "GemmaScopeSAE", "MeanPositiveActivation",
+    # "Random", "MeanEmbedding", "MeanActivation"
+  ] 
+
+  # for steering,"GemmaScopeSAE" is a must since we benchmark against it for win-rate
+  model_name: "google/gemma-2-2b"
+
+  # latent related params
+  input_length: 32
+  latent_num_of_examples: 50
+  latent_batch_size: 128
+
+  # steering related params
+  steering_model_name: "google/gemma-2-2b-it"
+  steering_datasets: ["AlpacaEval"]
+  # "OUATPrefix", "AlpacaEval", "MMLU", "BBQ"
+  steering_batch_size: 32
+  steering_output_length: 128
+  steering_num_of_examples: 3 # number of examples per concept
+  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0] # number of steering factors per example
+
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+
+evaluate:
+  models: [
+    # "LinearProbe", "IntegratedGradients", "InputXGradients",
+    # "L1LinearProbe", 
+    "ReAX", "PromptSteering",
+    # "GemmaScopeSAE", 
+    # "MeanPositiveActivation", 
+    # "Random", "MeanEmbedding", "MeanActivation", 
+  ] 
+
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeConceptEvaluator",
+    "LMJudgeFollowingEvaluator",
+    # "LMJudgeContinuationEvaluator"
+  ]
+
+  # Number of processes to run in parallel for steering evaluation.
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: true
+  winrate_baseline: "PromptSteering"
+

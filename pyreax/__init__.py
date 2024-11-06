@@ -1,4 +1,3 @@
-from .templates.html_templates import *
 from .templates.prompt_templates import *
 
 from .utils.constants import *

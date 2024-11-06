@@ -123,8 +123,7 @@ async def get_random_content(client, tokenizer, count, genres, concepts, length,
     prompts = []
     for concept in concepts:
         prompts += [T_RANDOM_CONTENT.format(
-            GENRE=random.choice(genres[concept]),
-            CONCEPTS="\n\n".join(concepts), LENGTH=length) for _ in range(count)]
+            GENRE=random.choice(genres[concept]), CONCEPTS="\n".join(concepts), LENGTH=length) for _ in range(count)]
     responses = await client.chat_completions("get_random_content", prompts)
 
     for i, response in enumerate(responses):

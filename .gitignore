@@ -1,11 +1,16 @@
 old_*.ipynb
 tmp_save/
 axbench/data/*.json
-axbench/demo/
+axbench/demo/train
+axbench/demo/inference
+axbench/demo/generate
+axbench/demo/evaluate
+axbench/demo/lm_cache
 *.out
 axbench/results/
 set_key.py
 uv.lock
+wandb/
 local_exp.sh
 exp*.sh
 axbench/data/persist_lm_cache

@@ -19,6 +19,7 @@ class AUCROCEvaluator(Evaluator):
         
         # Normalize the activation columns
         max_acts = data[f'{self.model_name}_max_act']
+        global_max_act = max_acts.max()
         data['normalized_max'] = (max_acts - max_acts.min()) / (max_acts.max() - max_acts.min())
         
         # Apply class labels
@@ -35,6 +36,7 @@ class AUCROCEvaluator(Evaluator):
         
         # Prepare output dictionary
         metrics = {
+            "max_act": float(global_max_act),
             "roc_auc": float(roc_auc),
             "optimal_threshold": float(optimal_threshold),
             "roc_curve": {

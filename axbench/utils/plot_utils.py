@@ -1,4 +1,4 @@
-import os, glob, random, json
+import os, glob, random, json, wandb
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import interpolate
@@ -30,7 +30,7 @@ COLORS = [
 MARKERS = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
 
 
-def plot_aggregated_roc(jsonl_data, write_to_path=None):
+def plot_aggregated_roc(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):
     # Collect ROC data for each model
     metrics_list = [aggregated_result["results"]["AUCROCEvaluator"] 
                     for aggregated_result in jsonl_data]
@@ -96,8 +96,22 @@ def plot_aggregated_roc(jsonl_data, write_to_path=None):
     else:
         print(p)
 
+    # Report to wandb if wandb_name is provided
+    if report_to is not None and "wandb" in report_to:
+        # Prepare data for wandb.plot.line_series
+        xs = common_fpr.tolist()
+        ys = [np.mean(tprs[model], axis=0).tolist() for model in tprs]
+        keys = [f"{model} (AUC = {np.mean(aucs[model]):.2f})" for model in tprs]
+        wandb.log({"latent/roc_curve" : wandb.plot.line_series(
+            xs=xs,
+            ys=ys,
+            keys=keys,
+            title='Aggregated ROC Curve',
+            xname='False Positive Rate (FPR)',
+        )})
 
-def plot_metrics(jsonl_data, configs, write_to_path=None):
+
+def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_name=None):
     # Collect data into a list
     data = []
     for config in configs:
@@ -162,8 +176,28 @@ def plot_metrics(jsonl_data, configs, write_to_path=None):
     else:
         print(p)
 
+    # Report to wandb if wandb_name is provided
+    if report_to is not None and "wandb" in report_to:
+        # Separate data by metrics to prepare for wandb line series plotting
+        line_series_plots = {}
+        for metric in df['Metric'].unique():
+            metric_data = df[df['Metric'] == metric]
+            
+            xs = metric_data['Factor'].unique().tolist()
+            ys = [metric_data[metric_data['Method'] == method]['TransformedValue'].tolist() for method in metric_data['Method'].unique()]
+            keys = [f"{method}" for method in metric_data['Method'].unique()]
+            
+            line_series_plots[f"steering/{metric}"] = wandb.plot.line_series(
+                xs=xs,
+                ys=ys,
+                keys=keys,
+                title=f"{metric}",
+                xname='Factor'
+            )
+        wandb.log(line_series_plots)
 
-def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
+
+def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to=[], wandb_name=None):
     
     # Get unique methods and sort them
     methods = set()
@@ -221,15 +255,18 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None):
             plot_title=element_text(size=5)
         )
     )
-    
+
     # Save or show the plot
     if write_to_path:
         p.save(filename=str(write_to_path / "hard_negative_accuracy.png"), dpi=300, bbox_inches='tight')
     else:
         print(p)
 
+    if report_to is not None and "wandb" in report_to:
+        wandb.log({"latent/hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
 
-def plot_win_rates(jsonl_data, write_to_path=None):    
+
+def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):    
     # Collect methods and baseline models
     methods = set()
     baseline_models = set()
@@ -338,3 +375,5 @@ def plot_win_rates(jsonl_data, write_to_path=None):
     else:
         print(p)
 
+    if report_to is not None and "wandb" in report_to:
+        wandb.log({"steering/winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})
