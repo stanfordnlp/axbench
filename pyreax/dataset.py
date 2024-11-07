@@ -18,7 +18,7 @@ from .utils.model_utils import *
 from .utils.prompt_utils import *
 from .language_models import *
 
-from dataset_dspy import Reaxoor
+from .dataset_dspy import Reaxoor
 
 async def run_tasks(tasks):
     # Gather and run all provided tasks concurrently, and collect their results

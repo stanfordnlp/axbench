@@ -180,6 +180,7 @@ def main():
     concept_path = args.concept_path
     num_of_examples = args.num_of_examples
     max_concepts = args.max_concepts
+    dspy = args.dspy
 
     # Load and optionally shuffle concepts
     set_seed(args.seed)
@@ -247,7 +248,7 @@ def main():
             current_df = dataset_factory.create_train_df(
                 concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
                 input_length=args.input_length, output_length=args.output_length,
-                current_group_id=data_group_id
+                current_group_id=data_group_id, dspy=dspy,
             )
             current_df["group_id"] = data_group_id
         except Exception as e:

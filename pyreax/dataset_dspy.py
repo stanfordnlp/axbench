@@ -1,8 +1,8 @@
 import dspy
 import math
 import random
-from signatures import *
-from utils.constants import *
+from .signatures import *
+from .utils.constants import *
 import pandas as pd
 import time
 import logging
