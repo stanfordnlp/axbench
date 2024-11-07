@@ -10,11 +10,14 @@ dependencies = [
     "einops>=0.8.0",
     "httpx>=0.27.2",
     "openai>=1.52.1",
-    "pyvene",
+    "pyvene>=0.1.6",
     "torch>=2.5.0",
-    "transformers",
-    "pyvene>=0.1.5",
+    "transformers>=4.42.4",
     "dspy>=2.5.16",
+    "wandb>=0.18.5",
+    "scikit-learn>=1.5.2",
+    "seaborn>=0.12.2",
+    "pyreft>=0.0.8",
 ]
 
 [build-system]
