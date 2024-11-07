@@ -324,7 +324,7 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
     
     # Sort methods: baseline at top, then methods by descending win rate
     non_baseline_methods = [m for m in methods if m != baseline_model]
-    sorted_methods = [baseline_model] + sorted(
+    sorted_methods = sorted(
         non_baseline_methods,
         key=lambda m: win_means[m],
         reverse=True
@@ -376,4 +376,4 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
         print(p)
 
     if report_to is not None and "wandb" in report_to:
-        wandb.log({"steering/winrate": wandb.Image(str(write_to_path / "winrate_plot.png"))})
+        wandb.log({"steering/winrate_plot": wandb.Image(str(write_to_path / "winrate_plot.png"))})

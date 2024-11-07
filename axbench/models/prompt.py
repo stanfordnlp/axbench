@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class PromptSteering(Model):
-    
+    input_field = "steered_input"
     def __str__(self):
         return 'PromptSteering'
 
@@ -50,7 +50,7 @@ class PromptSteering(Model):
         all_perplexities = []
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['steered_input'].tolist()
+            input_strings = batch_examples[self.input_field].tolist()
             # tokenize input_strings
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
@@ -98,3 +98,10 @@ class PromptSteering(Model):
             "steered_generation": all_generations,
             "perplexity": all_perplexities,
         }
+
+
+class PromptBaseline(PromptSteering):
+    input_field = "input"
+    def __str__(self):
+        return 'PromptBaseline'
+

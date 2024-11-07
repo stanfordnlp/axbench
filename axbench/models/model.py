@@ -119,6 +119,7 @@ class Model(object):
         # iterate rows in batch
         batch_size = kwargs.get("batch_size", 64)
         eval_output_length = kwargs.get("eval_output_length", 128)
+        temperature = kwargs.get("temperature", 1.0)
         all_generations = []
         all_perplexities = []
         all_strenghts = []
@@ -141,8 +142,7 @@ class Model(object):
                 unit_locations=None, intervene_on_prompt=True, 
                 subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}],
                 max_new_tokens=eval_output_length, do_sample=True, 
-                # following neuronpedia, we use temperature=0.5 and repetition_penalty=2.0
-                temperature=0.5, repetition_penalty=2.0
+                temperature=temperature,
             )
 
             # Decode and print only the generated text without prompt tokens

@@ -88,7 +88,7 @@ class ReAX(Model):
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
-    
+        norm_loss_fn = torch.nn.MSELoss()
         # Main training loop.
         progress_bar, curr_step = tqdm(range(num_training_steps)), 0
         for epoch in range(self.training_args.n_epochs):
@@ -113,7 +113,7 @@ class ReAX(Model):
         
                 # loss
                 loss = cf_outputs.loss
-                latent = self.ax_model.full_intervention_outputs[0].latent
+                latent, output, base = self.ax_model.full_intervention_outputs[0].latent
 
                 null_loss, l1_loss = calculate_l1_losses(
                     latent, 
@@ -121,9 +121,13 @@ class ReAX(Model):
                     mask=inputs["intervention_masks"],
                     k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
-        
+                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1).mean()
+                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1).mean()
+                norm_loss = norm_loss_fn(norm_output, norm_base)
                 coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
+                loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + \
+                    coeff*self.training_args.coeff_l1_loss*l1_loss + \
+                    coeff*self.training_args.coeff_norm_loss*norm_loss
                 
                 # grads
                 loss.backward()
@@ -137,7 +141,8 @@ class ReAX(Model):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || null l1 loss %.6f" % (curr_lr, loss, null_loss))
+                    "lr %.6f || loss %.6f || null l1 loss %.6f || norm loss %.6f" % (
+                        curr_lr, loss, null_loss, norm_loss))
         progress_bar.close()
         logger.warning("Training finished.")
     

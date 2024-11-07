@@ -9,6 +9,8 @@ class DatasetArgs:
     steering_datasets: field(default_factory=lambda: [])
     input_length: Optional[int] = 32
     output_length: Optional[int] = 10
+    # generation related params
+    temperature: Optional[float] = 1.0
     data_dir: Optional[str] = None
     train_dir: Optional[str] = None
     dump_dir: Optional[str] = None

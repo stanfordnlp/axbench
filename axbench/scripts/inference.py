@@ -52,13 +52,15 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
 
 
 def load_config(config_path):
     """
     Load metadata from a JSON lines file.
     """
+    if not os.path.exists(Path(config_path) / CONFIG_FILE):
+        return None
     with open(Path(config_path) / CONFIG_FILE) as f:
         d = json.load(f)
     return d
@@ -179,7 +181,7 @@ def infer_steering(args):
     num_of_examples = args.steering_num_of_examples
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
-    layer = config["layer"]
+    layer = config["layer"] if config else 0 # default layer for prompt baselines
     steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
 
@@ -283,7 +285,8 @@ def infer_steering(args):
             results = benchmark_model.predict_steer(
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
                 batch_size=args.steering_batch_size,
-                eval_output_length=args.steering_output_length
+                eval_output_length=args.steering_output_length, 
+                temperature=args.temperature
             )
             # Collect results
             return (concept_id, model_name, results)
@@ -329,7 +332,7 @@ def infer_latent(args):
     num_of_examples = args.latent_num_of_examples
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
-    layer = config["layer"]
+    layer = config["layer"] if config else 0 # default layer for prompt baselines
 
     # Create a new OpenAI client.
     client = AsyncOpenAI(
@@ -452,46 +455,46 @@ def infer_latent(args):
             results_per_concept[concept_id_result][model_name_result] = results
 
     # After all tasks are done, update datasets with results and save
-    for concept_id in concept_ids:
-        current_df = datasets[concept_id]
-        # Get the results for this concept_id
-        model_results = results_per_concept[concept_id]
-        for model_name, results in model_results.items():
-            for k, v in results.items():
-                if k == "tokens" and "tokens" not in current_df:
-                    current_df["tokens"] = v # for tokens, they are global
-                else:
-                    current_df[f"{model_name}_{k}"] = v
-        # Save the combined results
-        save(dump_dir, {"concept_id": concept_id + 1}, "latent",
-             current_df)
+    if len(tasks) > 0:
+        for concept_id in concept_ids:
+            current_df = datasets[concept_id]
+            # Get the results for this concept_id
+            model_results = results_per_concept[concept_id]
+            for model_name, results in model_results.items():
+                for k, v in results.items():
+                    if k == "tokens" and "tokens" not in current_df:
+                        current_df["tokens"] = v # for tokens, they are global
+                    else:
+                        current_df[f"{model_name}_{k}"] = v
+            # Save the combined results
+            save(dump_dir, {"concept_id": concept_id + 1}, "latent",
+                current_df)
     
-    logger.warning("Saving top logits...")
-    for concept_id in concept_ids:
-        all_top_logits = {}
-        for model_name in args.models:
-            if model_name in LATENT_EXCLUDE_MODELS:
-                continue
-            # calculate the logit lens results
-            model_class = getattr(axbench, model_name)
-            benchmark_model = model_class(
-                device_lm_models[available_devices[0]], tokenizer, layer=layer,
-                low_rank_dimension=len(metadata),
-                device=available_devices[0]
-            )
-            benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
-            benchmark_model.to(available_devices[0])
-            top_logits, neg_logits = benchmark_model.get_logits(concept_id, k=10)
-            all_top_logits[model_name] = {
-                "top_logits": top_logits,
-                "neg_logits": neg_logits
+        logger.warning("Saving top logits...")
+        for concept_id in concept_ids:
+            all_top_logits = {}
+            if "ReAX" in args.models:
+                model_name = "ReAX"
+                # calculate the logit lens results
+                model_class = getattr(axbench, model_name)
+                benchmark_model = model_class(
+                    device_lm_models[available_devices[0]], tokenizer, layer=layer,
+                    low_rank_dimension=len(metadata),
+                    device=available_devices[0]
+                )
+                benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
+                benchmark_model.to(available_devices[0])
+                top_logits, neg_logits = benchmark_model.get_logits(concept_id, k=10)
+                all_top_logits[model_name] = {
+                    "top_logits": top_logits,
+                    "neg_logits": neg_logits
+                }
+            top_logits_entry = {
+                "concept_id": int(concept_id),
+                "results": all_top_logits
             }
-        top_logits_entry = {
-            "concept_id": int(concept_id),
-            "results": all_top_logits
-        }
-        with open(Path(dump_dir) / "inference" / "top_logits.jsonl", "a") as f:
-            f.write(json.dumps(top_logits_entry) + "\n")
+            with open(Path(dump_dir) / "inference" / "top_logits.jsonl", "a") as f:
+                f.write(json.dumps(top_logits_entry) + "\n")
 
 
 def main():

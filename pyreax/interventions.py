@@ -64,7 +64,7 @@ class MaxReLUIntervention(
 
         return InterventionOutput(
             output=output.to(base.dtype),
-            latent=latent
+            latent=[latent, output, base.clone()] # latent, output, input
         )
 
 
