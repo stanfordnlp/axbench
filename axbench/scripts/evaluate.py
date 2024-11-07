@@ -88,34 +88,28 @@ def data_generator(data_dir, mode):
         yield (concept_id, df_subset)
 
 
-def winrate_data_generator(data_dir, aggregated_results):
-    avg_scores = {}
-    for result in aggregated_results:
-        # pick the best factor each method
-        for method, scores in result["results"]["GlobalLMJudgeConceptFollowingEvaluator"].items():
-            any_factor = scores["factor"]
-            # one caveat here is the best factor for prompt steering is the 0th element
-            if method in avg_scores:
-                avg_scores[method].append(scores["lm_judge_rating"])
-            else:
-                avg_scores[method] = [scores["lm_judge_rating"]]
+def get_best_factors(aggregated_results):
     best_factors = {}
-    for method, scores in avg_scores.items():
-        mean_score = np.mean(scores, axis=0)
-        best_factors[method] = any_factor[np.argmax(mean_score)]
+    for result in aggregated_results:
+        best_factors[result["concept_id"]] = {}
+        for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
+            best_factors[result["concept_id"]][method] = scores["factor"][np.argmax(scores["lm_judge_rating"])]
+    return best_factors
 
+
+def winrate_data_generator(data_dir, aggregated_results):
+    best_factors = get_best_factors(aggregated_results)
     df_generator = data_generator(data_dir, mode="steering")
-    best_dfs = []
     for concept_id, current_df in df_generator:
-        # if concept_id >= start_concept_id:
+        # if concept_id >= start_concept_id: # TODO: uncomment this when we fix our pipeline
         concept_best_dfs = {}
-        for method, factor in best_factors.items():
-            include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "factor",f"{method}_steered_generation"]
+        for method, factor in best_factors[concept_id].items():
+            include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "steered_input", "factor",f"{method}_steered_generation"]
             method_df = current_df[include_columns]
             method_best_df = method_df[method_df["factor"]==factor]
             concept_best_dfs[method] = method_best_df.copy()
-            concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt"]].copy()
-        for method in best_factors.keys():
+            concept_best_df = method_best_df[["concept_id", "input_concept", "input_id", "original_prompt", "steered_input"]].copy()
+        for method in best_factors[concept_id].keys():
             # Use merge instead of direct assignment to ensure proper alignment
             concept_best_df = concept_best_df.merge(
                 concept_best_dfs[method][['concept_id', 'input_concept', 'input_id', f"{method}_steered_generation"]],
@@ -165,27 +159,6 @@ def load_state(dump_dir, mode):
     return None
 
 
-def combine_scores(jsonl_lines):
-    concept_scores = jsonl_lines[0]["results"]["LMJudgeConceptEvaluator"]
-    combined_evaluator = {}
-    # For each method (L1LinearProbe, ReAX, etc.)
-    for method in concept_scores.keys():
-        all_concept_ratings = []
-        all_following_ratings = []
-        for id in range(len(jsonl_lines)):
-            c = jsonl_lines[id]["results"]["LMJudgeConceptEvaluator"][method]["lm_judge_rating"]
-            f = jsonl_lines[id]["results"]["LMJudgeFollowingEvaluator"][method]["lm_judge_rating"]
-            all_concept_ratings += [c]
-            all_following_ratings += [f]
-        combined_ratings = np.mean(all_concept_ratings, axis=0) * np.mean(all_following_ratings, axis=0)
-        combined_ratings = combined_ratings.tolist()
-        combined_evaluator[method] = {
-            "lm_judge_rating": combined_ratings,
-            "factor": concept_scores[method]["factor"]
-        }
-    return combined_evaluator
-
-
 def combine_scores_per_concept(concept_data):
     """Combine scores from concept and following evaluators for each method."""
     concept_scores = concept_data["results"]["LMJudgeConceptEvaluator"]
@@ -193,11 +166,11 @@ def combine_scores_per_concept(concept_data):
     combined_evaluator = {}
     # For each method (L1LinearProbe, ReAX, etc.)
     for method in concept_scores.keys():
-        concept_ratings = concept_scores[method]["lm_judge_rating"]
-        following_ratings = following_scores[method]["lm_judge_rating"]
+        concept_ratings = concept_scores[method]["raw_lm_judge_rating"]
+        following_ratings = following_scores[method]["raw_lm_judge_rating"]
         factors = concept_scores[method]["factor"]  # factors are same in both
-        # Multiply corresponding scores
-        combined_ratings = [(c*f) for c, f in zip(concept_ratings, following_ratings)]
+        combined_ratings = np.array(concept_ratings) * np.array(following_ratings) # n_factor * n_samples
+        combined_ratings = combined_ratings.mean(axis=1).tolist()
         combined_evaluator[method] = {
             "lm_judge_rating": combined_ratings,
             "factor": factors
@@ -206,13 +179,9 @@ def combine_scores_per_concept(concept_data):
 
 
 def process_jsonl_file(jsonl_lines):
-    global_combined_ratings = combine_scores(jsonl_lines)
-
     for data in jsonl_lines:
         data["results"]["LMJudgeConceptFollowingEvaluator"] = \
             combine_scores_per_concept(data)
-        data["results"]["GlobalLMJudgeConceptFollowingEvaluator"] = \
-            global_combined_ratings
     return jsonl_lines
 
 
@@ -246,15 +215,9 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
             {
                 'evaluator_name': 'LMJudgeConceptFollowingEvaluator',
                 'metric_name': 'lm_judge_rating',
-                'y_label': 'Steering*Relevance (Concept-level)',
+                'y_label': 'Steering*Relevance',
                 'use_log_scale': False
             },
-            {
-                'evaluator_name': 'GlobalLMJudgeConceptFollowingEvaluator',
-                'metric_name': 'lm_judge_rating',
-                'y_label': 'Steering*Relevance (Global)',
-                'use_log_scale': False
-            }
         ]
         plot_metrics(
             jsonl_data=aggregated_results,
@@ -378,7 +341,7 @@ def eval_steering(args):
         winrate_tasks = [
             (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline)
             for concept_id, current_df in winrate_df_generator
-            if concept_id >= start_concept_id
+            # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models
             if model_name != args.winrate_baseline
         ]
@@ -501,6 +464,7 @@ def eval_latent(args):
     plot_latent(dump_dir, args.report_to, args.wandb_name)
     logger.warning("Evaluation completed!")
 
+
 def main():
     custom_args = [
         {
@@ -557,29 +521,29 @@ def main():
             top_logits_results = load_jsonl(top_logits_path)
 
             concepts = []
-            idx = 0
+            best_factors = get_best_factors(steering_results)
             for metadata_entry in metadata:
                 for concept_idx, concept in enumerate(metadata_entry["concepts"]):
                     sae_link = metadata_entry["refs"][concept_idx]
-                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
-                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
-                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
-                    top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
-                    neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
+                    winrate = steering_results[concept_idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
+                    auc = latent_results[concept_idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
+                    max_act = latent_results[concept_idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
+                    top_logits = top_logits_results[concept_idx]["results"]["ReAX"]["top_logits"][0]
+                    neg_logits = top_logits_results[concept_idx]["results"]["ReAX"]["neg_logits"][0]
+                    best_factor = best_factors[concept_idx]["ReAX"]
                     concepts += [[
-                        idx, concept, winrate, auc, max_act, sae_link
+                        concept_idx, concept, winrate, auc, max_act, best_factor, sae_link
                     ]]
                     top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
                     neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
-                    wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
-                                                    title=f"{concept} ({idx})")})
-                    wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
-                                                    title=f"{concept} ({idx})")})
-                    idx += 1
+                    wandb.log({f"positive_logits/{concept_idx}": wandb.plot.bar(top_table, "token", "logits",
+                                                    title=f"{concept} ({concept_idx})")})
+                    wandb.log({f"negative_logits/{concept_idx}": wandb.plot.bar(neg_table, "token", "logits",
+                                                    title=f"{concept} ({concept_idx})")})
             wandb.log({
                 "concept_table":  wandb.Table(
                     columns=[
-                        "concept_id", "concept", "winrate", "auc", 
+                        "concept_id", "concept", "winrate", "auc", "best_factor",
                         "max_act", "sae_link"], data=concepts)})
             
             # log token level heatmaps

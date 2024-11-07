@@ -172,7 +172,8 @@ class LMJudgeEvaluator(Evaluator):
         data[f"{self.model_name}_lm_judge_rating"] = ratings
         metrics = {
             "lm_judge_rating": [],
-            "factor": []
+            "factor": [],
+            "raw_lm_judge_rating": []
         }
         
         # group by factor only and compute means
@@ -181,6 +182,7 @@ class LMJudgeEvaluator(Evaluator):
             lm_judge_rating = group[f"{self.model_name}_lm_judge_rating"].mean()
             metrics["lm_judge_rating"].append(lm_judge_rating)
             metrics["factor"].append(factor)
+            metrics["raw_lm_judge_rating"].append(list(group[f"{self.model_name}_lm_judge_rating"].values))
 
         return metrics
 

@@ -470,9 +470,8 @@ def infer_latent(args):
     logger.warning("Saving top logits...")
     for concept_id in concept_ids:
         all_top_logits = {}
-        for model_name in args.models:
-            if model_name in LATENT_EXCLUDE_MODELS:
-                continue
+        if "ReAX" in args.models:
+            model_name = "ReAX"
             # calculate the logit lens results
             model_class = getattr(axbench, model_name)
             benchmark_model = model_class(
