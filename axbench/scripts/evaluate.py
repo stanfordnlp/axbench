@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 STATE_FILE = "evaluate_state.pkl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
 
 
 def data_generator(data_dir, mode):
@@ -431,6 +431,10 @@ def eval_latent(args):
 
     data_dir = args.data_dir
     dump_dir = args.dump_dir
+    latent_data_path = os.path.join(data_dir, f'latent_data.parquet')
+    if not os.path.exists(latent_data_path):
+        logger.warning(f"Latent data not found at {latent_data_path}")
+        return
     df_generator = data_generator(args.data_dir, mode="latent")
 
     state = load_state(args.dump_dir, mode="latent")
@@ -519,32 +523,39 @@ def main():
             latent_results = load_jsonl(latent_path)
             top_logits_path = Path(args.dump_dir) / "inference" / "top_logits.jsonl"
             top_logits_results = load_jsonl(top_logits_path)
-
-            concepts = []
             best_factors = get_best_factors(steering_results)
-            for metadata_entry in metadata:
-                for concept_idx, concept in enumerate(metadata_entry["concepts"]):
-                    sae_link = metadata_entry["refs"][concept_idx]
-                    winrate = steering_results[concept_idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
-                    auc = latent_results[concept_idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
-                    max_act = latent_results[concept_idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
-                    top_logits = top_logits_results[concept_idx]["results"]["ReAX"]["top_logits"][0]
-                    neg_logits = top_logits_results[concept_idx]["results"]["ReAX"]["neg_logits"][0]
-                    best_factor = best_factors[concept_idx]["ReAX"]
-                    concepts += [[
-                        concept_idx, concept, winrate, auc, max_act, best_factor, sae_link
-                    ]]
-                    top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
-                    neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
-                    wandb.log({f"positive_logits/{concept_idx}": wandb.plot.bar(top_table, "token", "logits",
-                                                    title=f"{concept} ({concept_idx})")})
-                    wandb.log({f"negative_logits/{concept_idx}": wandb.plot.bar(neg_table, "token", "logits",
-                                                    title=f"{concept} ({concept_idx})")})
-            wandb.log({
-                "concept_table":  wandb.Table(
-                    columns=[
-                        "concept_id", "concept", "winrate", "auc", "best_factor",
-                        "max_act", "sae_link"], data=concepts)})
+
+
+            for model_name in args.models:
+                if model_name in STEERING_EXCLUDE_MODELS or model_name in {"PromptSteering", "PromptBaseline"}:
+                    continue
+                concepts = []
+                idx = 0
+                for metadata_entry in metadata:
+                    for concept_idx, concept in enumerate(metadata_entry["concepts"]):
+                        sae_link = metadata_entry["refs"][concept_idx]
+                        winrate = steering_results[idx]["results"]["WinRateEvaluator"][model_name]["win_rate"]
+                        auc = latent_results[idx]["results"]["AUCROCEvaluator"][model_name]["roc_auc"]
+                        max_act = latent_results[idx]["results"]["AUCROCEvaluator"][model_name]["max_act"]
+                        best_factor = best_factors[idx][model_name]
+                        concepts += [[
+                            idx, concept, winrate, auc, best_factor, max_act, sae_link
+                        ]]
+                        if model_name == "ReAX":
+                            top_logits = top_logits_results[idx]["results"][model_name]["top_logits"][0]
+                            neg_logits = top_logits_results[idx]["results"][model_name]["neg_logits"][0]
+                            top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
+                            neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
+                            wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
+                                                        title=f"{concept} ({idx})")})
+                            wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
+                                                        title=f"{concept} ({idx})")})
+                        idx += 1
+                wandb.log({
+                    f"{model_name}/concept_table":  wandb.Table(
+                        columns=[
+                            "concept_id", "concept", "winrate", "auc", "best_factor",
+                            "max_act", "sae_link"], data=concepts)})
             
             # log token level heatmaps
             inference_path = Path(args.dump_dir) / "inference" / "latent_data.parquet"
