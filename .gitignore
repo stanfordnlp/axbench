@@ -13,7 +13,8 @@ uv.lock
 wandb/
 local_exp.sh
 exp*.sh
-axbench/data/persist_lm_cache
+axbench/data/persist_lm_cache/
+axbench/demo/demo_aryaman.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

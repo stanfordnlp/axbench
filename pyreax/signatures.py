@@ -45,7 +45,7 @@ class ContinueContent(dspy.Signature):
     continuation = dspy.OutputField(desc="only the continuation")
 
 class ContinueContentWithConcept(dspy.Signature):
-    """Continue the content with 1 sentence of natural text that includes words, phrases, or ideas associated with particular concept."""
+    """Continue the content with 1 sentence of natural text that ONLY includes words, phrases, or ideas associated with particular concept."""
 
     content = dspy.InputField()
     concept = dspy.InputField()

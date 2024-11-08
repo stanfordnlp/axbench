@@ -55,12 +55,11 @@ class Reaxoor(dspy.Module):
         # generate some negative text that does not contain any of our concepts
         logger.warning("Making negative texts.")
         random_texts = {concept: [] for concept in concepts}
-        doc_id = 0
         for concept in concepts:
             genres = self.get_genres(concept=concept).genre
             for i in range(n_per_concept // len(concepts)):
                 random_text = self.get_random_text(genre=random.choice(genres)).content
-                doc_id += 1
+                print(random_text)
                 # rewrite to remove the concepts
                 random_text = self.remove_concept(
                     concepts=', '.join(concepts),
@@ -92,7 +91,7 @@ class Reaxoor(dspy.Module):
             ])
             content_id += len(random_texts[concept])
             null_prompts.extend([
-                (concept, content[0], content[1], content_id + i) for i, content in enumerate(polysemantic_tasks[concept])
+                (concept, content[0] + "//dspy", content[1], content_id + i) for i, content in enumerate(polysemantic_tasks[concept])
             ])
             content_id += len(polysemantic_tasks[concept])
         null_outputs = []
@@ -121,11 +120,11 @@ class Reaxoor(dspy.Module):
                 modified_output = self.continue_concept(
                     concept=continue_concept,
                     content=modified_prompt,
-                )
+                ).continuation
                 in_idx = concept2id[concept]
                 out_idx = concept2id[continue_concept]
                 all_examples += [[
-                    prompt, output, EXAMPLE_TAG.EXPERIMENT.value,
+                    prompt, modified_output, EXAMPLE_TAG.EXPERIMENT.value,
                     in_idx, out_idx, concept, continue_concept,
                     content_id,  # new content ID
                     curr_content_id,  # source content ID
