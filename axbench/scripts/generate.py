@@ -243,16 +243,16 @@ def main():
             dataset_factory.prepare_concepts(concepts)
         
         # generate with retry mechanism.
-        try:
-            current_df = dataset_factory.create_train_df(
-                concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
-                input_length=args.input_length, output_length=args.output_length,
-                current_group_id=data_group_id
-            )
-            current_df["group_id"] = data_group_id
-        except Exception as e:
-            logger.warning(f"Failed to create training data for group {group_id}: {e}")
-            continue # continue to the next group.
+        # try:
+        current_df = dataset_factory.create_train_df(
+            concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
+            input_length=args.input_length, output_length=args.output_length,
+            current_group_id=data_group_id
+        )
+        current_df["group_id"] = data_group_id
+        # except Exception as e:
+        #     logger.warning(f"Failed to create training data for group {group_id}: {e}")
+        #     continue # continue to the next group.
         
         # Save the generated DataFrame, metadata, and current state
         save(

@@ -73,7 +73,8 @@ class ReAX(Model):
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
         train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            data_module["train_dataset"], shuffle=False, # we shuffle for examples.
+            batch_size=self.training_args.batch_size, 
             collate_fn=data_module["data_collator"])
         return train_dataloader
         
@@ -91,6 +92,7 @@ class ReAX(Model):
         norm_loss_fn = torch.nn.MSELoss()
         # Main training loop.
         progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -110,7 +112,8 @@ class ReAX(Model):
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
                     subspaces=subspaces, use_cache=False)
-        
+                print(inputs["labels"])
+                
                 # loss
                 loss = cf_outputs.loss
                 latent, output, base = self.ax_model.full_intervention_outputs[0].latent

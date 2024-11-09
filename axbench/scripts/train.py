@@ -39,7 +39,7 @@ STATE_FILE = "train_state.pkl"
 CONFIG_FILE = "config.json"
 
 
-def data_generator(data_dir):
+def data_generator(data_dir, seed):
     """
     Generator function to read data files and yield data subsets by group_id.
 
@@ -55,6 +55,7 @@ def data_generator(data_dir):
     group_ids.sort()
     for group_id in group_ids:
         df_subset = df[df['group_id'] == group_id]
+        df_subset = df_subset.sample(frac=1, random_state=seed)
         yield (group_id, df_subset)
 
 
@@ -144,7 +145,7 @@ def main():
     # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
-    df_generator = data_generator(args.data_dir)
+    df_generator = data_generator(args.data_dir, args.seed)
     df_list = list(df_generator)  # Collect all (group_id, group_df) pairs
 
     dump_dir = Path(args.dump_dir) / "train"
@@ -169,7 +170,6 @@ def main():
             else:
                 for concept in metadata[group_id]["concepts"]:
                     tasks.append((model_name, group_id, group_df, concept))
-
     if len(tasks) == 0:
         logger.warning(f"No tasks to train. Exiting.")
         return
@@ -218,11 +218,7 @@ def main():
                 benchmark_model.train(binarize_df(group_df, concept, model_name))
             return model_name, group_id, concept, benchmark_model
         finally:
-            # Release the device back to the queue
             device_queue.put(device)
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
 
     # Run tasks in parallel on available GPUs
     # Run the tasks in parallel using ThreadPoolExecutor
@@ -236,9 +232,6 @@ def main():
             model_name, group_id, concept, benchmark_model = future.result()
             key = (model_name, group_id, concept)
             benchmark_model_results[key] = benchmark_model
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
 
     # Save all models after training
     for model_name in args.models.keys():
