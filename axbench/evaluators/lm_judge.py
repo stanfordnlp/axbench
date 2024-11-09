@@ -11,44 +11,41 @@ logger = logging.getLogger(__name__)
 
 
 INSTRUCTION_CONCEPT_BASED_RATING_TEMPLATE = """[System]
-You are an impartial evaluator. Your task is to determine if the response fragment both:
-1. Contains clear references or terms related to the specified concept (not just superficial mentions)
-2. Presents these references within a grammatically coherent structure (not just random related words)
+Please act as an impartial judge and evaluate the extent to which the \
+specified concept is presented in the sentence fragment provided below. \
+Focus solely on whether the concept is clearly and densely incorporated, \
+without regard for grammar or logical coherence. A higher rating should \
+reflect a strong and frequent presence of the concept, even if repetitive \
+or loosely structured, while a lower rating should be given if the concept \
+is missing, only vaguely referenced, or if the fragment appears irrelevant.
 
-Provide a rating of 1 if the response meets ALL of these conditions:
-- The concept must be clearly and meaningfully incorporated
-- The response fragment must form a grammatically sensible phrase or sentence
-
-Provide a rating of 0 if ANY of these conditions are met:
-- The concept is missing or only superficially mentioned in the response fragment
-- The words are jumbled or lack basic grammatical structure in the response fragment
-
-First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
-Then provide your rating in exactly this format: "Rating: [[score]]"
+Begin your evaluation by providing a short explanation of the extent and \
+clarity of the concept in the fragment. After providing your explanation, \
+please rate the sentence on a scale from 1 to 10 by following this exact \
+format: "Rating: [[score]]".
 
 [Concept Start]
 %s
 [Concept End]
 
-[Response Start]
+[Sentence Fragment Start]
 %s
-[Response End]
+[Sentence Fragment End]
 """
 
 
 INSTRUCTION_RELATEDNESS_BASED_RATING_TEMPLATE = """[System]
-You are an impartial evaluator. Your task is to assess whether the response fragment is \
-meaningfully related to the given instruction.
+Please act as an impartial judge and evaluate the extent to which the \
+response fragment provided below is related to the instruction. Focus solely \
+on the degree of relatedness, regardless of grammar, coherence, or \
+informativeness. A higher rating should reflect a strong and substantial \
+connection to the instruction, while a lower rating should be given if the \
+response is only vaguely related, unrelated, or off-topic.
 
-Provide a rating of 1 if the response meets ALL of these conditions:
-- The response fragment is related to the instruction in a meaningful way
-- The response fragment must form a grammatically sensible phrase or sentence
-
-Provide a rating of 0 if ANY of these conditions are met:
-- The response fragment is not related to the instruction at all
-- The words are jumbled or lack basic grammatical structure in the response fragment
-
-Begin with a brief explanation (1-2 sentences). Then provide your rating in this format: "Rating: [[score]]".
+Begin your evaluation by providing a brief explanation of how much the \
+response is related to the instruction. After providing your explanation, \
+please rate the response on a scale from 1 to 10 by following this exact \
+format: "Rating: [[score]]".
 
 [Instruction Start]
 %s
@@ -73,7 +70,7 @@ Rate 0 if either:
 - The concept is missing or only superficially mentioned
 - The words are jumbled or lack basic grammatical structure
 
-First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
+First provide a short explanation of whether and how the concept appears in a coherent way. \
 Then provide your rating in exactly this format: "Rating: [[score]]"
 
 [The Start of the Concept]
@@ -87,6 +84,9 @@ Then provide your rating in exactly this format: "Rating: [[score]]"
 
 
 class LMJudgeEvaluator(Evaluator):
+    MIN_RATING = 1
+    MAX_RATING = 10
+    DEFAULT_RATING = 5.0
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
         self.lm_model = kwargs.get("lm_model", None)
@@ -117,15 +117,15 @@ class LMJudgeEvaluator(Evaluator):
             try:
                 # Look for rating in various formats
                 rating = self._get_rating_from_completion(completion)
-                if rating is not None and 0 <= rating <= 1:
+                if rating is not None and self.MIN_RATING <= rating <= self.MAX_RATING:
                     ratings.append(rating)
                 else:
                     logger.warning(f"Invalid rating value: {rating}")
-                    ratings.append(0.0)
+                    ratings.append(self.DEFAULT_RATING)
                     
             except Exception as e:
                 logger.warning(f"Failed to parse rating:\n\n{completion}\nError: {str(e)}")
-                ratings.append(0.0)
+                ratings.append(self.DEFAULT_RATING)
         return ratings
     
     def compute_metrics(self, data, write_to_dir=None):

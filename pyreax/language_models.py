@@ -94,7 +94,7 @@ class LanguageModelStats(object):
 class LanguageModel(object):
     """Main class abstract async remote language model access"""
 
-    def __init__(self, model, client, dump_dir=None, use_cache=True,**kwargs):
+    def __init__(self, model, client, dump_dir=None, use_cache=True, **kwargs):
         self.model = model
         if "gpt-4o" in model:
             pass
@@ -107,7 +107,7 @@ class LanguageModel(object):
             cur_save_dir = Path(dump_dir) / "lm_cache"
             cur_save_dir.mkdir(parents=True, exist_ok=True)
             self.dump_dir = cur_save_dir
-
+        self.temperature = kwargs.get("temperature", 1.0)
         self.cache_dir = None
         self.use_cache = use_cache
         self.cache_in_mem = {}
@@ -131,7 +131,7 @@ class LanguageModel(object):
         if f"{prompt}_____{api_count}_____{api_name}" in self.cache_in_mem:
             return (self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"], None)
         raw_completion = await client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}], model=self.model)
+            messages=[{"role": "user", "content": prompt}], model=self.model, temperature=self.temperature)
         raw_completion = raw_completion.to_dict()
         completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
         self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"] = completion

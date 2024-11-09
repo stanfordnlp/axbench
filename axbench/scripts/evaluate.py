@@ -257,7 +257,8 @@ def eval_steering_single_task(args_tuple):
         lm_model,
         client,
         dump_dir=dump_dir,
-        use_cache=False
+        use_cache=False,
+        temperature=0.7
     )
     
     try:

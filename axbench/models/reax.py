@@ -55,7 +55,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
@@ -121,8 +121,8 @@ class ReAX(Model):
                     mask=inputs["intervention_masks"],
                     k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
-                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1).mean()
-                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1).mean()
+                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1)
+                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1)
                 norm_loss = norm_loss_fn(norm_output, norm_base)
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + \

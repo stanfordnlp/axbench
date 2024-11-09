@@ -15,17 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 PAIRWISE_EVALUATION_TEMPLATE = """[System]
-You are an impartial evaluator tasked with assessing the quality of response fragments provided by two AI assistants in answer to the user question below. Your evaluation must follow these specific criteria:
+Please act as an impartial judge and evaluate the quality of the response \
+fragments provided by two AI assistants in answer to the user question below. \
+Your evaluation should prioritize whether each response contains clear \
+references or terms related to the specified concept. If only one response \
+includes the concept and is also grammatically correct, coherent, and related \
+to the instruction, select that response as the better one. If only one response \
+includes the concept but is not grammatically correct, coherent, and related \
+to the instruction, declare a tie. If both responses \
+contain the concept, evaluate which response is more relevant to the \
+instruction. If both responses are similarly related, coherent, and meet the \
+requirements, declare a tie.
 
-1. The primary criterion is whether the response fragment contains clear references or terms related to the specified concept. Responses lacking concept-related content should be disqualified unless both responses lack the concept.
-2. If both responses contain the concept, evaluate based on how well each response follows the user's instructions.
-3. If only one response contains the concept, check its alignment with the instruction:
-    - If it aligns well, select it as the better response.
-    - If it does not align well, declare a tie.
-4. If neither response contains the concept, declare a tie.
-5. Avoid allowing factors such as response length, assistant names, or response order to influence your judgment.
-
-Begin your evaluation by comparing the two response fragments and provide a short explanation. Avoid any position biases and ensure that the order in which the response fragments were presented does not influence your decision. Do not allow the length of the response fragments to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A]]" if assistant A is better, "[[B]]" if assistant B is better, and "[[C]]" for a tie.
+Begin by comparing the two response fragments and provide a short explanation \
+of your reasoning. Avoid any biases related to position, response length, \
+assistant names, or response order. Be as objective as possible. After your \
+explanation, output your final decision in this exact format: "[[A]]" if \
+assistant A is better, "[[B]]" if assistant B is better, or "[[C]]" for a tie.
 
 [User Question]
 {question}

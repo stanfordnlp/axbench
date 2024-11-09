@@ -61,7 +61,7 @@ class TrainingArgs:
         # Define global and hierarchical parameters
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
-            'data_dir', 'dump_dir', 'run_name'
+            'data_dir', 'dump_dir', 'run_name', 'seed'
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'k_latent_null_loss',
@@ -152,7 +152,7 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        int_params = ['layer', 'batch_size', 'n_epochs', 'k_latent_null_loss']
+        int_params = ['layer', 'batch_size', 'n_epochs', 'k_latent_null_loss', 'seed']
         float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss']
         str_params = ['concept_path', 'model_name', 'component', 'data_dir', 'dump_dir', 'run_name']
 

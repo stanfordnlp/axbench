@@ -22,6 +22,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 from args.training_args import TrainingArgs
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from transformers import set_seed
 import queue
 
 # all supported methods
@@ -138,6 +139,7 @@ def binarize_df(original_df, concept, model_name):
 
 def main():
     args = TrainingArgs(section="train")
+    set_seed(args.seed)
     args.data_dir = f"{args.dump_dir}/generate"
     # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
