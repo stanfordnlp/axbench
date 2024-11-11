@@ -118,7 +118,7 @@ def winrate_data_generator(data_dir, aggregated_results):
         yield (concept_id, concept_best_df)
 
 
-def save_results(dump_dir, state, concept_id, partition, eval_results):
+def save_results(dump_dir, state, concept_id, partition, eval_results, eval_df=None):
     """
     Save the results dictionary to a .jsonl file.
     Each line in the file represents one concept_id's evaluation results.
@@ -141,6 +141,28 @@ def save_results(dump_dir, state, concept_id, partition, eval_results):
     with open(result_path, "a") as f:
         f.write(json.dumps(result_entry) + "\n")
 
+    # save the steering ratings for each example
+    if eval_df is not None:
+        sorted_evaluator_names = sorted(list(eval_df.keys()))
+        sorted_model_names = sorted(list(eval_df[sorted_evaluator_names[0]].keys()))
+        if len(sorted_evaluator_names) == 0:
+            return
+        current_df = eval_df[sorted_evaluator_names[0]][sorted_model_names[0]].copy()
+        for evaluator_name in sorted_evaluator_names:
+            if evaluator_name == "PerplexityEvaluator":
+                continue
+            for model_name in sorted_model_names:
+                if evaluator_name == sorted_evaluator_names[0] and model_name == sorted_model_names[0]:
+                    continue
+                current_df[f"{model_name}_{evaluator_name}"] = eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}"]
+        df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
+        if os.path.exists(df_path):
+            existing_df = pd.read_parquet(df_path)
+            combined_df = pd.concat([existing_df, current_df], ignore_index=True)
+        else:
+            combined_df = current_df
+        combined_df.to_parquet(df_path, index=False)
+
 
 def load_state(dump_dir, mode):
     """
@@ -161,6 +183,8 @@ def load_state(dump_dir, mode):
 
 def combine_scores_per_concept(concept_data):
     """Combine scores from concept and following evaluators for each method."""
+    if "LMJudgeConceptFollowingEvaluator" in concept_data["results"]:
+        return concept_data["results"]["LMJudgeConceptFollowingEvaluator"]
     concept_scores = concept_data["results"]["LMJudgeConceptEvaluator"]
     following_scores = concept_data["results"]["LMJudgeFollowingEvaluator"]
     combined_evaluator = {}
@@ -198,18 +222,6 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
                 'evaluator_name': 'PerplexityEvaluator',
                 'metric_name': 'strength',
                 'y_label': 'Strength',
-                'use_log_scale': False
-            },
-            {
-                'evaluator_name': 'LMJudgeConceptEvaluator',
-                'metric_name': 'lm_judge_rating',
-                'y_label': 'Steering',
-                'use_log_scale': False
-            },
-            {
-                'evaluator_name': 'LMJudgeFollowingEvaluator',
-                'metric_name': 'lm_judge_rating',
-                'y_label': 'Relevance',
                 'use_log_scale': False
             },
             {
@@ -308,19 +320,23 @@ def eval_steering(args):
     if not hasattr(args, 'num_of_workers') or args.num_of_workers is None:
         args.num_of_workers = max(1, multiprocessing.cpu_count() - 1)
     lm_reports = []
-    all_dfs = []
+    eval_dfs = {}
     with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
         for concept_id, evaluator_str, model_str, result, lm_report, current_df in executor.map(
             eval_steering_single_task, all_tasks):
             if concept_id not in all_results:
                 all_results[concept_id] = {}
+                eval_dfs[concept_id] = {}
             if evaluator_str not in all_results[concept_id]:
                 all_results[concept_id][evaluator_str] = {}
+                eval_dfs[concept_id][evaluator_str] = {}
             all_results[concept_id][evaluator_str][model_str] = result
+            if "raw_rating_flattened" in result:
+                current_df[f"{model_str}_{evaluator_str}"] = result["raw_rating_flattened"]
+                eval_dfs[concept_id][evaluator_str][model_str] = current_df
             lm_reports += [lm_report]
-            all_dfs += [current_df]
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
-    
+
     # Batch save all results
     for concept_id, eval_results in sorted(all_results.items()):
         save_results(
@@ -328,8 +344,10 @@ def eval_steering(args):
             {"concept_id": concept_id + 1}, 
             concept_id, 
             'steering', 
-            eval_results,
+            eval_results, 
+            eval_dfs[concept_id]
         )
+        
 
     # Reload for plotting and optional winrate
     aggregated_results = process_jsonl_file(
@@ -462,7 +480,7 @@ def eval_latent(args):
                 eval_results[evaluator.__str__()][model_name.__str__()] = eval_result
         save_results(
             dump_dir, {"concept_id": concept_id + 1}, 
-            concept_id, 'latent', eval_results)
+            concept_id, 'latent', eval_results, None)
 
     # Generate final plot
     logger.warning("Generating final plot...")

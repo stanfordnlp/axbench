@@ -1,12 +1,15 @@
 import torch, einops, os
 import pandas as pd
 from tqdm.auto import tqdm
+from torch.utils.data import DataLoader
 from pyreax import (
     gather_residual_activations, 
+    make_data_module,
 )
 from pyvene import (
     IntervenableModel,
 )
+from transformers import set_seed
 
 
 class Model(object):
@@ -20,12 +23,21 @@ class Model(object):
         self.max_activations = {}
         # Set default device to GPU if available, otherwise CPU
         self.device = kwargs.get("device", "cuda" if torch.cuda.is_available() else "cpu")
+        self.seed = kwargs.get("seed", 42)
 
     def make_model(self, **kwargs):
         pass
 
     def make_dataloader(self, examples, **kwargs):
-        pass
+        data_module = make_data_module(self.tokenizer, examples)
+        g = torch.Generator()
+        g.manual_seed(self.seed)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, # we shuffle for examples.
+            batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"],
+            generator=g)
+        return train_dataloader
     
     def train(self, examples, **kwargs):
         pass

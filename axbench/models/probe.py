@@ -123,13 +123,6 @@ class LinearProbe(Model):
             ax_model = IntervenableModel(ax_config, self.model)
             ax_model.set_device(self.device)
             self.ax_model = ax_model
-
-    def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, self.model, examples)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
-            collate_fn=data_module["data_collator"])
-        return train_dataloader
     
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)

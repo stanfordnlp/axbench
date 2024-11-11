@@ -287,7 +287,7 @@ class ReftDataCollator(object):
 
 
 def make_data_module(
-    tokenizer: transformers.PreTrainedTokenizer, model, df,
+    tokenizer: transformers.PreTrainedTokenizer, df,
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
     
