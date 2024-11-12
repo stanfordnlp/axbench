@@ -19,6 +19,8 @@ class EvalArgs:
     wandb_entity: Optional[str] = None
     wandb_name: Optional[str] = None
     run_name: Optional[bool] = None
+    use_icl: Optional[bool] = None
+    winrate_split_ratio: Optional[float] = None
 
     def __init__(
         self,

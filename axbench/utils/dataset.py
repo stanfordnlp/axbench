@@ -79,9 +79,10 @@ class SteeringDatasetFactory(object):
                 steering_prompts = [prompt.strip() for prompt in steering_prompts]
                 all_examples = []
                 for idx, concept in enumerate(concepts):
+                    # sample a random example from alpaca eval dataset.
+                    sampled_prompts = alpaca_eval_df.sample(subset_n)["instruction"].tolist()
                     for i in range(subset_n):
-                        # sample a random example from alpaca eval dataset.
-                        sampled_prompt = alpaca_eval_df.sample(1)["instruction"].tolist()[0]
+                        sampled_prompt = sampled_prompts[i]
                         # for prompt-based steering ONLY.
                         steering_prompt = steering_prompts[idx] \
                             if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
