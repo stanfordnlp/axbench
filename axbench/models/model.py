@@ -135,8 +135,9 @@ class Model(object):
         all_generations = []
         all_perplexities = []
         all_strenghts = []
-
-        progress_bar = tqdm(range(0, len(examples), batch_size))
+        # Main training loop.
+        rank = torch.distributed.get_rank()
+        progress_bar = tqdm(range(0, len(examples), batch_size), position=rank, leave=True)
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
             input_strings = batch_examples['input'].tolist()

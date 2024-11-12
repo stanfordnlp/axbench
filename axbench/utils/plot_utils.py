@@ -266,7 +266,7 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to
         wandb.log({"latent/hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
 
 
-def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):    
+def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):
     # Collect methods and baseline models
     methods = set()
     baseline_models = set()
@@ -333,9 +333,9 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
     # Prepare data for plotting
     data = []
     for method in sorted_methods:
-        data.append({'Method': method, 'Outcome': 'Win', 'Percentage': win_means[method]})
-        data.append({'Method': method, 'Outcome': 'Tie', 'Percentage': tie_means[method]})
         data.append({'Method': method, 'Outcome': 'Loss', 'Percentage': loss_means[method]})
+        data.append({'Method': method, 'Outcome': 'Tie', 'Percentage': tie_means[method]})
+        data.append({'Method': method, 'Outcome': 'Win', 'Percentage': win_means[method]})
     
     df = pd.DataFrame(data)
     
@@ -344,10 +344,42 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
     # Reverse the methods list for coord_flip to display baseline at the top
     df['Method'] = pd.Categorical(df['Method'], categories=sorted_methods[::-1], ordered=True)
     
+    # Ensure df is sorted properly
+    df = df.sort_values(['Method', 'Outcome'])
+    # Convert 'Percentage' to float
+    df['Percentage'] = df['Percentage'].astype(float)
+    
+    # Compute cumulative percentage per method
+    df['cum_percentage'] = df.groupby('Method')['Percentage'].cumsum()
+    # Shift cumulative percentages per method
+    df['cum_percentage_shifted'] = df.groupby('Method')['cum_percentage'].shift(1).fillna(0)
+    
+    # For the 'Win' outcome, get the cumulative percentage up to before 'Win'
+    df_win = df[df['Outcome'] == 'Win'].copy()
+    df_win['text_position'] = df_win['cum_percentage_shifted']
+    # Convert 'text_position' to float
+    df_win['text_position'] = 100.0 - df_win['text_position'].astype(float)
+    # Format the win percentage label
+    df_win['win_percentage_label'] = df_win['Percentage'].map(lambda x: f"{x:.1f}%")
+    
     # Create the plot
     p = (
         ggplot(df, aes(x='Method', y='Percentage', fill='Outcome')) +
         geom_bar(stat='identity', position='stack', width=0.8) +
+        # Add the geom_text layer to include win rate numbers
+        geom_text(
+            data=df_win,
+            mapping=aes(
+                x='Method',
+                y='text_position',
+                label='win_percentage_label'
+            ),
+            ha='right',
+            va='center',
+            size=6,  # Adjust size as needed
+            color='black',
+            nudge_y=20  # Adjust this value as needed for proper positioning
+        ) +
         coord_flip() +  # Flip coordinates for horizontal bars
         theme_bw() +
         labs(
@@ -355,12 +387,12 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
             x=''
         ) +
         theme(
-            axis_text_x=element_text(size=4),
-            axis_text_y=element_text(size=4),
-            axis_title=element_text(size=4),
-            legend_title=element_text(size=4),
-            legend_text=element_text(size=4),
-            figure_size=(3, len(sorted_methods) * 0.2 + 0.3)
+            axis_text_x=element_text(size=6),
+            axis_text_y=element_text(size=6),
+            axis_title=element_text(size=6),
+            legend_title=element_text(size=6),
+            legend_text=element_text(size=6),
+            figure_size=(3, len(sorted_methods) * 0.3 + 0.3)
         ) +
         scale_fill_manual(
             values={'Win': '#a6cee3', 'Tie': '#bdbdbd', 'Loss': '#fbb4ae'},
@@ -374,6 +406,7 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
         p.save(filename=str(write_to_path / "winrate_plot.png"), dpi=300, bbox_inches='tight')
     else:
         print(p)
-
+    
     if report_to is not None and "wandb" in report_to:
         wandb.log({"steering/winrate_plot": wandb.Image(str(write_to_path / "winrate_plot.png"))})
+

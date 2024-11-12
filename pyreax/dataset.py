@@ -41,6 +41,7 @@ class ReAXFactory(object):
             use_cache=use_cache, master_data_dir=master_data_dir
         )
         self.seed = kwargs.get("seed", 42)
+        self.logger = kwargs.get("logger", logger)
 
     def save_cache(self):
         """Save the language model cache before exiting"""
@@ -55,7 +56,7 @@ class ReAXFactory(object):
     def prepare_concepts(self, concepts, **kwargs):
         start = time.time()
         if kwargs.get("concept_genres_map", None) != None:
-            logger.warning("Creating contrast concepts for the inputs (skipping genres as they are provided).")
+            self.logger.warning("Creating contrast concepts for the inputs (skipping genres as they are provided).")
             contrast_task = get_contrast_concepts(
                 self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
                 api_tag=kwargs.get("api_tag", ""))
@@ -63,7 +64,7 @@ class ReAXFactory(object):
                 run_tasks([contrast_task]))[0]
             concept_genres_map = kwargs.get("concept_genres_map", None)
         else:
-            logger.warning("Creating genre and contrast concepts for the inputs.")
+            self.logger.warning("Creating genre and contrast concepts for the inputs.")
             genre_task = get_concept_genres(self.lm_model, concepts, 
                                             api_tag=kwargs.get("api_tag", ""))
             contrast_task = get_contrast_concepts(
@@ -75,8 +76,8 @@ class ReAXFactory(object):
         end = time.time()
         elapsed = round(end - start, 3)
         for concept in concepts:
-            logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
-        logger.warning(
+            self.logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
+        self.logger.warning(
             f"Init finished in {elapsed} sec.")
         return concept_genres_map, contrast_concepts_map
 
@@ -84,7 +85,7 @@ class ReAXFactory(object):
         """category: positive, negative, hard negative"""
         
         start = time.time()
-        logger.warning("Creating dataframe.")
+        self.logger.warning("Creating dataframe.")
 
         all_examples = []
         input_length = kwargs.get("input_length", 32)
@@ -135,14 +136,14 @@ class ReAXFactory(object):
         df = df[df["input"].str.strip() != ""]
         end = time.time()
         elapsed = round(end-start, 3)
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
+        self.logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()
-        logger.warning("Creating dataframe.")
+        self.logger.warning("Creating dataframe.")
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
         content_id = n * kwargs.get("current_group_id", 0)
@@ -243,7 +244,7 @@ class ReAXFactory(object):
             ])
         end = time.time()
         elapsed = round(end-start, 3)
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
+        self.logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
         
 
@@ -314,8 +315,8 @@ def make_data_module(
         output_ids = base_input_ids.clone()
         output_ids[:base_prompt_length] = -100
 
-        # logger.warning("tokens with lm loss:")
-        # logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
+        # self.logger.warning("tokens with lm loss:")
+        # self.logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
 
         intervention_locations = torch.tensor([[i for i in range(1, base_length)]])
         all_intervention_locations.append(intervention_locations)

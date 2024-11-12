@@ -22,8 +22,7 @@ class WinRateEvaluator(Evaluator):
         self.winrate_baseline = kwargs.get(
             "winrate_baseline", "PromptSteering")
         self.use_icl = kwargs.get("use_icl", False)
-        self.template = UNIDIRECTIONAL_PAIRWISE_EVALUATION_NO_ICL_TEMPLATE \
-            if not self.use_icl else UNIDIRECTIONAL_PAIRWISE_EVALUATION_TEMPLATE
+        self.template = UNIDIRECTIONAL_PAIRWISE_EVALUATION_TEMPLATE
 
     def __str__(self):
         return 'WinRateEvaluator'
@@ -101,6 +100,12 @@ class WinRateEvaluator(Evaluator):
             else:
                 assert False, f"Unknown verdict: {verdict}"
             results_winrate += [who_wins]
+            # print("Prompt: ", prompt)
+            # print("completion: ", completion)
+            # print("verdict: ", verdict)
+            # print("is_baseline_a: ", is_baseline_a)
+            # print("="*100)
+            # print("="*100)
         data[f"{self.model_name}_win_result"] = results_winrate
 
         total_samples = len(results_winrate)

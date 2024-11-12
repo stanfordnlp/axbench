@@ -19,8 +19,11 @@ import glob
 import pickle
 import torch
 import shutil
+import requests
 import pandas as pd
+import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from huggingface_hub import hf_hub_download
 from pathlib import Path
 from args.training_args import TrainingArgs
 from transformers import set_seed
@@ -71,6 +74,31 @@ def load_metadata(metadata_path):
     return metadata
 
 
+def load_metadata_flatten(metadata_path):
+    """
+    Load flatten metadata from a JSON lines file.
+    """
+    metadata = []
+    group_id = 0
+    with open(metadata_path, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            for concept_id, concept in enumerate(data["concepts"]):
+                concept_genres_map = data["concept_genres_map"][concept]
+                contrast_concepts_map = data["contrast_concepts_map"][concept]
+                ref = data["refs"][concept_id]
+                flatten_data = {
+                    "concept": concept,
+                    "ref": ref,
+                    "concept_genres_map": {concept: concept_genres_map},
+                    "contrast_concepts_map": {concept: contrast_concepts_map},
+                    "group_id": group_id
+                }
+                metadata += [flatten_data]  # Return the metadata as is
+            group_id += 1
+    return metadata
+
+
 def binarize_df(original_df, concept, model_name):
     if model_name in {
         "LinearProbe", "L1LinearProbe", "IntegratedGradients",
@@ -96,6 +124,21 @@ def binarize_df(original_df, concept, model_name):
         raise NotImplementedError(f"Binarization not implemented for {model_name}")
 
 
+def partition_list(lst, n):
+    """
+    Partition a list into n approximately equal slices.
+
+    Args:
+        lst (list): The list to partition.
+        n (int): The number of partitions.
+
+    Returns:
+        list of lists: A list containing n sublists.
+    """
+    k, m = divmod(len(lst), n)
+    return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
+
+
 def main():
     args = TrainingArgs(section="train")
 
@@ -116,7 +159,7 @@ def main():
     torch.backends.cudnn.benchmark = False
 
     # Set a unique seed per rank for reproducibility
-    set_seed(args.seed)
+    set_seed(args.seed + rank)
 
     args.data_dir = f"{args.dump_dir}/generate"
 
@@ -158,85 +201,53 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
-    # Prepare tasks
-    tasks = []
-    for model_name in sorted(list(args.models.keys())):
-        for group_id, group_df in df_list:
-            if model_name == "ReAX":
-                tasks.append((model_name, group_id, group_df.copy(), None, 0))
-            else:
-                for idx, concept in enumerate(metadata[group_id]["concepts"]):
-                    tasks.append((model_name, group_id, group_df.copy(), concept, idx))
-    if len(tasks) == 0:
-        logger.warning(f"No tasks to train. Exiting.")
-        return
-
-    # Partition tasks among ranks
-    tasks_per_rank = [[] for _ in range(world_size)]
-    for idx, task in enumerate(tasks):
-        tasks_per_rank[idx % world_size].append(task)
-
-    # Get tasks assigned to this rank
-    my_tasks = tasks_per_rank[rank]
+    # Partition df_list among ranks
+    df_list_per_rank = partition_list(df_list, world_size)
+    my_df_list = df_list_per_rank[rank]
 
     # Load model instance onto device
-    model_instance = AutoModelForCausalLM.from_pretrained(args.model_name)
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.model_name, torch_dtype=torch.bfloat16, device_map=device)
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
-    model_instance = model_instance.to(device)
 
-    benchmark_model_results = {}
-
-    # Run tasks assigned to this rank
-    for task in my_tasks:
-        # each task starts with the same seed
-        set_seed(args.seed)
-        model_name, group_id, group_df, concept, idx = task
-        model_class = getattr(axbench, model_name)
-        # Construct a unique model_name for saving
-        model_name_with_task = f"{model_name}_group_{group_id}_concept_{idx}"
-        weight_file = dump_dir / f"{model_name_with_task}_weight.pt"
-        bias_file = dump_dir / f"{model_name_with_task}_bias.pt"
-        master_weight_file = dump_dir / f"{model_name}_weight.pt"
-        master_bias_file = dump_dir / f"{model_name}_bias.pt"
-
-        # Check if both weight and bias files already exist
-        if (weight_file.exists() and bias_file.exists()) or (master_weight_file.exists() and master_bias_file.exists()):
-            logger.warning(f"Files for task {model_name_with_task} already exist. Skipping training.")
-            continue  # Skip this task
-
-        if model_name == "ReAX":
-            logger.warning(f"Training {model_class} with paired data: group_id {group_id}.")
-            benchmark_model = model_class(
-                model_instance, tokenizer, layer=args.layer,
-                training_args=args.models[model_name],
-                device=device, seed=args.seed
-            )
-            benchmark_model.train(group_df)
-        else:
-            logger.warning(
-                f"Training {model_class} with non-paired data for concept {concept}.")
-            benchmark_model = model_class(
-                model_instance, tokenizer, layer=args.layer,
-                training_args=args.models[model_name],
-                device=device, seed=args.seed
-            )
-            benchmark_model.train(binarize_df(group_df, concept, model_name))
-        key = (model_name, group_id, concept, idx)
-        benchmark_model_results[key] = benchmark_model
-
-        # Save the model after training
-        benchmark_model.save(dump_dir, model_name=model_name_with_task)
-        logger.warning(f"Saved model weights and biases to {dump_dir} with model_name {model_name_with_task}")
+    # Run training for assigned group_ids
+    for model_name in sorted(args.models.keys()):
+        logger.warning(f"Processing model {model_name} on rank {rank}")
+        for group_id, group_df in my_df_list:
+            if model_name == "ReAX":
+                logger.warning(f"Training {model_name} with group_id {group_id}")
+                benchmark_model = getattr(axbench, model_name)(
+                    model_instance, tokenizer, layer=args.layer,
+                    training_args=args.models[model_name],
+                    device=device, seed=args.seed
+                )
+                benchmark_model.make_model()
+                benchmark_model.ax.to(torch.bfloat16)
+                benchmark_model.train(group_df)
+            else:
+                for idx, concept in enumerate(metadata[group_id]["concepts"]):
+                    logger.warning(f"Training {model_name} with concept {concept}")
+                    benchmark_model = getattr(axbench, model_name)(
+                        model_instance, tokenizer, layer=args.layer,
+                        training_args=args.models[model_name],
+                        device=device, seed=args.seed
+                    )
+                    benchmark_model.make_model()
+                    benchmark_model.ax.to(torch.bfloat16)
+                    binarized_df = binarize_df(group_df, concept, model_name)
+                    benchmark_model.train(binarized_df)
+            benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
+            # Clean up
+            del benchmark_model
+            torch.cuda.empty_cache()
 
     # Synchronize all processes
     dist.barrier()
 
     # Rank 0 merges results
     if rank == 0:
-        import re
-        from collections import defaultdict
-
         logger.warning("Rank 0 is merging results.")
 
         # Save other config
@@ -247,67 +258,41 @@ def main():
         with open(config_path, 'w') as f:
             json.dump(config, f)
 
-        # Collect all weight and bias files
-        weight_files = list(dump_dir.glob("*_weight.pt"))
-        # Build a list of file info
-        file_info_list = []
-        pattern = re.compile(r'(.*)_group_(\d+)_concept_(\d+)_weight.pt')
+        for model_name in sorted(args.models.keys()):
+            # Collect per-rank weight and bias files
+            weight_files = [dump_dir / f"rank_{r}_{model_name}_weight.pt" for r in range(world_size)]
+            bias_files = [dump_dir / f"rank_{r}_{model_name}_bias.pt" for r in range(world_size)]
 
-        for wf in weight_files:
-            filename = wf.name
-            match = pattern.match(filename)
-            if match:
-                model_name, group_id_str, concept_idx_str = match.groups()
-                group_id = int(group_id_str)
-                concept_idx = int(concept_idx_str)
-                bias_file = dump_dir / f"{model_name}_group_{group_id}_concept_{concept_idx}_bias.pt"
-                file_info_list.append({
-                    'model_name': model_name,
-                    'group_id': group_id,
-                    'concept_idx': concept_idx,
-                    'weight_file': wf,
-                    'bias_file': bias_file
-                })
-            else:
-                logger.error(f"Filename {filename} does not match the expected pattern.")
+            # Check if files exist
+            weight_files_existing = [f for f in weight_files if f.exists()]
+            bias_files_existing = [f for f in bias_files if f.exists()]
+
+            if not weight_files_existing or not bias_files_existing:
+                logger.warning(f"No weight or bias files found for model {model_name}. Skipping.")
                 continue
 
-        # Now, group by model_name
-        model_files = defaultdict(list)
-        for info in file_info_list:
-            model_name = info['model_name']
-            model_files[model_name].append(info)
+            # Load weights and biases
+            weights = [torch.load(f) for f in weight_files_existing]
+            biases = [torch.load(f) for f in bias_files_existing]
 
-        # For each model_name, sort the files and merge the weights and biases
-        for model_name, files in model_files.items():
-            # Sort the files by group_id and concept_idx
-            files.sort(key=lambda x: (x['group_id'], x['concept_idx']))
-            # Collect weights and biases
-            weights = []
-            biases = []
-            for info in files:
-                weight = torch.load(info['weight_file'])
-                bias = torch.load(info['bias_file'])
-                weights.append(weight)
-                biases.append(bias)
             # Concatenate weights and biases
             merged_weight = torch.cat(weights, dim=0)
             merged_bias = torch.cat(biases, dim=0)
-            # Save the merged tensors
+
+            # Save merged weight and bias files
             weight_file = dump_dir / f"{model_name}_weight.pt"
             bias_file = dump_dir / f"{model_name}_bias.pt"
             torch.save(merged_weight, weight_file)
             torch.save(merged_bias, bias_file)
             logger.warning(f"Saved merged weights and biases for model {model_name}")
 
-            # After merging, delete the per-task weight and bias files
-            for info in files:
+            # Optionally delete per-rank files
+            for f in weight_files_existing + bias_files_existing:
                 try:
-                    info['weight_file'].unlink()  # Delete weight file
-                    info['bias_file'].unlink()    # Delete bias file
-                    logger.warning(f"Deleted files: {info['weight_file'].name}, {info['bias_file'].name}")
+                    f.unlink()
+                    logger.warning(f"Deleted file {f.name}")
                 except Exception as e:
-                    logger.error(f"Error deleting files {info['weight_file'].name} and {info['bias_file'].name}: {e}")
+                    logger.error(f"Error deleting file {f.name}: {e}")
 
     # Finalize the process group
     dist.destroy_process_group()
@@ -316,6 +301,7 @@ def main():
     logger.removeHandler(console_handler)
     # If file_handler is used, remove it as well
     # logger.removeHandler(file_handler)
+
 
 if __name__ == "__main__":
     main()

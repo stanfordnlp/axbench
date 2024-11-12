@@ -1,7 +1,7 @@
-# inference with existing subspaces.
+# inference.py: Inference with existing subspaces.
 #
 # example launch command:
-#     python axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
+#     torchrun --nproc_per_node=NUM_GPUS axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
 
 try:
     # This library is our indicator that the required installs
@@ -14,7 +14,6 @@ except ModuleNotFoundError:
     sys.path.append("../../pyreax")
     import pyreax
 
-
 import os, argparse, yaml, json, glob, pickle, time, itertools
 import shutil
 import pandas as pd
@@ -23,8 +22,6 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import queue
 
 from pyreax import (
     EXAMPLE_TAG, 
@@ -41,9 +38,10 @@ from openai import AsyncOpenAI
 import httpx, asyncio
 
 import logging
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.WARN)
+import torch.distributed as dist
+import sys
+
+# Initialize the logger
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 5
@@ -66,21 +64,24 @@ def load_config(config_path):
     return d
 
 
-def load_state(dump_dir, mode):
+def load_state(dump_dir, mode, rank):
     """
     Load the state from a file if it exists.
-    
-    Args:
-        dump_dir (str): The directory to load the state file from.
-    
-    Returns:
-        dict: The loaded state dictionary, or None if no state file exists.
     """
-    state_path = os.path.join(f"{dump_dir}/inference", f"{mode}_{STATE_FILE}")
+    state_path = os.path.join(f"{dump_dir}/inference", f"{mode}_{STATE_FILE}_rank_{rank}")
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
             return pickle.load(f)
     return None
+
+
+def save_state(dump_dir, state, partition, rank):
+    dump_dir = Path(dump_dir) / "inference"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # Save state
+    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}_rank_{rank}")
+    with open(state_path, "wb") as f:
+        pickle.dump(state, f)
 
 
 def load_metadata_flatten(metadata_path):
@@ -109,18 +110,13 @@ def load_metadata_flatten(metadata_path):
 
 
 def save(
-    dump_dir, state, partition,
-    current_df):
+    dump_dir, partition,
+    current_df, rank):
+    # This function saves DataFrames per rank per partition (latent or steering)
     dump_dir = Path(dump_dir) / "inference"
     dump_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save state
-    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}")
-    with open(state_path, "wb") as f:
-        pickle.dump(state, f)
-    
     # Save DataFrame
-    df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
+    df_path = os.path.join(dump_dir, f"rank_{rank}_{partition}_data.parquet")
     
     if os.path.exists(df_path):
         existing_df = pd.read_parquet(df_path)
@@ -129,6 +125,19 @@ def save(
         combined_df = current_df
     
     combined_df.to_parquet(df_path, engine='pyarrow')
+
+
+def partition_concept_ids(concept_ids, world_size):
+    concept_ids_per_rank = []
+    n = len(concept_ids)
+    chunk_size = n // world_size
+    remainder = n % world_size
+    start = 0
+    for i in range(world_size):
+        end = start + chunk_size + (1 if i < remainder else 0)
+        concept_ids_per_rank.append(concept_ids[start:end])
+        start = end
+    return concept_ids_per_rank
 
 
 def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, args):
@@ -173,17 +182,39 @@ def create_data_steering(
     return current_df, (concept_id, sae_link, sae_id)
 
 
-def infer_steering(args):
-
+def infer_steering(args, rank, world_size, device, logger):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
     num_of_examples = args.steering_num_of_examples
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
-    layer = config["layer"] if config else 0 # default layer for prompt baselines
+    layer = config["layer"] if config else 0  # default layer for prompt baselines
     steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
+
+    state = load_state(args.dump_dir, "steering", rank)
+    last_concept_id_processed = state.get("last_concept_id", None) if state else None
+    logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
+
+    # Get list of all concept_ids
+    concept_ids = list(range(len(metadata)))
+
+    # Partition concept_ids among ranks sequentially
+    concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
+    my_concept_ids = concept_ids_per_rank[rank]
+
+    if last_concept_id_processed is not None:
+        if last_concept_id_processed in my_concept_ids:
+            idx = my_concept_ids.index(last_concept_id_processed)
+            my_concept_ids = my_concept_ids[idx+1:]
+        else:
+            # If last_concept_id_processed is not in my_concept_ids, process all
+            pass
+
+    if len(my_concept_ids) == 0:
+        logger.warning(f"Rank {rank} has no concepts to process. Exiting.")
+        return
 
     # Create a new OpenAI client.
     lm_client = AsyncOpenAI(
@@ -199,14 +230,6 @@ def infer_steering(args):
         max_retries=3,
     )
 
-    state = load_state(args.dump_dir, "steering")
-    start_concept_id = state.get("concept_id", 0) if state else 0
-    logger.warning(f"Starting concept index: {start_concept_id}")
-    concept_ids = list(range(start_concept_id, len(metadata)))
-    if len(concept_ids) == 0:
-        logger.warning(f"No concept ids to infer. Exiting.")
-        return
-    
     # Initialize the dataset factory with the tokenizer.
     tokenizer = AutoTokenizer.from_pretrained(args.steering_model_name, use_fast=False)
     tokenizer.padding_side = "right"
@@ -216,58 +239,35 @@ def infer_steering(args):
         lm_model=args.lm_model
     )
 
-    # Initialize the available devices queue.
-    available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-    device_queue = queue.Queue()
-    for device in available_devices:
-        device_queue.put(device)
+    # Load model instance onto device
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.steering_model_name if args.steering_model_name else args.model_name,
+        device_map=device, torch_dtype=torch.bfloat16
+    )
+    model_instance.config.use_cache = False
+    model_instance = model_instance.eval()
 
-    device_lm_models = {}
-    for device in available_devices:
-        model_instance = AutoModelForCausalLM.from_pretrained(
-            args.steering_model_name if args.steering_model_name else args.model_name
-        )
-        model_instance.config.use_cache = False
-        model_instance = model_instance.eval()
-        model_instance = model_instance.to(device)
-        device_lm_models[device] = model_instance
-
-    # Combine datasets, sae_links, and sae_ids into a single dictionary
+    # Prepare data per concept
     data_per_concept = {}
-    for concept_id in concept_ids:
+    for concept_id in my_concept_ids:
         current_df, (_, sae_link, sae_id) = create_data_steering(
             dataset_factory, metadata, concept_id, num_of_examples,
             steering_factors, steering_datasets, args
         )
         data_per_concept[concept_id] = (current_df, sae_link, sae_id)
 
-    # Prepare tasks: list of (model_idx, model_name, concept_id)
-    tasks = []
-    for concept_id in concept_ids:
-        for model_idx, model_name in enumerate(args.models):
+    # Now loop over concept_ids and use preloaded models
+    for concept_id in my_concept_ids:
+        current_df, sae_link, sae_id = data_per_concept[concept_id]
+        for model_name in args.models:
+
             if model_name in STEERING_EXCLUDE_MODELS:
                 continue
-            tasks.append((model_idx, model_name, concept_id))
-
-    # Dictionary to collect results per concept_id and model_name
-    torch.cuda.empty_cache()
-    results_per_concept = {}
-    def run_predict_steer(task):
-        model_idx, model_name, concept_id = task
-        # Get an available device from the queue
-        device = device_queue.get()
-        try:
             model_class = getattr(axbench, model_name)
-            logger.warning(f"Inference steering with {model_class} on {device} for concept {concept_id}.\n")
-            # Use the pre-loaded model_instance
-            model_instance = device_lm_models[device]
-            # Instantiate a new tokenizer inside the thread to avoid sharing across threads
-            thread_tokenizer = AutoTokenizer.from_pretrained(
-                args.steering_model_name, use_fast=False
-            )
-            thread_tokenizer.padding_side = "right"
+            logger.warning(f"Loading {model_class} on {device}.")
+
             benchmark_model = model_class(
-                model_instance, thread_tokenizer, layer=layer,
+                model_instance, tokenizer, layer=layer,
                 low_rank_dimension=len(metadata),
                 device=device
             )
@@ -275,12 +275,14 @@ def infer_steering(args):
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
             )
             benchmark_model.to(device)
-            # Pre-compute mean activations for steering evaluation.
+            if hasattr(benchmark_model, 'ax'):
+                benchmark_model.ax.eval()
+                benchmark_model.ax.to(torch.bfloat16)
+            # Pre-compute mean activations once
             benchmark_model.pre_compute_mean_activations(
                 os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
             )
-            # Get the data for this concept_id
-            current_df, sae_link, sae_id = data_per_concept[concept_id]
+            logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
             results = benchmark_model.predict_steer(
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
@@ -288,51 +290,96 @@ def infer_steering(args):
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature
             )
-            # Collect results
-            return (concept_id, model_name, results)
-        finally:
-            # Release the device back to the queue
-            device_queue.put(device)
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
-
-    # Run the tasks in parallel using ThreadPoolExecutor
-    with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(run_predict_steer, task): task
-            for task in tasks
-        }
-        for future in as_completed(futures):
-            task = futures[future]
-            model_idx, model_name, concept_id = task
-            concept_id_result, model_name_result, results = future.result()
-            # Store the results
-            if concept_id_result not in results_per_concept:
-                results_per_concept[concept_id_result] = {}
-            results_per_concept[concept_id_result][model_name_result] = results
-
-    # After all tasks are done, update datasets with results and save
-    for concept_id in concept_ids:
-        current_df, _, _ = data_per_concept[concept_id]
-        # Get the results for this concept_id
-        model_results = results_per_concept[concept_id]
-        for model_name, results in model_results.items():
+            # Store the results in current_df
             for k, v in results.items():
                 current_df[f"{model_name}_{k}"] = v
-        # Save the combined results
-        save(dump_dir, {"concept_id": concept_id + 1}, "steering",
-             current_df)
+            del benchmark_model
+            torch.cuda.empty_cache()
+        save(dump_dir, 'steering', current_df, rank)
+        logger.warning(f"Saved inference results for concept {concept_id} to rank_{rank}_steering_data.parquet")
+        # After processing, save state
+        current_state = {'last_concept_id': concept_id}
+        save_state(args.dump_dir, current_state, 'steering', rank)
+
+    # Synchronize all processes
+    dist.barrier()
+
+    # Rank 0 merges results
+    if rank == 0:
+        logger.warning("Rank 0 is merging results.")
+        # Merge per-rank results
+        all_parquet_files = list((Path(dump_dir) / "inference").glob("rank_*_steering_data.parquet"))
+        # Parse filenames to extract rank
+        import re
+        pattern = re.compile(r'rank_(\d+)_steering_data\.parquet')
+
+        file_info_list = []
+        for parquet_file in all_parquet_files:
+            match = pattern.match(parquet_file.name)
+            if match:
+                rank_str = match.group(1)
+                rank_int = int(rank_str)
+                file_info_list.append({
+                    'rank': rank_int,
+                    'file': parquet_file
+                })
+            else:
+                logger.warning(f"Filename {parquet_file.name} does not match the expected pattern.")
+
+        # Sort the file_info_list by rank
+        file_info_list.sort(key=lambda x: x['rank'])
+
+        # Read and concatenate dataframes
+        dfs = []
+        for info in file_info_list:
+            df = pd.read_parquet(info['file'])
+            dfs.append(df)
+        if len(dfs) > 0:
+            combined_df = pd.concat(dfs, ignore_index=True)
+            # Optionally sort combined_df by 'concept_id' if needed
+            combined_df = combined_df.sort_values(by='concept_id').reset_index(drop=True)
+            combined_df.to_parquet(Path(dump_dir) / "inference" / "steering_data.parquet", engine='pyarrow')
+            logger.warning(f"Saved combined steering inference results to {Path(dump_dir) / 'inference' / 'steering_data.parquet'}")
+        else:
+            logger.warning("No results to merge.")
+
+        # Optionally, delete per-rank files
+        for info in file_info_list:
+            os.remove(info['file'])
+            logger.warning(f"Deleted {info['file']}")
 
 
-def infer_latent(args):
+def infer_latent(args, rank, world_size, device, logger):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
     num_of_examples = args.latent_num_of_examples
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
-    layer = config["layer"] if config else 0 # default layer for prompt baselines
+    layer = config["layer"] if config else 0  # default layer for prompt baselines
+
+    state = load_state(args.dump_dir, "latent", rank)
+    last_concept_id_processed = state.get("last_concept_id", None) if state else None
+    logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
+
+    # Get list of all concept_ids
+    concept_ids = list(range(len(metadata)))
+
+    # Partition concept_ids among ranks sequentially
+    concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
+    my_concept_ids = concept_ids_per_rank[rank]
+
+    if last_concept_id_processed is not None:
+        if last_concept_id_processed in my_concept_ids:
+            idx = my_concept_ids.index(last_concept_id_processed)
+            my_concept_ids = my_concept_ids[idx+1:]
+        else:
+            # If last_concept_id_processed is not in my_concept_ids, process all
+            pass
+
+    if len(my_concept_ids) == 0:
+        logger.warning(f"Rank {rank} has no concepts to process. Exiting.")
+        return
 
     # Create a new OpenAI client.
     client = AsyncOpenAI(
@@ -348,14 +395,6 @@ def infer_latent(args):
         max_retries=3,
     )
 
-    state = load_state(args.dump_dir, "latent")
-    start_concept_id = state.get("concept_id", 0) if state else 0
-    logger.warning(f"Starting concept index: {start_concept_id}")
-    concept_ids = list(range(start_concept_id, len(metadata)))
-    if len(concept_ids) == 0:
-        logger.warning(f"No concept ids to infer. Exiting.")
-        return
-
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name, model_max_length=512)
@@ -365,136 +404,130 @@ def infer_latent(args):
     dataset_factory = ReAXFactory(
         None, client, tokenizer, dump_dir,
         use_cache=True, master_data_dir=args.master_data_dir,
-        lm_model=args.lm_model
+        lm_model=args.lm_model, logger=logger
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
-    # Initialize the available devices.
-    available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-    num_devices = len(available_devices)
-    device_queue = queue.Queue()
-    for device in available_devices:
-        device_queue.put(device)
+    # Load model instance onto device
+    model_instance = AutoModelForCausalLM.from_pretrained(args.model_name, device_map=device)
+    model_instance.config.use_cache = False
+    model_instance = model_instance.eval()
 
-    # Pre-load model instances per device
-    device_lm_models = {}
-    for device in available_devices:
-        model_instance = AutoModelForCausalLM.from_pretrained(args.model_name)
-        model_instance.config.use_cache = False
-        model_instance = model_instance.eval()
-        model_instance = model_instance.to(device)
-        device_lm_models[device] = model_instance
+    # Preload benchmark models before the loop over concept_ids
+    benchmark_models = {}
+    for model_name in args.models:
+        if model_name in LATENT_EXCLUDE_MODELS:
+            continue
+        model_class = getattr(axbench, model_name)
+        logger.warning(f"Loading {model_class} on {device}.")
 
-    # Prepare tasks: list of (model_name, concept_id)
-    datasets = {}
-    tasks = []
-    for concept_id in concept_ids:
+        benchmark_model = model_class(
+            model_instance, tokenizer, layer=layer,
+            low_rank_dimension=len(metadata),
+            device=device
+        )
+        benchmark_model.load(
+            dump_dir=train_dir, sae_path=metadata[0]["ref"]
+        )
+        benchmark_model.to(device)
+        benchmark_models[model_name] = benchmark_model
+
+
+    # Now loop over concept_ids and use preloaded models
+    for concept_id in my_concept_ids:
         current_df = create_data_latent(
             dataset_factory, metadata, concept_id, num_of_examples, args)
-        datasets[concept_id] = current_df
-    for concept_id in concept_ids:
-        for model_name in args.models:
-            if model_name in LATENT_EXCLUDE_MODELS:
-                continue
-            tasks.append((model_name, concept_id))
-
-    # Dictionary to collect results per concept_id and model_name
-    torch.cuda.empty_cache()
-    results_per_concept = {}
-    def run_predict_latent(task):
-        try:
-            model_name, concept_id = task
-            # Get an available device from the queue
-            device = device_queue.get()
-
-            model_class = getattr(axbench, model_name)
-            logger.warning(f"Inference latent with {model_class} on {device} for concept {concept_id}.")
-            # Use the pre-loaded model_instance
-            model_instance = device_lm_models[device]
-            # Instantiate a new tokenizer inside the thread to avoid sharing across threads
-            thread_tokenizer = AutoTokenizer.from_pretrained(
-                args.model_name, model_max_length=512)
-            thread_tokenizer.padding_side = "right"
-            benchmark_model = model_class(
-                model_instance, thread_tokenizer, layer=layer,
-                low_rank_dimension=len(metadata),
-                device=device
-            )
-            benchmark_model.load(
-                dump_dir=train_dir, sae_path=metadata[0]["ref"]
-            )
-            benchmark_model.to(device)
-            # Get the dataset for this concept_id
-            current_df = datasets[concept_id]
+        for model_name, benchmark_model in benchmark_models.items():
+            logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
             results = benchmark_model.predict_latent(
                 current_df, batch_size=args.latent_batch_size
             )
-            return (concept_id, model_name, results)
-        finally:
-            # Release the device back to the queue
-            device_queue.put(device)
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
+            # Store the results in current_df
+            for k, v in results.items():
+                if k == "tokens" and "tokens" not in current_df:
+                    current_df["tokens"] = v  # for tokens, they are global
+                else:
+                    current_df[f"{model_name}_{k}"] = v
+        save(dump_dir, 'latent', current_df, rank)
+        logger.warning(f"Saved inference results for concept {concept_id} to rank_{rank}_latent_data.parquet")
+        # After processing, save state
+        current_state = {'last_concept_id': concept_id}
+        save_state(args.dump_dir, current_state, 'latent', rank)
 
-    # Run the tasks in parallel on available GPUs
-    with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(run_predict_latent, task): task
-            for task in tasks
-        }
-        for future in as_completed(futures):
-            task = futures[future]
-            model_name, concept_id = task
-            concept_id_result, model_name_result, results = future.result()
-            # Store the results
-            if concept_id_result not in results_per_concept:
-                results_per_concept[concept_id_result] = {}
-            results_per_concept[concept_id_result][model_name_result] = results
+    # Synchronize all processes
+    dist.barrier()
 
-    # After all tasks are done, update datasets with results and save
-    if len(tasks) > 0:
-        for concept_id in concept_ids:
-            current_df = datasets[concept_id]
-            # Get the results for this concept_id
-            model_results = results_per_concept[concept_id]
-            for model_name, results in model_results.items():
-                for k, v in results.items():
-                    if k == "tokens" and "tokens" not in current_df:
-                        current_df["tokens"] = v # for tokens, they are global
-                    else:
-                        current_df[f"{model_name}_{k}"] = v
-            # Save the combined results
-            save(dump_dir, {"concept_id": concept_id + 1}, "latent",
-                current_df)
-    
+    # Rank 0 merges results
+    if rank == 0:
+        logger.warning("Rank 0 is merging results.")
+        # Merge per-rank results
+        all_parquet_files = list((Path(dump_dir) / "inference").glob("rank_*_latent_data.parquet"))
+        # Parse filenames to extract rank
+        import re
+        pattern = re.compile(r'rank_(\d+)_latent_data\.parquet')
+
+        file_info_list = []
+        for parquet_file in all_parquet_files:
+            match = pattern.match(parquet_file.name)
+            if match:
+                rank_str = match.group(1)
+                rank_int = int(rank_str)
+                file_info_list.append({
+                    'rank': rank_int,
+                    'file': parquet_file
+                })
+            else:
+                logger.warning(f"Filename {parquet_file.name} does not match the expected pattern.")
+
+        # Sort the file_info_list by rank
+        file_info_list.sort(key=lambda x: x['rank'])
+
+        # Read and concatenate dataframes
+        dfs = []
+        for info in file_info_list:
+            df = pd.read_parquet(info['file'])
+            dfs.append(df)
+        if len(dfs) > 0:
+            combined_df = pd.concat(dfs, ignore_index=True)
+            # Optionally sort combined_df by 'concept_id' if needed
+            combined_df = combined_df.sort_values(by='concept_id').reset_index(drop=True)
+            combined_df.to_parquet(Path(dump_dir) / "inference" / "latent_data.parquet", engine='pyarrow')
+            logger.warning(f"Saved combined latent inference results to {Path(dump_dir) / 'inference' / 'latent_data.parquet'}")
+        else:
+            logger.warning("No results to merge.")
+
+        # Optionally, delete per-rank files
+        for info in file_info_list:
+            os.remove(info['file'])
+            logger.warning(f"Deleted {info['file']}")
+
+        # Save top logits (optional)
         logger.warning("Saving top logits...")
-        for concept_id in concept_ids:
-            all_top_logits = {}
-            if "ReAX" in args.models:
-                model_name = "ReAX"
-                # calculate the logit lens results
-                model_class = getattr(axbench, model_name)
-                benchmark_model = model_class(
-                    device_lm_models[available_devices[0]], tokenizer, layer=layer,
-                    low_rank_dimension=len(metadata),
-                    device=available_devices[0]
-                )
-                benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
-                benchmark_model.to(available_devices[0])
+        if "ReAX" in args.models:
+            model_name = "ReAX"
+            model_class = getattr(axbench, model_name)
+            benchmark_model = model_class(
+                model_instance, tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=device
+            )
+            benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
+            benchmark_model.to(device)
+            for concept_id in concept_ids:
                 top_logits, neg_logits = benchmark_model.get_logits(concept_id, k=10)
-                all_top_logits[model_name] = {
-                    "top_logits": top_logits,
-                    "neg_logits": neg_logits
+                top_logits_entry = {
+                    "concept_id": int(concept_id),
+                    "results": {
+                        model_name: {
+                            "top_logits": top_logits,
+                            "neg_logits": neg_logits
+                        }
+                    }
                 }
-            top_logits_entry = {
-                "concept_id": int(concept_id),
-                "results": all_top_logits
-            }
-            with open(Path(dump_dir) / "inference" / "top_logits.jsonl", "a") as f:
-                f.write(json.dumps(top_logits_entry) + "\n")
+                with open(Path(dump_dir) / "inference" / "top_logits.jsonl", "a") as f:
+                    f.write(json.dumps(top_logits_entry) + "\n")
 
 
 def main():
@@ -515,23 +548,63 @@ def main():
     logger.warning(args)
     set_seed(args.seed)
 
-    def check_latent_eval_done(args):
-        # Check if at least one latent eval fragment exists.
-        if os.path.exists(os.path.join(
-            args.dump_dir, "inference", "latent_data.parquet")):
-            return True
-        return False
+    # Initialize the process group
+    dist.init_process_group(backend='nccl', init_method='env://')
+
+    # Get the rank and world_size from environment variables
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+
+    # Set the device for this process
+    device = torch.device(f'cuda:{local_rank}')
+    torch.cuda.set_device(device)
+
+    # Configure the logger per rank
+    logger.setLevel(logging.WARNING)  # Set the logging level as desired
+
+    # Create a logging formatter that includes the rank
+    formatter = logging.Formatter(
+        fmt=f'%(asctime)s,%(msecs)03d %(levelname)-8s [Rank {rank}] [%(filename)s:%(lineno)d] %(message)s',
+        datefmt='%Y-%m-%d:%H:%M:%S'
+    )
+
+    # Create a console handler and set its formatter
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+
+    # Optionally, create a file handler per rank
+    """
+    log_file = f'log_rank_{rank}.log'
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    """
 
     if args.mode == "latent":
-        infer_latent(args)
+        infer_latent(args, rank, world_size, device, logger)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
-        if not check_latent_eval_done(args):
+        if not os.path.exists(os.path.join(args.dump_dir, "inference", "latent_data.parquet")):
             raise ValueError("Latent eval must be done before steering eval.")
-        infer_steering(args)
+        infer_steering(args, rank, world_size, device, logger)
     elif args.mode == "all":
-        infer_latent(args)
-        infer_steering(args)
+        infer_latent(args, rank, world_size, device, logger)
+        infer_steering(args, rank, world_size, device, logger)
+
+    # Finalize the process group
+    dist.destroy_process_group()
+
+    # Remove handlers to prevent duplication if the script is run multiple times
+    logger.removeHandler(console_handler)
+    # If file_handler is used, remove it as well
+    # logger.removeHandler(file_handler)
+
 
 if __name__ == "__main__":
     main()
+

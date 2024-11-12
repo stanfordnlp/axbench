@@ -67,7 +67,6 @@ class ReAX(Model):
         
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
 
         # Optimizer and lr
