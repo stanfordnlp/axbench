@@ -140,13 +140,14 @@ class ReAXFactory(object):
         return df
     
     def create_train_df_dspy(self, concepts, n):
-        reaxoor = Reaxoor()
+        reaxoor = Reaxoor(n=n)
         return reaxoor(concepts, n)
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
         if kwargs.get("dspy", False):
             return self.create_train_df_dspy(concepts, n)
 
+        contrast_concepts_map = []
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()

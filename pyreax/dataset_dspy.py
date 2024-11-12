@@ -20,10 +20,10 @@ def get_cost():
     return sum([x['cost'] for x in lm.history if x['cost'] is not None])
 
 class Reaxoor(dspy.Module):
-    def __init__(self):
+    def __init__(self, n: int):
         super().__init__()
         self.get_contrastive_concepts = dspy.Predict(ContrastConcepts)
-        self.get_random_text = dspy.Predict(GenerateContent)
+        self.get_random_text = [dspy.Predict(GenerateContent) for _ in range(n)]
         self.get_genres = dspy.Predict(GetGenre)
         self.remove_concept = dspy.Predict(RemoveConcept)
         self.add_concept = dspy.Predict(AddConcept)
@@ -58,7 +58,7 @@ class Reaxoor(dspy.Module):
         for concept in concepts:
             genres = self.get_genres(concept=concept).genre
             for i in range(n_per_concept // len(concepts)):
-                random_text = self.get_random_text(genre=random.choice(genres)).content
+                random_text = self.get_random_text[i](genre=random.choice(genres)).content
                 print(random_text)
                 # rewrite to remove the concepts
                 random_text = self.remove_concept(
