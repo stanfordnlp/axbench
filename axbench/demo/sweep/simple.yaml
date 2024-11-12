@@ -6,7 +6,7 @@ generate:
   concept_path: "axbench/demo/concepts.csv"
   master_data_dir: "axbench/data"
   seed: 42
-  dspy: False
+  dspy: True
 
 train:
   model_name: "google/gemma-2-2b"

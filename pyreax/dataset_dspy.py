@@ -117,7 +117,7 @@ class Reaxoor(dspy.Module):
                     input_text=prompt,
                 ).output_text
                 continue_concept = random.choice([c for c in concepts if c != concept])
-                modified_output = self.continue_concept(
+                modified_output = " " + self.continue_concept(
                     concept=continue_concept,
                     content=modified_prompt,
                 ).continuation

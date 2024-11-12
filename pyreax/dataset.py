@@ -146,8 +146,6 @@ class ReAXFactory(object):
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
         if kwargs.get("dspy", False):
             return self.create_train_df_dspy(concepts, n)
-
-        contrast_concepts_map = []
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()
