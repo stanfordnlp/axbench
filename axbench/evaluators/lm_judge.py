@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from .evaluator import Evaluator
+from .prompt_templates import *
 import asyncio
 
 import logging
@@ -10,83 +11,10 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 
-INSTRUCTION_CONCEPT_BASED_RATING_TEMPLATE = """[System]
-You are an impartial evaluator. Your task is to determine if the response fragment both:
-1. Contains clear references or terms related to the specified concept (not just superficial mentions)
-2. Presents these references within a grammatically coherent structure (not just random related words)
-
-Provide a rating of 1 if the response meets ALL of these conditions:
-- The concept must be clearly and meaningfully incorporated
-- The response fragment must form a grammatically sensible phrase or sentence
-
-Provide a rating of 0 if ANY of these conditions are met:
-- The concept is missing or only superficially mentioned in the response fragment
-- The words are jumbled or lack basic grammatical structure in the response fragment
-
-First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
-Then provide your rating in exactly this format: "Rating: [[score]]"
-
-[Concept Start]
-%s
-[Concept End]
-
-[Response Start]
-%s
-[Response End]
-"""
-
-
-INSTRUCTION_RELATEDNESS_BASED_RATING_TEMPLATE = """[System]
-You are an impartial evaluator. Your task is to assess whether the response fragment is \
-meaningfully related to the given instruction.
-
-Provide a rating of 1 if the response meets ALL of these conditions:
-- The response fragment is related to the instruction in a meaningful way
-- The response fragment must form a grammatically sensible phrase or sentence
-
-Provide a rating of 0 if ANY of these conditions are met:
-- The response fragment is not related to the instruction at all
-- The words are jumbled or lack basic grammatical structure in the response fragment
-
-Begin with a brief explanation (1-2 sentences). Then provide your rating in this format: "Rating: [[score]]".
-
-[Instruction Start]
-%s
-[Instruction End]
-
-[Response Start]
-%s
-[Response End]
-"""
-
-
-GENERATION_RATING_TEMPLATE = """[System]
-You are an impartial evaluator. Your task is to determine if the sentence fragment both:
-1. Contains clear references or terms related to the specified concept (not just superficial mentions)
-2. Presents these references within a grammatically coherent structure (not just random related words)
-
-Rate 1 if the fragment satisfies BOTH criteria:
-- The concept must be clearly and meaningfully incorporated
-- The fragment must form a grammatically sensible phrase or sentence
-
-Rate 0 if either:
-- The concept is missing or only superficially mentioned
-- The words are jumbled or lack basic grammatical structure
-
-First provide a brief explanation (1-2 sentences) of whether and how the concept appears in a coherent way. \
-Then provide your rating in exactly this format: "Rating: [[score]]"
-
-[The Start of the Concept]
-%s
-[The End of the Concept]
-
-[The Start of the Sentence Fragment]
-%s
-[The End of the Sentence Fragment]
-"""
-
-
 class LMJudgeEvaluator(Evaluator):
+    MIN_RATING = 1
+    MAX_RATING = 10
+    DEFAULT_RATING = 5.0
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
         self.lm_model = kwargs.get("lm_model", None)
@@ -117,15 +45,15 @@ class LMJudgeEvaluator(Evaluator):
             try:
                 # Look for rating in various formats
                 rating = self._get_rating_from_completion(completion)
-                if rating is not None and 0 <= rating <= 1:
+                if rating is not None and self.MIN_RATING <= rating <= self.MAX_RATING:
                     ratings.append(rating)
                 else:
                     logger.warning(f"Invalid rating value: {rating}")
-                    ratings.append(0.0)
+                    ratings.append(self.DEFAULT_RATING)
                     
             except Exception as e:
                 logger.warning(f"Failed to parse rating:\n\n{completion}\nError: {str(e)}")
-                ratings.append(0.0)
+                ratings.append(self.DEFAULT_RATING)
         return ratings
     
     def compute_metrics(self, data, write_to_dir=None):
@@ -139,15 +67,9 @@ class LMJudgeEvaluator(Evaluator):
         prompts = []
         # This is a generation dataset.
         for _, row in data_copy.iterrows():
-            if self.template == GENERATION_RATING_TEMPLATE:
+            if self.template == UNIDIRECTIONAL_RATING_TEMPLATE:
                 prompts += [self.template % (
-                    row["input_concept"], row["input"] + row[f"{self.model_name}_steered_generation"])]
-            elif self.template == INSTRUCTION_CONCEPT_BASED_RATING_TEMPLATE:
-                prompts += [self.template % (
-                    row["input_concept"], row[f"{self.model_name}_steered_generation"])]
-            elif self.template == INSTRUCTION_RELATEDNESS_BASED_RATING_TEMPLATE:
-                prompts += [self.template % (
-                    row["original_prompt"], row[f"{self.model_name}_steered_generation"])]
+                    row["original_prompt"], row["input_concept"], row[f"{self.model_name}_steered_generation"])]
 
         async def process_batch():
             try:
@@ -168,14 +90,13 @@ class LMJudgeEvaluator(Evaluator):
 
         ratings = self._get_ratings_from_completions(completions)
         data_copy[f"{self.model_name}_lm_judge_rating"] = ratings
-        # overwrite the original data to add new ratings.
-        data[f"{self.model_name}_lm_judge_rating"] = ratings
         metrics = {
             "lm_judge_rating": [],
             "factor": [],
-            "raw_lm_judge_rating": []
+            "raw_lm_judge_rating": [],
+            "raw_rating_flattened": ratings
         }
-        
+
         # group by factor only and compute means
         grouped = data_copy.groupby("factor")
         for factor, group in grouped:
@@ -187,20 +108,15 @@ class LMJudgeEvaluator(Evaluator):
         return metrics
 
 
-class LMJudgeConceptEvaluator(LMJudgeEvaluator):
-    template = INSTRUCTION_CONCEPT_BASED_RATING_TEMPLATE
+class LMJudgeConceptFollowingEvaluator(LMJudgeEvaluator):
+    template = UNIDIRECTIONAL_RATING_TEMPLATE
+    def __init__(self, model_name, **kwargs):
+        super().__init__(model_name, **kwargs)
+        self.use_icl = kwargs.get("use_icl", False)
+        self.template = UNIDIRECTIONAL_RATING_NO_ICL_TEMPLATE if not self.use_icl else self.template
+        
     def __str__(self):
-        return 'LMJudgeConceptEvaluator'
+        return 'LMJudgeConceptFollowingEvaluator'
+    
 
-
-class LMJudgeFollowingEvaluator(LMJudgeEvaluator):
-    template = INSTRUCTION_RELATEDNESS_BASED_RATING_TEMPLATE
-    def __str__(self):
-        return 'LMJudgeFollowingEvaluator'
-
-
-class LMJudgeContinuationEvaluator(LMJudgeEvaluator):
-    template = GENERATION_RATING_TEMPLATE
-    def __str__(self):
-        return 'LMJudgeContinuationEvaluator'
 

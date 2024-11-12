@@ -35,12 +35,7 @@ from pyreax import (
 )
 from transformers import get_scheduler
 from pyreax.utils.model_utils import calculate_l1_losses
-
-import logging
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.WARN)
-logger = logging.getLogger(__name__)
+from transformers import set_seed
 
 
 class ReAX(Model):
@@ -55,7 +50,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
@@ -69,13 +64,6 @@ class ReAX(Model):
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device(self.device)
         self.ax_model = ax_model
-    
-    def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, self.model, examples)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
-            collate_fn=data_module["data_collator"])
-        return train_dataloader
         
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
@@ -90,7 +78,9 @@ class ReAX(Model):
             num_warmup_steps=0, num_training_steps=num_training_steps)
         norm_loss_fn = torch.nn.MSELoss()
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
+        
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -110,7 +100,7 @@ class ReAX(Model):
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
                     subspaces=subspaces, use_cache=False)
-        
+
                 # loss
                 loss = cf_outputs.loss
                 latent, output, base = self.ax_model.full_intervention_outputs[0].latent
@@ -121,8 +111,8 @@ class ReAX(Model):
                     mask=inputs["intervention_masks"],
                     k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
-                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1).mean()
-                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1).mean()
+                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1)
+                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1)
                 norm_loss = norm_loss_fn(norm_output, norm_base)
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + \
@@ -144,7 +134,6 @@ class ReAX(Model):
                     "lr %.6f || loss %.6f || null l1 loss %.6f || norm loss %.6f" % (
                         curr_lr, loss, null_loss, norm_loss))
         progress_bar.close()
-        logger.warning("Training finished.")
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):

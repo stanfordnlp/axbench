@@ -138,13 +138,6 @@ class MeanActivation(MeanEmbedding):
     def __str__(self):
         return 'MeanActivation'
 
-    def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, self.model, examples)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
-            collate_fn=data_module["data_collator"])
-        return train_dataloader
-
     @torch.no_grad()
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)

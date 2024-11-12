@@ -189,7 +189,6 @@ class ReAXFactory(object):
                     content_map[content[1]] = content_id
                     null_prompts += [(concept, f"{content[0][0]}//{content[0][1]}", content[1], content_id)]
                     content_id += 1
-
         null_outputs = get_model_continues(
             self.model, self.tokenizer, [prompt[2] for prompt in null_prompts],
             max_new_tokens=int(output_length*1.5))
@@ -288,7 +287,7 @@ class ReftDataCollator(object):
 
 
 def make_data_module(
-    tokenizer: transformers.PreTrainedTokenizer, model, df,
+    tokenizer: transformers.PreTrainedTokenizer, df,
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
     

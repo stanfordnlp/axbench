@@ -2,39 +2,42 @@
 # This script takes arguments to specify the dataset and other configurations.
 #
 # example launch command:
-#     python axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
+#     torchrun --nproc_per_node=NUM_GPUS axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
 
 try:
-    # This library is our indicator that the required installs
-    # need to be done.
     import pyreax
-
 except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
     import sys
     sys.path.append("../../pyreax")
     import pyreax
 
-import os, argparse, yaml, json, glob, pickle, torch
+import os
+import argparse
+import yaml
+import json
+import glob
+import pickle
+import torch
 import shutil
 import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 from args.training_args import TrainingArgs
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import queue
+from transformers import set_seed
+import torch.distributed as dist
+import sys
+
+from pyreax import make_data_module
+from torch.utils.data import DataLoader
 
 # all supported methods
 import axbench
 
-
 import logging
-logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.WARN)
+
+# Initialize the logger
 logger = logging.getLogger(__name__)
 
-STATE_FILE = "train_state.pkl"
 CONFIG_FILE = "config.json"
 
 
@@ -48,7 +51,6 @@ def data_generator(data_dir):
     Yields:
         (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
     """
-    # Get list of files sorted by index
     df = pd.read_parquet(os.path.join(data_dir, 'train_data.parquet'))
     group_ids = df['group_id'].unique()
     group_ids.sort()
@@ -69,61 +71,19 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def load_state(dump_dir):
-    """
-    Load the state from a file if it exists.
-    
-    Args:
-        dump_dir (str): The directory to load the state file from.
-    
-    Returns:
-        dict: The loaded state dictionary, or None if no state file exists.
-    """
-    state_path = os.path.join(f"{dump_dir}/train", STATE_FILE)
-    if os.path.exists(state_path):
-        with open(state_path, "rb") as f:
-            return pickle.load(f)
-    return None
-    
-
-def save(args, group_id, models):
-    """save artifacts"""
-    
-    # handle training df first
-    dump_dir = args.dump_dir
-    dump_dir = Path(dump_dir) / "train"
-    dump_dir.mkdir(parents=True, exist_ok=True)
-    
-    for model in models:
-        model.save(dump_dir)
-
-    state_path = dump_dir / STATE_FILE
-    with open(state_path, "wb") as f:
-        pickle.dump({"group_id": group_id + 1}, f)
-
-    # save other config
-    config = {"model_name": args.model_name,
-        "layer": args.layer,
-        "component": args.component}
-    config_path = dump_dir / CONFIG_FILE
-    with open(config_path, 'w') as f:
-        json.dump(config, f)
-
-
 def binarize_df(original_df, concept, model_name):
     if model_name in {
         "LinearProbe", "L1LinearProbe", "IntegratedGradients",
-        "InputXGradients", "IntegratedGradients",
-        "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
+        "InputXGradients", "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
     }:
         # assign input and output containing concept with 1, otherwise 0
-        input_df = original_df[original_df["input_concept"]==concept]
-        output_df = original_df[original_df["output_concept"]==concept]
+        input_df = original_df[original_df["input_concept"] == concept]
+        output_df = original_df[original_df["output_concept"] == concept]
         positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
         positive_df = pd.DataFrame(positive_df, columns=['input'])
 
-        input_df = original_df[original_df["input_concept"]!=concept]
-        output_df = original_df[original_df["output_concept"]!=concept]
+        input_df = original_df[original_df["input_concept"] != concept]
+        output_df = original_df[original_df["output_concept"] != concept]
         negative_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
         negative_df = pd.DataFrame(negative_df, columns=['input'])
 
@@ -138,7 +98,53 @@ def binarize_df(original_df, concept, model_name):
 
 def main():
     args = TrainingArgs(section="train")
+
+    # Initialize the process group
+    dist.init_process_group(backend='nccl', init_method='env://')
+
+    # Get the rank and world_size from environment variables
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+
+    # Set the device for this process
+    device = torch.device(f'cuda:{local_rank}')
+    torch.cuda.set_device(device)
+
+    # Configure PyTorch for determinism
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # Set a unique seed per rank for reproducibility
+    set_seed(args.seed)
+
     args.data_dir = f"{args.dump_dir}/generate"
+
+    # Configure the logger per rank
+    logger.setLevel(logging.WARNING)  # Set the logging level as desired
+
+    # Create a logging formatter that includes the rank
+    formatter = logging.Formatter(
+        fmt=f'%(asctime)s,%(msecs)03d %(levelname)-8s [Rank {rank}] [%(filename)s:%(lineno)d] %(message)s',
+        datefmt='%Y-%m-%d:%H:%M:%S'
+    )
+
+    # Create a console handler and set its formatter
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+
+    # Optionally, create a file handler per rank
+    """
+    log_file = f'log_rank_{rank}.log'
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    """
+
     # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
@@ -152,103 +158,164 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
-    state = load_state(args.dump_dir)
-    start_group_id = state.get("group_id", 0) if state else 0
-    logger.warning(f"Starting group index: {start_group_id}")
-
     # Prepare tasks
     tasks = []
-    for model_name in args.models.keys():
+    for model_name in sorted(list(args.models.keys())):
         for group_id, group_df in df_list:
-            if group_id < start_group_id:
-                continue
             if model_name == "ReAX":
-                tasks.append((model_name, group_id, group_df, None))
+                tasks.append((model_name, group_id, group_df.copy(), None, 0))
             else:
-                for concept in metadata[group_id]["concepts"]:
-                    tasks.append((model_name, group_id, group_df, concept))
-
+                for idx, concept in enumerate(metadata[group_id]["concepts"]):
+                    tasks.append((model_name, group_id, group_df.copy(), concept, idx))
     if len(tasks) == 0:
         logger.warning(f"No tasks to train. Exiting.")
         return
 
-    # Initialize the available devices queue.
-    available_devices = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-    device_queue = queue.Queue()
-    for device in available_devices:
-        device_queue.put(device)
+    # Partition tasks among ranks
+    tasks_per_rank = [[] for _ in range(world_size)]
+    for idx, task in enumerate(tasks):
+        tasks_per_rank[idx % world_size].append(task)
 
-    device_models = {}
-    for device in available_devices:
-        model_instance = AutoModelForCausalLM.from_pretrained(args.model_name)
-        model_instance.config.use_cache = False
-        model_instance = model_instance.eval()
-        model_instance = model_instance.to(device)
-        device_models[device] = model_instance
+    # Get tasks assigned to this rank
+    my_tasks = tasks_per_rank[rank]
+
+    # Load model instance onto device
+    model_instance = AutoModelForCausalLM.from_pretrained(args.model_name)
+    model_instance.config.use_cache = False
+    model_instance = model_instance.eval()
+    model_instance = model_instance.to(device)
 
     benchmark_model_results = {}
 
-    # Process tasks in batches equal to the number of available GPUs
-    torch.cuda.empty_cache()
-    def run_train(task):
-        model_name, group_id, group_df, concept = task
-        # Get an available device from the queue
-        device = device_queue.get()
-        try:
-            model_class = getattr(axbench, model_name)
-            model_instance = device_models[device]
-            if model_name == "ReAX":
-                logger.warning(f"Training {model_class} with paired data: group_id {group_id} ({len(group_df)})\n")
-                benchmark_model = model_class(
-                    model_instance, tokenizer, layer=args.layer,
-                    training_args=args.models[model_name],
-                    device=device
-                )
-                benchmark_model.train(group_df)
+    # Run tasks assigned to this rank
+    for task in my_tasks:
+        # each task starts with the same seed
+        set_seed(args.seed)
+        model_name, group_id, group_df, concept, idx = task
+        model_class = getattr(axbench, model_name)
+        # Construct a unique model_name for saving
+        model_name_with_task = f"{model_name}_group_{group_id}_concept_{idx}"
+        weight_file = dump_dir / f"{model_name_with_task}_weight.pt"
+        bias_file = dump_dir / f"{model_name_with_task}_bias.pt"
+        master_weight_file = dump_dir / f"{model_name}_weight.pt"
+        master_bias_file = dump_dir / f"{model_name}_bias.pt"
+
+        # Check if both weight and bias files already exist
+        if (weight_file.exists() and bias_file.exists()) or (master_weight_file.exists() and master_bias_file.exists()):
+            logger.warning(f"Files for task {model_name_with_task} already exist. Skipping training.")
+            continue  # Skip this task
+
+        if model_name == "ReAX":
+            logger.warning(f"Training {model_class} with paired data: group_id {group_id}.")
+            benchmark_model = model_class(
+                model_instance, tokenizer, layer=args.layer,
+                training_args=args.models[model_name],
+                device=device, seed=args.seed
+            )
+            benchmark_model.train(group_df)
+        else:
+            logger.warning(
+                f"Training {model_class} with non-paired data for concept {concept}.")
+            benchmark_model = model_class(
+                model_instance, tokenizer, layer=args.layer,
+                training_args=args.models[model_name],
+                device=device, seed=args.seed
+            )
+            benchmark_model.train(binarize_df(group_df, concept, model_name))
+        key = (model_name, group_id, concept, idx)
+        benchmark_model_results[key] = benchmark_model
+
+        # Save the model after training
+        benchmark_model.save(dump_dir, model_name=model_name_with_task)
+        logger.warning(f"Saved model weights and biases to {dump_dir} with model_name {model_name_with_task}")
+
+    # Synchronize all processes
+    dist.barrier()
+
+    # Rank 0 merges results
+    if rank == 0:
+        import re
+        from collections import defaultdict
+
+        logger.warning("Rank 0 is merging results.")
+
+        # Save other config
+        config = {"model_name": args.model_name,
+                "layer": args.layer,
+                "component": args.component}
+        config_path = dump_dir / CONFIG_FILE
+        with open(config_path, 'w') as f:
+            json.dump(config, f)
+
+        # Collect all weight and bias files
+        weight_files = list(dump_dir.glob("*_weight.pt"))
+        # Build a list of file info
+        file_info_list = []
+        pattern = re.compile(r'(.*)_group_(\d+)_concept_(\d+)_weight.pt')
+
+        for wf in weight_files:
+            filename = wf.name
+            match = pattern.match(filename)
+            if match:
+                model_name, group_id_str, concept_idx_str = match.groups()
+                group_id = int(group_id_str)
+                concept_idx = int(concept_idx_str)
+                bias_file = dump_dir / f"{model_name}_group_{group_id}_concept_{concept_idx}_bias.pt"
+                file_info_list.append({
+                    'model_name': model_name,
+                    'group_id': group_id,
+                    'concept_idx': concept_idx,
+                    'weight_file': wf,
+                    'bias_file': bias_file
+                })
             else:
-                logger.warning(
-                    f"Training {model_class} with non-paired data for concept {concept} ({len(group_df)})\n")
-                benchmark_model = model_class(
-                    model_instance, tokenizer, layer=args.layer,
-                    training_args=args.models[model_name],
-                    device=device
-                )
-                benchmark_model.train(binarize_df(group_df, concept, model_name))
-            return model_name, group_id, concept, benchmark_model
-        finally:
-            # Release the device back to the queue
-            device_queue.put(device)
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
-
-    # Run tasks in parallel on available GPUs
-    # Run the tasks in parallel using ThreadPoolExecutor
-    with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(run_train, task): task
-            for task in tasks
-        }
-        for future in as_completed(futures):
-            task = futures[future]
-            model_name, group_id, concept, benchmark_model = future.result()
-            key = (model_name, group_id, concept)
-            benchmark_model_results[key] = benchmark_model
-            # Clean up
-            del benchmark_model
-            torch.cuda.empty_cache()
-
-    # Save all models after training
-    for model_name in args.models.keys():
-        for group_id, group_df in df_list:
-            if group_id < start_group_id:
+                logger.error(f"Filename {filename} does not match the expected pattern.")
                 continue
-            if model_name == "ReAX":
-                save(args, group_id, [benchmark_model_results[(model_name, group_id, None)]])
-            else:
-                for concept in metadata[group_id]["concepts"]:
-                    save(args, group_id, [benchmark_model_results[(model_name, group_id, concept)]])
 
+        # Now, group by model_name
+        model_files = defaultdict(list)
+        for info in file_info_list:
+            model_name = info['model_name']
+            model_files[model_name].append(info)
+
+        # For each model_name, sort the files and merge the weights and biases
+        for model_name, files in model_files.items():
+            # Sort the files by group_id and concept_idx
+            files.sort(key=lambda x: (x['group_id'], x['concept_idx']))
+            # Collect weights and biases
+            weights = []
+            biases = []
+            for info in files:
+                weight = torch.load(info['weight_file'])
+                bias = torch.load(info['bias_file'])
+                weights.append(weight)
+                biases.append(bias)
+            # Concatenate weights and biases
+            merged_weight = torch.cat(weights, dim=0)
+            merged_bias = torch.cat(biases, dim=0)
+            # Save the merged tensors
+            weight_file = dump_dir / f"{model_name}_weight.pt"
+            bias_file = dump_dir / f"{model_name}_bias.pt"
+            torch.save(merged_weight, weight_file)
+            torch.save(merged_bias, bias_file)
+            logger.warning(f"Saved merged weights and biases for model {model_name}")
+
+            # After merging, delete the per-task weight and bias files
+            for info in files:
+                try:
+                    info['weight_file'].unlink()  # Delete weight file
+                    info['bias_file'].unlink()    # Delete bias file
+                    logger.warning(f"Deleted files: {info['weight_file'].name}, {info['bias_file'].name}")
+                except Exception as e:
+                    logger.error(f"Error deleting files {info['weight_file'].name} and {info['bias_file'].name}: {e}")
+
+    # Finalize the process group
+    dist.destroy_process_group()
+
+    # Remove handlers to prevent duplication if the script is run multiple times
+    logger.removeHandler(console_handler)
+    # If file_handler is used, remove it as well
+    # logger.removeHandler(file_handler)
 
 if __name__ == "__main__":
     main()

@@ -22,8 +22,10 @@ python axbench/scripts/generate.py --config axbench/demo/sweep/simple.yaml --dum
 ### train
 Train and save representation abstractions with generated datasets:
 ```bash
-python axbench/scripts/train.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
+torchrun --nproc_per_node=$gpu_count axbench/scripts/train.py \
+  --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
 ```
+where `$gpu_count` is the number of GPUs available.
 
 ### inference
 

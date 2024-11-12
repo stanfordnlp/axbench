@@ -1,4 +1,5 @@
 from .evaluator import Evaluator
+from .prompt_templates import *
 import asyncio, random, re
 
 import logging
@@ -14,41 +15,15 @@ logger = logging.getLogger(__name__)
 ################################################################################
 
 
-PAIRWISE_EVALUATION_TEMPLATE = """[System]
-You are an impartial evaluator tasked with assessing the quality of response fragments provided by two AI assistants in answer to the user question below. Your evaluation must follow these specific criteria:
-
-1. The primary criterion is whether the response fragment contains clear references or terms related to the specified concept. Responses lacking concept-related content should be disqualified unless both responses lack the concept.
-2. If both responses contain the concept, evaluate based on how well each response follows the user's instructions.
-3. If only one response contains the concept, check its alignment with the instruction:
-    - If it aligns well, select it as the better response.
-    - If it does not align well, declare a tie.
-4. If neither response contains the concept, declare a tie.
-5. Avoid allowing factors such as response length, assistant names, or response order to influence your judgment.
-
-Begin your evaluation by comparing the two response fragments and provide a short explanation. Avoid any position biases and ensure that the order in which the response fragments were presented does not influence your decision. Do not allow the length of the response fragments to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. After providing your explanation, output your final verdict by strictly following this format: "[[A]]" if assistant A is better, "[[B]]" if assistant B is better, and "[[C]]" for a tie.
-
-[User Question]
-{question}
-
-[Concept]
-{concept}
-
-[The Start of Assistant A's Answer]
-{answer_a}
-[The End of Assistant A's Answer]
-
-[The Start of Assistant B's Answer]
-{answer_b}
-[The End of Assistant B's Answer]
-"""
-
-
 class WinRateEvaluator(Evaluator):
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
         self.lm_model = kwargs.get("lm_model", None)
         self.winrate_baseline = kwargs.get(
             "winrate_baseline", "PromptSteering")
+        self.use_icl = kwargs.get("use_icl", False)
+        self.template = UNIDIRECTIONAL_PAIRWISE_EVALUATION_NO_ICL_TEMPLATE \
+            if not self.use_icl else UNIDIRECTIONAL_PAIRWISE_EVALUATION_TEMPLATE
 
     def __str__(self):
         return 'WinRateEvaluator'
@@ -83,8 +58,8 @@ class WinRateEvaluator(Evaluator):
             baseline_generation = row[f"{self.winrate_baseline}_steered_generation"]
             model_generation = row[f"{self.model_name}_steered_generation"]
             is_baseline_a = random.random() < 0.5
-            prompt = PAIRWISE_EVALUATION_TEMPLATE.format(
-                question=original_prompt,
+            prompt = self.template.format(
+                instruction=original_prompt,
                 concept=input_concept,
                 answer_a=baseline_generation if is_baseline_a else model_generation,
                 answer_b=model_generation if is_baseline_a else baseline_generation

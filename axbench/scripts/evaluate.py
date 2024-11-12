@@ -58,7 +58,7 @@ STEERING_EXCLUDE_MODELS = {}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
 
 
-def data_generator(data_dir, mode):
+def data_generator(data_dir, mode, winrate_split_ratio=None):
     """
     Generator function to read data files and yield data subsets by group_id.
     Pre-loads data in chunks to reduce I/O bottlenecks.
@@ -72,7 +72,10 @@ def data_generator(data_dir, mode):
     """
     # Pre-load and organize data by concept_id
     concept_data = {}
-    df = pd.read_parquet(os.path.join(data_dir, f'{mode}_data.parquet'))
+    if mode == "latent":
+        df = pd.read_parquet(os.path.join(data_dir, f'latent_data.parquet'))
+    elif mode == "steering" or mode == "winrate":
+        df = pd.read_parquet(os.path.join(data_dir, f'steering_data.parquet'))
     # Group by concept_id and store in dictionary
     for concept_id, group in df.groupby('concept_id'):
         if concept_id not in concept_data:
@@ -85,6 +88,13 @@ def data_generator(data_dir, mode):
             df_subset = pd.concat(concept_data[concept_id])
         else:
             df_subset = concept_data[concept_id][0]
+        if winrate_split_ratio is not None:
+            n_input_ids = df_subset["input_id"].max()
+            n_steering_ids = n_input_ids - round(n_input_ids * winrate_split_ratio)
+            if mode == "steering":
+                df_subset = df_subset[df_subset["input_id"] < n_steering_ids]
+            elif mode == "winrate":
+                df_subset = df_subset[df_subset["input_id"] >= n_steering_ids]
         yield (concept_id, df_subset)
 
 
@@ -97,14 +107,14 @@ def get_best_factors(aggregated_results):
     return best_factors
 
 
-def winrate_data_generator(data_dir, aggregated_results):
+def winrate_data_generator(data_dir, aggregated_results, winrate_split_ratio):
     best_factors = get_best_factors(aggregated_results)
-    df_generator = data_generator(data_dir, mode="steering")
+    df_generator = data_generator(data_dir, mode="winrate", winrate_split_ratio=winrate_split_ratio)
     for concept_id, current_df in df_generator:
         # if concept_id >= start_concept_id: # TODO: uncomment this when we fix our pipeline
         concept_best_dfs = {}
         for method, factor in best_factors[concept_id].items():
-            include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "steered_input", "factor",f"{method}_steered_generation"]
+            include_columns = ["concept_id", "input_concept", "input_id", "original_prompt", "steered_input", "factor", f"{method}_steered_generation"]
             method_df = current_df[include_columns]
             method_best_df = method_df[method_df["factor"]==factor]
             concept_best_dfs[method] = method_best_df.copy()
@@ -118,7 +128,7 @@ def winrate_data_generator(data_dir, aggregated_results):
         yield (concept_id, concept_best_df)
 
 
-def save_results(dump_dir, state, concept_id, partition, eval_results):
+def save_results(dump_dir, state, concept_id, partition, eval_results, eval_df=None):
     """
     Save the results dictionary to a .jsonl file.
     Each line in the file represents one concept_id's evaluation results.
@@ -141,6 +151,28 @@ def save_results(dump_dir, state, concept_id, partition, eval_results):
     with open(result_path, "a") as f:
         f.write(json.dumps(result_entry) + "\n")
 
+    # save the steering ratings for each example
+    if eval_df is not None:
+        sorted_evaluator_names = sorted(list(eval_df.keys()))
+        sorted_model_names = sorted(list(eval_df[sorted_evaluator_names[0]].keys()))
+        if len(sorted_evaluator_names) == 0:
+            return
+        current_df = eval_df[sorted_evaluator_names[0]][sorted_model_names[0]].copy()
+        for evaluator_name in sorted_evaluator_names:
+            if evaluator_name == "PerplexityEvaluator":
+                continue
+            for model_name in sorted_model_names:
+                if evaluator_name == sorted_evaluator_names[0] and model_name == sorted_model_names[0]:
+                    continue
+                current_df[f"{model_name}_{evaluator_name}"] = eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}"]
+        df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
+        if os.path.exists(df_path):
+            existing_df = pd.read_parquet(df_path)
+            combined_df = pd.concat([existing_df, current_df], ignore_index=True)
+        else:
+            combined_df = current_df
+        combined_df.to_parquet(df_path, index=False)
+
 
 def load_state(dump_dir, mode):
     """
@@ -161,21 +193,7 @@ def load_state(dump_dir, mode):
 
 def combine_scores_per_concept(concept_data):
     """Combine scores from concept and following evaluators for each method."""
-    concept_scores = concept_data["results"]["LMJudgeConceptEvaluator"]
-    following_scores = concept_data["results"]["LMJudgeFollowingEvaluator"]
-    combined_evaluator = {}
-    # For each method (L1LinearProbe, ReAX, etc.)
-    for method in concept_scores.keys():
-        concept_ratings = concept_scores[method]["raw_lm_judge_rating"]
-        following_ratings = following_scores[method]["raw_lm_judge_rating"]
-        factors = concept_scores[method]["factor"]  # factors are same in both
-        combined_ratings = np.array(concept_ratings) * np.array(following_ratings) # n_factor * n_samples
-        combined_ratings = combined_ratings.mean(axis=1).tolist()
-        combined_evaluator[method] = {
-            "lm_judge_rating": combined_ratings,
-            "factor": factors
-        }
-    return combined_evaluator
+    return concept_data["results"]["LMJudgeConceptFollowingEvaluator"]
 
 
 def process_jsonl_file(jsonl_lines):
@@ -198,18 +216,6 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
                 'evaluator_name': 'PerplexityEvaluator',
                 'metric_name': 'strength',
                 'y_label': 'Strength',
-                'use_log_scale': False
-            },
-            {
-                'evaluator_name': 'LMJudgeConceptEvaluator',
-                'metric_name': 'lm_judge_rating',
-                'y_label': 'Steering',
-                'use_log_scale': False
-            },
-            {
-                'evaluator_name': 'LMJudgeFollowingEvaluator',
-                'metric_name': 'lm_judge_rating',
-                'y_label': 'Relevance',
                 'use_log_scale': False
             },
             {
@@ -238,7 +244,7 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
 
 def eval_steering_single_task(args_tuple):
     """Helper function to evaluate a single concept-model-evaluator combination"""
-    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model, winrate_baseline = args_tuple
+    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model, winrate_baseline, use_icl = args_tuple
     
     # Create LanguageModel instance within the worker process
     client = AsyncOpenAI(
@@ -257,14 +263,15 @@ def eval_steering_single_task(args_tuple):
         lm_model,
         client,
         dump_dir=dump_dir,
-        use_cache=False
+        use_cache=False,
+        temperature=0.7
     )
     
     try:
         evaluator_class = getattr(axbench, evaluator_name)
         evaluator = evaluator_class(
             model_name, dump_dir=dump_dir, 
-            concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline)
+            concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline, use_icl=use_icl)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report(), current_df)
     finally:
@@ -282,7 +289,9 @@ def eval_steering(args):
     dump_dir = args.dump_dir
 
     # Initialize data generator
-    df_generator = data_generator(args.data_dir, mode="steering")
+    df_generator = data_generator(
+        args.data_dir, mode="steering", 
+        winrate_split_ratio=args.winrate_split_ratio)
 
     # Load previous state if exists
     state = load_state(args.dump_dir, mode="steering")
@@ -291,7 +300,7 @@ def eval_steering(args):
 
     # Create all evaluation tasks - flattened for maximum parallelization
     all_tasks = [
-        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model, args.winrate_baseline)
+        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model, args.winrate_baseline, args.use_icl)
         for concept_id, current_df in df_generator
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
@@ -307,19 +316,23 @@ def eval_steering(args):
     if not hasattr(args, 'num_of_workers') or args.num_of_workers is None:
         args.num_of_workers = max(1, multiprocessing.cpu_count() - 1)
     lm_reports = []
-    all_dfs = []
+    eval_dfs = {}
     with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
         for concept_id, evaluator_str, model_str, result, lm_report, current_df in executor.map(
             eval_steering_single_task, all_tasks):
             if concept_id not in all_results:
                 all_results[concept_id] = {}
+                eval_dfs[concept_id] = {}
             if evaluator_str not in all_results[concept_id]:
                 all_results[concept_id][evaluator_str] = {}
+                eval_dfs[concept_id][evaluator_str] = {}
             all_results[concept_id][evaluator_str][model_str] = result
+            if "raw_rating_flattened" in result:
+                current_df[f"{model_str}_{evaluator_str}"] = result["raw_rating_flattened"]
+                eval_dfs[concept_id][evaluator_str][model_str] = current_df.copy()
             lm_reports += [lm_report]
-            all_dfs += [current_df]
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
-    
+
     # Batch save all results
     for concept_id, eval_results in sorted(all_results.items()):
         save_results(
@@ -327,19 +340,21 @@ def eval_steering(args):
             {"concept_id": concept_id + 1}, 
             concept_id, 
             'steering', 
-            eval_results,
+            eval_results, 
+            eval_dfs[concept_id]
         )
+        
 
     # Reload for plotting and optional winrate
     aggregated_results = process_jsonl_file(
-            load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
+        load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
 
     if args.run_winrate:
         winrate_results = {}
-        winrate_df_generator = winrate_data_generator(data_dir, aggregated_results)
+        winrate_df_generator = winrate_data_generator(data_dir, aggregated_results, args.winrate_split_ratio)
         # Create all winrate evaluation tasks - flattened for maximum parallelization
         winrate_tasks = [
-            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline)
+            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline, args.use_icl)
             for concept_id, current_df in winrate_df_generator
             # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models
@@ -461,7 +476,7 @@ def eval_latent(args):
                 eval_results[evaluator.__str__()][model_name.__str__()] = eval_result
         save_results(
             dump_dir, {"concept_id": concept_id + 1}, 
-            concept_id, 'latent', eval_results)
+            concept_id, 'latent', eval_results, None)
 
     # Generate final plot
     logger.warning("Generating final plot...")
