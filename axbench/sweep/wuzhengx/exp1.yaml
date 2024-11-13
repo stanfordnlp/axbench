@@ -13,7 +13,7 @@ train:
   layer: 20
   component: "res"
   seed: 42
-  use_bf16: false
+  use_bf16: true
   models: 
     ReAX:
       batch_size: 3
@@ -32,7 +32,7 @@ train:
       coeff_l1_loss: 0.1
 
 inference:
-  use_bf16: false
+  use_bf16: true
   models: ["ReAX", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"] 
   model_name: "google/gemma-2-2b"
   # latent related params
