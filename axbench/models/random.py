@@ -80,7 +80,6 @@ class Random(Model):
             self.ax_model = ax_model
     
     def train(self, examples, **kwargs):
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Dummy training finished :) I'm a random baseline.")

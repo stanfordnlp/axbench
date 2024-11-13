@@ -41,6 +41,7 @@ class ReAXFactory(object):
             use_cache=use_cache, master_data_dir=master_data_dir
         )
         self.seed = kwargs.get("seed", 42)
+        self.logger = kwargs.get("logger", logger)
 
     def save_cache(self):
         """Save the language model cache before exiting"""
@@ -89,7 +90,7 @@ class ReAXFactory(object):
         """category: positive, negative, hard negative"""
         
         start = time.time()
-        logger.warning("Creating dataframe.")
+        self.logger.warning("Creating dataframe.")
 
         all_examples = []
         input_length = kwargs.get("input_length", 32)
@@ -140,14 +141,14 @@ class ReAXFactory(object):
         df = df[df["input"].str.strip() != ""]
         end = time.time()
         elapsed = round(end-start, 3)
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
+        self.logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
 
     def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         
         start = time.time()
-        logger.warning("Creating dataframe.")
+        self.logger.warning("Creating dataframe.")
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
         content_id = n * kwargs.get("current_group_id", 0)
@@ -248,7 +249,7 @@ class ReAXFactory(object):
             ])
         end = time.time()
         elapsed = round(end-start, 3)
-        logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
+        self.logger.warning(f"Finished creating current dataframe in {elapsed} sec.")
         return df
         
 
@@ -319,8 +320,8 @@ def make_data_module(
         output_ids = base_input_ids.clone()
         output_ids[:base_prompt_length] = -100
 
-        # logger.warning("tokens with lm loss:")
-        # logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
+        # self.logger.warning("tokens with lm loss:")
+        # self.logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
 
         intervention_locations = torch.tensor([[i for i in range(1, base_length)]])
         all_intervention_locations.append(intervention_locations)

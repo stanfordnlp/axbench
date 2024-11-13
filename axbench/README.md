@@ -32,13 +32,15 @@ where `$gpu_count` is the number of GPUs available.
 #### latent
 Inference with latent activations with representation abstractions:
 ```bash
-python axbench/scripts/inference.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode latent
+torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+--config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode latent
 ```
 
 #### steering
 Inference with model steering with representation abstractions:
 ```bash
-python axbench/scripts/inference.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode steering
+torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+--config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo --mode steering
 ```
 
 ### evaluate

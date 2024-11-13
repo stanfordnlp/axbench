@@ -98,7 +98,7 @@ class Model(object):
             for seq_idx, row in enumerate(batch.itertuples()):
                 # select acts with attention mask
                 acts = ax_acts_batch[
-                    seq_idx, :seq_lens[seq_idx], row.concept_id].flatten().cpu().numpy().tolist()
+                    seq_idx, :seq_lens[seq_idx], row.concept_id].flatten().float().cpu().numpy().tolist()
                 acts = [round(x, 3) for x in acts]
                 max_act = max(acts)
                 max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
@@ -135,13 +135,14 @@ class Model(object):
         all_generations = []
         all_perplexities = []
         all_strenghts = []
-
-        progress_bar = tqdm(range(0, len(examples), batch_size))
+        # Main training loop.
+        rank = torch.distributed.get_rank()
+        progress_bar = tqdm(range(0, len(examples), batch_size), position=rank, leave=True)
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
             input_strings = batch_examples['input'].tolist()
             mag = torch.tensor(batch_examples['factor'].tolist()).to(self.device)
-            idx = torch.tensor(batch_examples[concept_id_col].tolist()).to(self.device)
+            idx = torch.tensor(batch_examples["concept_id"].tolist()).to(self.device)
             max_acts = torch.tensor([
                 self.max_activations.get(id, 1.0) 
                 for id in batch_examples[concept_id_col].tolist()]).to(self.device)
@@ -203,7 +204,7 @@ class Model(object):
         if concept_id is not None:
             W_U = self.model.lm_head.weight.T
             W_U = W_U * (self.model.model.norm.weight +
-                        torch.ones_like(self.model.model.norm.weight, dtype=torch.float32))[:, None]
+                        torch.ones_like(self.model.model.norm.weight))[:, None]
             W_U -= einops.reduce(
                 W_U, "d_model d_vocab -> 1 d_vocab", "mean"
             )
