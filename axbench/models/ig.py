@@ -204,7 +204,7 @@ class IntegratedGradients(Model):
             actual_label = 1 if row["category"] == "positive" else 0
             correct += (pred_label == actual_label)
 
-            ax_acts = ax_acts.flatten().data.cpu().numpy().tolist()
+            ax_acts = ax_acts.flatten().data.float().cpu().numpy().tolist()
             ax_acts = [round(x, 3) for x in ax_acts]
             max_ax_act = max(ax_acts)
             max_ax_act_idx = ax_acts.index(max_ax_act)
@@ -290,7 +290,7 @@ class InputXGradients(IntegratedGradients):
                 
                 # Get attributions for this example
                 ax_acts_single = torch.abs(act_in[idx] * grad[idx]).sum(dim=-1)[1:]  # Remove first token
-                ax_acts = ax_acts_single[:seq_lens[idx]].flatten().data.cpu().numpy().tolist()
+                ax_acts = ax_acts_single[:seq_lens[idx]].flatten().data.float().cpu().numpy().tolist()
                 ax_acts = [round(x, 3) for x in ax_acts]
                 max_ax_act = max(ax_acts)
                 max_ax_act_idx = ax_acts.index(max_ax_act)

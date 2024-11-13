@@ -162,7 +162,7 @@ class ReAX(Model):
             seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
             # Process each sequence in the batch
             for seq_idx, ax_seq in enumerate(ax_acts):
-                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.cpu().numpy().tolist()
+                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.float().cpu().numpy().tolist()
                 acts = [round(x, 3) for x in acts]
                 max_act = max(acts)
                 max_act_indices = [i for i, x in enumerate(acts) if x == max_act]

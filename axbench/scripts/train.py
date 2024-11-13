@@ -42,6 +42,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "config.json"
+STATE_FILE = "train_state.pkl"
 
 
 def data_generator(data_dir):
@@ -139,6 +140,26 @@ def partition_list(lst, n):
     return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
 
+def load_state(dump_dir, rank):
+    """
+    Load the state from a file if it exists.
+    """
+    state_path = os.path.join(f"{dump_dir}", f"{STATE_FILE}_rank_{rank}")
+    if os.path.exists(state_path):
+        with open(state_path, "rb") as f:
+            return pickle.load(f)
+    return None
+
+
+def save_state(dump_dir, state, rank):
+    dump_dir = Path(dump_dir)
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # Save state
+    state_path = os.path.join(dump_dir, f"{STATE_FILE}_rank_{rank}")
+    with open(state_path, "wb") as f:
+        pickle.dump(state, f)
+
+
 def main():
     args = TrainingArgs(section="train")
 
@@ -211,10 +232,17 @@ def main():
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
+    state = load_state(dump_dir, rank)
+    last_group_id = state.get("last_group_id", None) if state else None
+    logger.warning(f"Rank {rank} last group_id processed: {last_group_id}")
+
     # Run training for assigned group_ids
-    for model_name in sorted(args.models.keys()):
-        logger.warning(f"Processing model {model_name} on rank {rank}")
-        for group_id, group_df in my_df_list:
+    for group_id, group_df in my_df_list:
+        if last_group_id is not None and group_id <= last_group_id:
+            logger.warning(f"Rank {rank} skipping group_id {group_id} because it is already processed")
+            continue
+        logger.warning(f"Training models for group_id {group_id} on rank {rank}")
+        for model_name in sorted(args.models.keys()):
             if model_name == "ReAX":
                 logger.warning(f"Training {model_name} with group_id {group_id}")
                 benchmark_model = getattr(axbench, model_name)(
@@ -225,6 +253,8 @@ def main():
                 benchmark_model.make_model()
                 benchmark_model.ax.to(torch.bfloat16)
                 benchmark_model.train(group_df)
+                benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+                logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             else:
                 for idx, concept in enumerate(metadata[group_id]["concepts"]):
                     logger.warning(f"Training {model_name} with concept {concept}")
@@ -237,11 +267,14 @@ def main():
                     benchmark_model.ax.to(torch.bfloat16)
                     binarized_df = binarize_df(group_df, concept, model_name)
                     benchmark_model.train(binarized_df)
-            benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
-            logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
+                    benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+                    logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
             del benchmark_model
             torch.cuda.empty_cache()
+        # After processing, save state
+        current_state = {'last_group_id': group_id}
+        save_state(dump_dir, current_state, rank)
 
     # Synchronize all processes
     dist.barrier()
@@ -293,6 +326,45 @@ def main():
                     logger.warning(f"Deleted file {f.name}")
                 except Exception as e:
                     logger.error(f"Error deleting file {f.name}: {e}")
+
+        # Save SAE weights and biases for inference
+        logger.warning("Saving SAE weights and biases for inference")
+        flatten_metadata = load_metadata_flatten(metadata_path)
+        # Save pruned SAE weights and biases
+        sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
+        sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+        headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+        response = requests.get(sae_url, headers=headers).json()
+        hf_repo = response["source"]["hfRepoId"]
+        hf_folder = response["source"]["hfFolderId"]
+        path_to_params = hf_hub_download(
+            repo_id=hf_repo,
+            filename=f"{hf_folder}/params.npz",
+            force_download=False,
+        )
+        params = np.load(path_to_params)
+        sae_pt_params = {k: torch.from_numpy(v) for k, v in params.items()}
+        pruned_sae_pt_params = {
+            "b_dec": sae_pt_params["b_dec"],
+            "W_dec": [],
+            "W_enc": [],
+            "b_enc": [],
+            "threshold": []
+        }
+        for concept_id, metadata in enumerate(flatten_metadata):
+            sae_id = int(metadata["ref"].split("/")[-1])
+            pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
+            pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
+            pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
+            pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
+        for k, v in pruned_sae_pt_params.items():
+            if k == "b_dec":
+                continue
+            if k == "W_enc":
+                pruned_sae_pt_params[k] = torch.cat(v, dim=1)
+            else:
+                pruned_sae_pt_params[k] = torch.cat(v, dim=0)
+        torch.save(pruned_sae_pt_params, dump_dir / "GemmaScopeSAE.pt") # sae only has one file
 
     # Finalize the process group
     dist.destroy_process_group()
