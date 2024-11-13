@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # to a system where A means the baseline wins, B means the model wins, and C means a tie.
 ################################################################################
 
+DEBUG = True
 
 class WinRateEvaluator(Evaluator):
     def __init__(self, model_name, **kwargs):
@@ -23,6 +24,7 @@ class WinRateEvaluator(Evaluator):
             "winrate_baseline", "PromptSteering")
         self.use_icl = kwargs.get("use_icl", False)
         self.template = UNIDIRECTIONAL_PAIRWISE_EVALUATION_TEMPLATE
+        self.dump_dir = kwargs.get("dump_dir", None)
 
     def __str__(self):
         return 'WinRateEvaluator'
@@ -100,12 +102,24 @@ class WinRateEvaluator(Evaluator):
             else:
                 assert False, f"Unknown verdict: {verdict}"
             results_winrate += [who_wins]
-            # print("Prompt: ", prompt)
-            # print("completion: ", completion)
-            # print("verdict: ", verdict)
-            # print("is_baseline_a: ", is_baseline_a)
-            # print("="*100)
-            # print("="*100)
+
+            if DEBUG and who_wins == "B":
+                with open(f"{self.dump_dir}/{self.model_name}_winning_results.txt", 'a+') as f:
+                    f.write("Prompt: \n")
+                    f.write(prompt)
+                    f.write("\n")
+                    f.write("Completion: \n")
+                    f.write(completion)
+                    f.write("\n")
+                    f.write("Verdict: \n")
+                    f.write(verdict)
+                    f.write("\n")
+                    f.write("is_baseline_a: \n")
+                    f.write(str(is_baseline_a))
+                    f.write("\n")
+                    f.write("=================================")
+                    f.write("\n")
+
         data[f"{self.model_name}_win_result"] = results_winrate
 
         total_samples = len(results_winrate)

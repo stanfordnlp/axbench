@@ -163,25 +163,28 @@ assistant A is better, "[[B]]" if assistant B is better, or "[[C]]" for a tie.
 
 
 UNIDIRECTIONAL_PAIRWISE_EVALUATION_TEMPLATE = """[System]
-Please act as an impartial judge and evaluate the quality of the response \
-fragments provided by two AI assistants below. \
-A winning response must contain clear references related to the specified concept and terms related to the instruction.
+Please act as an impartial judge and evaluate the answer fragments provided by \
+two AI assistants below. Your evaluation should prioritize whether the response \
+has clear references or terms related to the specified concept and is related to \
+the instruction. Begin by comparing the two answer fragments and provide an explanation \
+of your step-by-step reasoning as follows:
 
-Follow these steps strictly:
-1. Check if each response contains content related to the specified concept.
-2. If no response passes the first check, declare a tie immediately. 
-3. Only for responses that pass the first check, check if each response is related to the instruction.
-4. If no response passes the first and second checks, declare a tie immediately.
-5. Only for responses that pass the first and second checks, check language fluency and coherence.
-6. If only one response passes all three checks, it is the winner. If no response passes all three checks, declare a tie. \
-If both responses pass all three checks, declare a tie if they are equally good in terms of language fluency and coherence, \
-otherwise declare the better one as the winner.
+For each answer, check the following:
+1. **Concept Check**: Does the answer contain content related to the specified concept? 
+   Only answers with relevant concept content proceed to the next check.
+2. **Instruction Check**: Does the answer address the instruction? Eliminate answers that don't.
+3. **Fluency Check**: Is the answer fluent and coherent? Only fluent answers pass.
 
-Begin by comparing the two response fragments and provide a short explanation \
-of your reasoning. Avoid any biases related to position, response \
-length, assistant names, or response order. Be as objective as possible. After \
-your explanation, output your final decision in this exact format: "[[A]]" if \
-assistant A is better, "[[B]]" if assistant B is better, or "[[C]]" for a tie.
+Next, only consider answers that pass all three checks. To determine a winner, \
+follow these criteria:
+- If both answers pass all three checks, declare a tie if they are equally fluent and coherent.
+- If only one answer passes all three checks, it is the winner.
+- If neither answer passes all three checks, declare a tie.
+
+Avoid any biases related to position, answer length, assistant names, or answer order. \
+Be as objective as possible. After your explanation, output your final decision in this \
+exact format: "[[A]]" if assistant A is better, "[[B]]" if assistant B is better, or \
+"[[C]]" for a tie.
 
 Here are some examples:
 
@@ -197,9 +200,7 @@ URLs or web links
 While L'Hôpital's Rule is a powerful tool for evaluating limits involving \
 indeterminate forms, it's not something you'd typically use regularly in \
 everyday life.  Here's why and what related concepts are more relevant:
-
 **What L'Hôpital's Rule Does:**
-
 * **For URLs:**  L'Hôpital's Rule is a mathematical rule for evaluating \
 limits that involve expressions that become indeterminate when directly plugged in. \
 This means for limits like:  
@@ -216,13 +217,10 @@ behavior works behind these rules helps us grasp concepts that apply beyond pure
 here are some practical examples
 [The End of Assistant B's Answer]
 
-Let's think step-by-step:
-
-1. First, we’ll check if each answer contains content related to the concept 'URLs or web links'. Assistant A's answer includes relevant content, as it provides an example URL link ('www.example.com/examplewebsite/www.example.com/examplewebsite'). Assistant B's answer, however, does not contain any content related to URLs or web links. In conclusion, only Assistant A’s answer passes this first check.
-
-2. Since only Assistant A's answer passes the first check, we next verify whether it directly addresses the instruction, which asks about the use of L'Hôpital's Rule in daily life. Assistant A's answer includes content directly related to L'Hôpital's Rule, explaining what the rule does and noting its mathematical basis. Although the response could be more detailed in connecting the rule to real-life applications, it provides relevant content related to the instruction. Therefore, Assistant A’s answer passes this second check.
-
-3. Finally, we evaluate overall language fluency and coherence only for Assistant A’s answer. Assistant A’s answer is generally fluent and coherent. Given that it meets both the concept and instruction criteria and maintains fluency, we conclude that Assistant A’s answer is the better response.
+Evaluation:
+1. Concept Check: Assistant A includes a URL example, relevant to the concept. Assistant B does not. Only A passes.
+2. Instruction Check: Assistant A addresses L'Hôpital’s Rule in daily life. A passes.
+3. Fluency: Assistant A is fluent and coherent. A passes.
 
 Final Decision: [[A]]
 
@@ -237,9 +235,7 @@ Java programming code involving data structures and method calls.
 
 [The Start of Assistant A's Answer]
 ## Game Day Snacks for a Winning Party! 
-
 **Classic Stadium Staples:**
-
 ArrayList<String> snacks = new ArrayList<String>();
 ArrayList<String> snacks = new ArrayList<String>();
 ArrayList<String> snacks = new ArrayList<String>();
@@ -248,32 +244,18 @@ ArrayList<String> snacks = new ArrayList<String>();
 
 [The Start of Assistant B's Answer]
 Okay here are some snack ideas for your gaming marathon with example methods you could use them within java programmatically : 
-
 **Snacks:**  Let’s break down our selection into categories - classic eats & finger-food fun!:
-
 * **Classic Chips**: Think potato chips (Lays Classic), \
 tortilla chip dips (Nacho style!), pretzels – all perfect companions during \
 gameplay sessions 😉 . We can keep track these easily by creating array/list objects which is what we do below..   ```java
     public class GameDaySnackList
-
 Declare variables representing different types of Snacks... but
 [The End of Assistant B's Answer]
 
-Let's think step-by-step:
-
-1. First, we’ll check if each answer contains content related to the concept 'Java programming \
-code involving data structures and method calls.' Assistant A's answer includes relevant Java programming content, \
-such as ArrayList<String> snacks = new ArrayList<String>();, which defines a snack list. Similarly, Assistant B's answer \
-contains Java code with a class definition (public class GameDaySnackList). In conclusion, both answers pass this first check.
-
-2. Since both answers pass the first check, we’ll verify if they directly address the instruction. \
-The instruction requests a list of snacks and foods to serve as party snacks on a game day. \
-Assistant A includes phrases like 'Game Day Snacks for a Winning Party,' while Assistant B mentions relevant snack items \
-such as 'potato chips' and uses terms like 'GameDaySnackList.' In conclusion, both answers pass this second check.
-
-3. Finally, we evaluate overall language fluency and coherence. Assistant A's answer is somewhat verbose and contains repeated \
-Java code that is unnecessary, which detracts from clarity. Assistant B's answer, however, is generally fluent and coherent. In conclusion, \
-Assistant B's answer is better.
+Evaluation:
+1. Concept Check: Both A and B use Java code involving lists and classes, relevant to the concept. Both pass.
+2. Instruction Check: Both address snacks for game day, but B directly mentions relevant items. Both pass.
+3. Fluency: Assistant A’s answer repeats code, detracting from clarity, while B is fluent and coherent. B is better.
 
 Final Decision: [[B]]
 
@@ -290,20 +272,15 @@ data related to medical examinations and treatments.
 ```python
 def fibonacci(n):
   This function calculates the nth Fibonacci number using dynamic programming.
-
   Args:
     n: The index of the desired Fibonacci number in the sequence (starting from 0).
-
   Returns:
     The nth Fibonacci number as an integer.
-
   # Create a list to store Fibonacci results
   cache = [0 for i in range(n + 1)]
-
   # Base cases
   cache[0] = 0
   cache[1] = 1
-
   # Calculate Fibonacci numbers iteratively
   for i in range
 [The End of Assistant A's Answer]
@@ -313,23 +290,14 @@ Certainly! Let's break down this problem with an emphasis on understanding \
 its connection between algorithms like Dynamic Programming (DP)  and real-world \
 applications in medicine where these principles are crucial too – especially when \
 dealing with diagnoses & prognosis based upon patient data over time 🩺🏥
-
 **Understanding The Problem:**The classic "Fibonacci Sequence" is often \
 discussed as part curriculum at computer science schools but let me explain why \
 we use DP here - It mirrors our approach towards healthcare diagnostics
 [The End of Assistant B's Answer]
 
-Let's think step-by-step:
-
-1. First, we check if each answer contains content related to the concept 'data related to medical examinations and treatments.' \
-Assistant A's answer does not contain any content related to the concept. Assistant B's answer, however, does include relevant content, \
-such as phrases like 'applications in medicine' and 'our approach towards healthcare diagnostics.' In conclusion, only Assistant B's answer passes our first check.
-
-2. Since only Assistant B's answer passes our first check, we then verify whether Assistant B's answer contains terms related to the instruction. \
-The instruction asks for a program to find the nth Fibonacci number. However, Assistant B's answer only superficially discusses algorithms like Dynamic Programming (DP) \
-without providing an actual program. In conclusion, neither answer passes our second check.
-
-3. Since no answer passes both checks, we declare a tie.
+Evaluation:
+1. Concept Check: Assistant B mentions healthcare diagnostics, relevant to the concept. A does not. Only B passes.
+2. Instruction Check: Assistant B does not provide a program. B fails.
 
 Final Decision: [[C]]
 
@@ -344,34 +312,26 @@ code snippets related to defining, setting, and manipulating field values in a s
 
 [The Start of Assistant A's Answer]
 Please provide the witty review of The Rings of Power series so I can help you! 😄 
-
 I'm excited to see what you've got! I can then:
-
 * **Summarize it:**  I can give you the gist of the review.
 * **Offer my thoughts:** I can share my own opinion about the review and whether I agree.
 * **Compare it to others:**  I can compare this review to others and see what makes it unique.
 * **Give you ideas:**  I can suggest other witty reviews or ways to make it even funnier. 
-
-
 Let's make this a
 [The End of Assistant A's Answer]
 
 [The Start of Assistant B's Answer]
 Please share the witty review you have! I'm eager to read it and see what you think. 😄 
-
 I'm ready to dissect the humor, the clever observations, and the clever wordplay. Once you share it, I'll let you know what I think about it as well! 
 [The End of Assistant B's Answer]
 
-Let's think step-by-step:
-
-1. First, we check if each answer contains content related to the concept 'code snippets related to defining, setting, and manipulating field values in a software development context.'. Neither Assistant A's nor Assistant B's response have references related to the concept; both responses focus on discussing The Rings of Power. Thus, both responses fail this check.
-
-2. Since no answer passes first checks, we declare a tie.
+Evaluation:
+1. Concept Check: Neither answer includes code snippets or field manipulation references. Both fail.
 
 Final Decision: [[C]]
 
 
-Now, evaluate the following example:
+Follow these examples to evaluate the following example:
 
 [Instruction Start]
 {instruction}
@@ -388,4 +348,7 @@ Now, evaluate the following example:
 [The Start of Assistant B's Answer]
 {answer_b}
 [The End of Assistant B's Answer]
+
+Evaluation:
+1. Concept Check: 
 """

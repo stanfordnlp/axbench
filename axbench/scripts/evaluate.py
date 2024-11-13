@@ -264,7 +264,7 @@ def eval_steering_single_task(args_tuple):
         client,
         dump_dir=dump_dir,
         use_cache=False,
-        temperature=0.3
+        temperature=0.7
     )
     
     try:
@@ -356,7 +356,7 @@ def eval_steering(args):
         winrate_tasks = [
             (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline, args.use_icl)
             for concept_id, current_df in winrate_df_generator
-            if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
+            # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models
             if model_name != args.winrate_baseline
         ]
