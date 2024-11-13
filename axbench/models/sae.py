@@ -75,7 +75,12 @@ class GemmaScopeSAE(Model):
         if isinstance(self.ax, SubspaceAdditionIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
         else:
-            self.ax.load_state_dict(pt_params, strict=False)
+            try:
+                self.ax.load_state_dict(pt_params, strict=True)
+            except Exception as e:
+                # let it passing
+                logger.warning(f"Error loading state dict: {e}")
+                self.ax.load_state_dict(pt_params, strict=False)
 
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):

@@ -144,7 +144,8 @@ class LinearProbe(Model):
         criterion = torch.nn.BCELoss()
 
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -196,7 +197,8 @@ class L1LinearProbe(LinearProbe):
         criterion = torch.nn.BCELoss()
 
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input

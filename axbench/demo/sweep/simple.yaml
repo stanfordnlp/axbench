@@ -12,7 +12,7 @@ train:
   model_name: "google/gemma-2-2b"
   layer: 20
   component: "res"
-  seed: 43
+  seed: 42
   models: 
     ReAX:
       batch_size: 3
@@ -22,16 +22,9 @@ train:
       coeff_l1_loss_null: 0.05
       coeff_l1_loss: 0.008
       coeff_norm_loss: 0.000
-    L1LinearProbe:
-      batch_size: 6
-      n_epochs: 12
-      k_latent_null_loss: 1
-      lr: 0.003
-      coeff_l1_loss_null: 0.5
-      coeff_l1_loss: 0.1
 
 inference:
-  models: ["ReAX", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"] 
+  models: ["ReAX", "GemmaScopeSAE"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -52,7 +45,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["ReAX", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"]
+  models: ["ReAX", "GemmaScopeSAE"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
@@ -66,6 +59,6 @@ evaluate:
   # Number of processes to run in parallel for steering evaluation.
   num_of_workers: 32
   lm_model: "gpt-4o-mini"
-  run_winrate: true
+  run_winrate: false
   winrate_baseline: "PromptSteering"
 
