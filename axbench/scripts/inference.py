@@ -276,8 +276,8 @@ def infer_steering(args, rank, world_size, device, logger):
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
             )
             benchmark_model.to(device)
+            benchmark_model.ax.eval()
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
-                benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
             benchmark_model.pre_compute_mean_activations(
@@ -435,8 +435,8 @@ def infer_latent(args, rank, world_size, device, logger):
         benchmark_model.load(
             dump_dir=train_dir, sae_path=metadata[0]["ref"]
         )
+        benchmark_model.ax.eval()
         if hasattr(benchmark_model, 'ax') and args.use_bf16:
-            benchmark_model.ax.eval()
             benchmark_model.ax.to(torch.bfloat16)
         benchmark_model.to(device)
         benchmark_models[model_name] = benchmark_model
@@ -521,6 +521,9 @@ def infer_latent(args, rank, world_size, device, logger):
                 device=device
             )
             benchmark_model.load(dump_dir=train_dir, sae_path=metadata[0]["ref"])
+            benchmark_model.ax.eval()
+            if hasattr(benchmark_model, 'ax') and args.use_bf16:
+                benchmark_model.ax.to(torch.bfloat16)
             benchmark_model.to(device)
             for concept_id in concept_ids:
                 top_logits, neg_logits = benchmark_model.get_logits(concept_id, k=10)
