@@ -432,6 +432,8 @@ def infer_latent(args):
                 current_df, batch_size=args.latent_batch_size
             )
             return (concept_id, model_name, results)
+        except Exception as e:
+            logging.exception(e)
         finally:
             # Release the device back to the queue
             device_queue.put(device)
