@@ -55,30 +55,35 @@ class ReAXFactory(object):
 
     def prepare_concepts(self, concepts, **kwargs):
         start = time.time()
-        if kwargs.get("concept_genres_map", None) != None:
-            self.logger.warning("Creating contrast concepts for the inputs (skipping genres as they are provided).")
-            contrast_task = get_contrast_concepts(
-                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
-                api_tag=kwargs.get("api_tag", ""))
-            contrast_concepts_map = asyncio.run(
-                run_tasks([contrast_task]))[0]
-            concept_genres_map = kwargs.get("concept_genres_map", None)
-        else:
-            self.logger.warning("Creating genre and contrast concepts for the inputs.")
-            genre_task = get_concept_genres(self.lm_model, concepts, 
-                                            api_tag=kwargs.get("api_tag", ""))
-            contrast_task = get_contrast_concepts(
-                self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
-                api_tag=kwargs.get("api_tag", ""))
-            concept_genres_map, contrast_concepts_map = asyncio.run(
-                run_tasks([genre_task, contrast_task]))
+        tasks = []
+        
+        # contrast concepts
+        logger.warning("Creating contrast concepts for the inputs.")
+        contrast_task = get_contrast_concepts(
+            self.lm_model, concepts, kwargs.get("contrast_concepts_map", None), 
+            api_tag=kwargs.get("api_tag", ""))
+        tasks.append(contrast_task)
 
-        end = time.time()
-        elapsed = round(end - start, 3)
+        # prepare genres if needed
+        concept_genres_map = kwargs.get("concept_genres_map", None)
+        if concept_genres_map is None:
+            logger.warning("Creating genre for the inputs (not provided).")
+            genre_task = get_concept_genres(
+                self.lm_model, concepts, 
+                api_tag=kwargs.get("api_tag", "")
+            )
+            tasks.append(genre_task)
+        
+        # run tasks
+        res = asyncio.run(run_tasks(tasks))
+        contrast_concepts_map = res[0]
+        if len(res) > 1:
+            concept_genres_map = res[1]
+
+        # log
         for concept in concepts:
-            self.logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
-        self.logger.warning(
-            f"Init finished in {elapsed} sec.")
+            logger.warning(f"Found {len(contrast_concepts_map[concept])} contrast concept(s) for concept: {concept}.")
+        logger.warning(f"Init finished in {round(time.time() - start, 3)} sec.")
         return concept_genres_map, contrast_concepts_map
 
     def create_eval_df(self, concepts, subset_n, concept_genres_map, train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
