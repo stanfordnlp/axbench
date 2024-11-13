@@ -31,6 +31,7 @@ class DatasetArgs:
     steering_num_of_examples: Optional[int] = None
     lm_model: Optional[str] = None
     run_name: Optional[str] = None
+    use_bf16: Optional[bool] = False
 
     def __init__(
         self,

@@ -182,7 +182,7 @@ def create_data_steering(
     return current_df, (concept_id, sae_link, sae_id)
 
 
-def infer_steering(args, rank, world_size, device, logger, model_instance):
+def infer_steering(args, rank, world_size, device, logger):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
@@ -239,6 +239,15 @@ def infer_steering(args, rank, world_size, device, logger, model_instance):
         lm_model=args.lm_model
     )
 
+    # Load model instance onto device
+    if args.use_bf16:
+        logger.warning(f"Using bfloat16 for model {args.model_name}")
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
+    )
+    model_instance.config.use_cache = False
+    model_instance = model_instance.eval()
+
     # Prepare data per concept
     data_per_concept = {}
     for concept_id in my_concept_ids:
@@ -252,7 +261,6 @@ def infer_steering(args, rank, world_size, device, logger, model_instance):
     for concept_id in my_concept_ids:
         current_df, sae_link, sae_id = data_per_concept[concept_id]
         for model_name in args.models:
-
             if model_name in STEERING_EXCLUDE_MODELS:
                 continue
             model_class = getattr(axbench, model_name)
@@ -267,7 +275,7 @@ def infer_steering(args, rank, world_size, device, logger, model_instance):
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
             )
             benchmark_model.to(device)
-            if hasattr(benchmark_model, 'ax'):
+            if hasattr(benchmark_model, 'ax') and args.use_bf16:
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
@@ -329,7 +337,7 @@ def infer_steering(args, rank, world_size, device, logger, model_instance):
         if len(dfs) > 0:
             combined_df = pd.concat(dfs, ignore_index=True)
             # Optionally sort combined_df by 'concept_id' if needed
-            combined_df = combined_df.sort_values(by='concept_id').reset_index(drop=True)
+            combined_df = combined_df.sort_values(by=['concept_id', 'input_id', 'factor']).reset_index(drop=True)
             combined_df.to_parquet(Path(dump_dir) / "inference" / "steering_data.parquet", engine='pyarrow')
             logger.warning(f"Saved combined steering inference results to {Path(dump_dir) / 'inference' / 'steering_data.parquet'}")
         else:
@@ -341,7 +349,7 @@ def infer_steering(args, rank, world_size, device, logger, model_instance):
             logger.warning(f"Deleted {info['file']}")
 
 
-def infer_latent(args, rank, world_size, device, logger, model_instance):
+def infer_latent(args, rank, world_size, device, logger):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
@@ -392,6 +400,15 @@ def infer_latent(args, rank, world_size, device, logger, model_instance):
         args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
+    # Load model instance onto device
+    if args.use_bf16:
+        logger.warning(f"Using bfloat16 for model {args.model_name}")
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
+    )
+    model_instance.config.use_cache = False
+    model_instance = model_instance.eval()
+
     # Load dataset factory for evals.
     dataset_factory = ReAXFactory(
         None, client, tokenizer, dump_dir,
@@ -417,7 +434,7 @@ def infer_latent(args, rank, world_size, device, logger, model_instance):
         benchmark_model.load(
             dump_dir=train_dir, sae_path=metadata[0]["ref"]
         )
-        if hasattr(benchmark_model, 'ax'):
+        if hasattr(benchmark_model, 'ax') and args.use_bf16:
             benchmark_model.ax.eval()
             benchmark_model.ax.to(torch.bfloat16)
         benchmark_model.to(device)
@@ -574,23 +591,16 @@ def main():
     logger.addHandler(file_handler)
     """
 
-    # Load model instance onto device
-    model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16, device_map=device
-    )
-    model_instance.config.use_cache = False
-    model_instance = model_instance.eval()
-
     if args.mode == "latent":
-        infer_latent(args, rank, world_size, device, logger, model_instance)
+        infer_latent(args, rank, world_size, device, logger)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
         if not os.path.exists(os.path.join(args.dump_dir, "inference", "latent_data.parquet")):
             raise ValueError("Latent eval must be done before steering eval.")
-        infer_steering(args, rank, world_size, device, logger, model_instance)
+        infer_steering(args, rank, world_size, device, logger)
     elif args.mode == "all":
-        infer_latent(args, rank, world_size, device, logger, model_instance)
-        infer_steering(args, rank, world_size, device, logger, model_instance)
+        infer_latent(args, rank, world_size, device, logger)
+        infer_steering(args, rank, world_size, device, logger)
 
     # Finalize the process group
     dist.destroy_process_group()
