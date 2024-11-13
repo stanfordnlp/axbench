@@ -124,7 +124,6 @@ class MeanEmbedding(Model):
             self.ax_model = ax_model
 
     def train(self, examples, **kwargs):
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         # set the decoder weights to be the mean of the embeddings
         W_U = self.model.lm_head.weight.mean(dim=0).detach().clone().unsqueeze(0)
@@ -141,7 +140,6 @@ class MeanActivation(MeanEmbedding):
     @torch.no_grad()
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.eval()
         # Main training loop.
@@ -173,7 +171,6 @@ class MeanPositiveActivation(MeanActivation):
     @torch.no_grad()
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.eval()
         self.ax.to(self.device)

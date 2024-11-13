@@ -66,26 +66,22 @@ class GemmaScopeSAE(Model):
         self.ax_model = ax_model
 
     def load(self, dump_dir=None, **kwargs):
-        sae_path = kwargs["sae_path"].split("https://www.neuronpedia.org/")[-1]
-        sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-        
-        headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-        response = requests.get(sae_url, headers=headers).json()
-        hf_repo = response["source"]["hfRepoId"]
-        hf_folder = response["source"]["hfFolderId"]
-        path_to_params = hf_hub_download(
-            repo_id=hf_repo,
-            filename=f"{hf_folder}/params.npz",
-            force_download=False,
+        model_name = kwargs.get("model_name", self.__str__())
+        params = torch.load(
+            f"{dump_dir}/{model_name}.pt"
         )
-        params = np.load(path_to_params)
-        pt_params = {k: torch.from_numpy(v).to(self.device) for k, v in params.items()}
+        pt_params = {k: v.to(self.device) for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
         if isinstance(self.ax, SubspaceAdditionIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
         else:
-            self.ax.load_state_dict(pt_params, strict=False)
-            
+            try:
+                self.ax.load_state_dict(pt_params, strict=True)
+            except Exception as e:
+                # let it passing
+                logger.warning(f"Error loading state dict: {e}")
+                self.ax.load_state_dict(pt_params, strict=False)
+
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
@@ -109,7 +105,7 @@ class GemmaScopeSAE(Model):
             seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
             # Process each sequence in the batch
             for seq_idx, row in enumerate(batch.itertuples()):
-                acts = ax_acts[seq_idx, :seq_lens[seq_idx], row.sae_id].cpu().numpy().tolist()  # no bos token
+                acts = ax_acts[seq_idx, :seq_lens[seq_idx], row.concept_id].cpu().float().numpy().tolist()  # no bos token
                 acts = [round(x, 3) for x in acts]
                 max_act = max(acts)
                 max_act_indices = [i for i, x in enumerate(acts) if x == max_act]

@@ -87,11 +87,15 @@ def load_concepts(dump_dir):
         # this must be a neuropedia export.
         with open(dump_dir, 'r') as file:
             json_concepts = json.load(file)
+        seen_index = set()
         for concept in json_concepts:
-            sae_concepts += [concept["description"].strip()]
             model = concept["modelId"]
             sae_model = concept["layer"]
             subspace_id = concept["index"]
+            if subspace_id in seen_index:
+                continue # if there are multiple descriptions, we only take the first one.
+            seen_index.add(subspace_id)
+            sae_concepts += [concept["description"].strip()]
             concepts += [f"https://www.neuronpedia.org/{model}/{sae_model}/{subspace_id}"]
         return sae_concepts, concepts
     else:
@@ -187,8 +191,11 @@ def main():
     
     # Limit the number of concepts if specified
     if max_concepts is not None:
-        all_concepts = all_concepts[:max_concepts]
-        all_refs = all_refs[:max_concepts]
+        combined = list(zip(all_concepts, all_refs))
+        random.shuffle(combined)
+        all_concepts, all_refs = zip(*combined)
+        all_concepts = list(all_concepts)[:max_concepts]
+        all_refs = list(all_refs)[:max_concepts]
     
     concept2id = {concept: i for i, concept in enumerate(all_concepts)}
     concept_groups = partition_lists(all_concepts, all_refs)

@@ -124,9 +124,15 @@ class LinearProbe(Model):
             ax_model.set_device(self.device)
             self.ax_model = ax_model
     
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
+
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.train()
         # Optimizer and lr
@@ -138,7 +144,8 @@ class LinearProbe(Model):
         criterion = torch.nn.BCELoss()
 
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -150,10 +157,10 @@ class LinearProbe(Model):
                 nonbos_mask = inputs["attention_mask"][:,1:]
                 activations = activations[:,1:][nonbos_mask.bool()]
                 labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
-                labels = labels[nonbos_mask.bool()].unsqueeze(1).float()
+                labels = labels[nonbos_mask.bool()].unsqueeze(1)
 
                 preds = self.ax(activations)
-                loss = criterion(preds, labels)
+                loss = criterion(preds.float(), labels.float())
 
                 loss.backward()
                 set_decoder_norm_to_unit_norm(self.ax)
@@ -179,7 +186,6 @@ class L1LinearProbe(LinearProbe):
     def train(self, examples, **kwargs):
         """with a L1 penalty on the activations"""
         train_dataloader = self.make_dataloader(examples)
-        self.make_model(**kwargs)
         torch.cuda.empty_cache()
         self.ax.train()
         # Optimizer and lr
@@ -191,7 +197,8 @@ class L1LinearProbe(LinearProbe):
         criterion = torch.nn.BCELoss()
 
         # Main training loop.
-        progress_bar, curr_step = tqdm(range(num_training_steps)), 0
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -203,7 +210,7 @@ class L1LinearProbe(LinearProbe):
                 )
                 latent = self.ax(activations).squeeze(-1)  # bs, seq
                 loss = criterion(
-                    latent[:,1:][nonbos_mask.bool()], 
+                    latent[:,1:][nonbos_mask.bool()].float(), 
                     inputs["labels"].unsqueeze(1).repeat(
                         1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
                 )
