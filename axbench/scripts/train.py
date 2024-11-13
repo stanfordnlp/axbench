@@ -227,8 +227,10 @@ def main():
     my_df_list = df_list_per_rank[rank]
 
     # Load model instance onto device
+    if args.use_bf16:
+        logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16, device_map=device)
+        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device)
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
@@ -251,7 +253,8 @@ def main():
                     device=device, seed=args.seed
                 )
                 benchmark_model.make_model()
-                benchmark_model.ax.to(torch.bfloat16)
+                if args.use_bf16:
+                    benchmark_model.ax.to(torch.bfloat16)
                 benchmark_model.train(group_df)
                 benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
                 logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
@@ -264,7 +267,8 @@ def main():
                         device=device, seed=args.seed
                     )
                     benchmark_model.make_model()
-                    benchmark_model.ax.to(torch.bfloat16)
+                    if args.use_bf16:
+                        benchmark_model.ax.to(torch.bfloat16)
                     binarized_df = binarize_df(group_df, concept, model_name)
                     benchmark_model.train(binarized_df)
                     benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
