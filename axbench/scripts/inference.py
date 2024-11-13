@@ -243,7 +243,8 @@ def infer_steering(args, rank, world_size, device, logger):
     if args.use_bf16:
         logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
+        args.steering_model_name if args.steering_model_name else args.model_name, 
+        torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
