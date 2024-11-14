@@ -18,7 +18,6 @@ class WinRateEvaluator(Evaluator):
         self.lm_model = kwargs.get("lm_model", None)
         self.winrate_baseline = kwargs.get(
             "winrate_baseline", "PromptSteering")
-        self.use_icl = kwargs.get("use_icl", False)
         self.dump_dir = kwargs.get("dump_dir", None)
 
     def __str__(self):

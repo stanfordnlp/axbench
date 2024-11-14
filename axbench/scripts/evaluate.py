@@ -263,7 +263,7 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
 def eval_steering_single_task(args_tuple):
     """Helper function to evaluate a single concept-model-evaluator combination"""
     concept_id, current_df, evaluator_name, model_name, dump_dir, \
-        lm_model, winrate_baseline, use_icl, lm_caches = args_tuple
+        lm_model, winrate_baseline, lm_caches = args_tuple
     
     # Create LanguageModel instance within the worker process
     client = AsyncOpenAI(
@@ -296,7 +296,7 @@ def eval_steering_single_task(args_tuple):
         evaluator_class = getattr(axbench, evaluator_name)
         evaluator = evaluator_class(
             model_name, dump_dir=dump_dir, 
-            concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline, use_icl=use_icl)
+            concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, \
                 lm_model.stats.get_report(), None if bool(lm_caches) else lm_model.cache_in_mem, current_df)
@@ -327,7 +327,7 @@ def eval_steering(args):
     # Create all evaluation tasks - flattened for maximum parallelization
     all_tasks = [
         (concept_id, current_df, evaluator_name, model_name, args.dump_dir, \
-         args.lm_model, args.winrate_baseline, args.use_icl, {})
+         args.lm_model, args.winrate_baseline, {})
         for concept_id, current_df in df_generator
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
@@ -389,7 +389,7 @@ def eval_steering(args):
         # Create all winrate evaluation tasks - flattened for maximum parallelization
         winrate_tasks = [
             (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, \
-             args.lm_model, args.winrate_baseline, args.use_icl, copy.deepcopy(lm_caches))
+             args.lm_model, args.winrate_baseline, copy.deepcopy(lm_caches))
             for concept_id, current_df in winrate_df_generator
             # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models

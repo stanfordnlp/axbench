@@ -64,7 +64,6 @@ evaluate:
     "LMJudgeEvaluator",
   ]
   winrate_split_ratio: 0.5 # this is for steering only, we use a separate partition for factor selection.
-  use_icl: false
   # Number of processes to run in parallel for steering evaluation.
   num_of_workers: 32
   lm_model: "gpt-4o-mini"

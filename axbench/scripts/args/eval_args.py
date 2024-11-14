@@ -19,7 +19,6 @@ class EvalArgs:
     wandb_entity: Optional[str] = None
     wandb_name: Optional[str] = None
     run_name: Optional[bool] = None
-    use_icl: Optional[bool] = None
     winrate_split_ratio: Optional[float] = None
     master_data_dir: Optional[str] = None
 
