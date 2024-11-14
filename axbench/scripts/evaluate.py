@@ -299,7 +299,7 @@ def eval_steering_single_task(args_tuple):
             concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline, use_icl=use_icl)
         eval_result = evaluator.compute_metrics(current_df)
         return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, \
-                lm_model.stats.get_report(), None if bool(lm_caches) else copy.deepcopy(lm_model.cache_in_mem), current_df)
+                lm_model.stats.get_report(), None if bool(lm_caches) else lm_model.cache_in_mem, current_df)
     finally:
         # Properly close both the HTTP client and async client
         async def cleanup():
@@ -389,7 +389,7 @@ def eval_steering(args):
         # Create all winrate evaluation tasks - flattened for maximum parallelization
         winrate_tasks = [
             (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, \
-             args.lm_model, args.winrate_baseline, args.use_icl, lm_caches)
+             args.lm_model, args.winrate_baseline, args.use_icl, copy.deepcopy(lm_caches))
             for concept_id, current_df in winrate_df_generator
             # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models
@@ -399,7 +399,7 @@ def eval_steering(args):
         winrate_dfs = {}
         model_strs = set()
         with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-            for concept_id, _, model_str, result, lm_report, lm_cache,current_df in executor.map(
+            for concept_id, _, model_str, result, lm_report, _, current_df in executor.map(
                 eval_steering_single_task, winrate_tasks):
                 if concept_id not in winrate_results:
                     winrate_results[concept_id] = {}

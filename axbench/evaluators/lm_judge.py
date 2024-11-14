@@ -17,7 +17,6 @@ class LMJudgeEvaluator(Evaluator):
         self.model_name = model_name
         self.lm_model = kwargs.get("lm_model", None)
         self.concept_id = kwargs.get("concept_id", None)
-        self.template = UNIDIRECTIONAL_RATING_TEMPLATE
 
     def __str__(self):
         return 'LMJudgeEvaluator'

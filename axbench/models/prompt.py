@@ -46,6 +46,7 @@ class PromptSteering(Model):
         # iterate rows in batch
         batch_size = kwargs.get("batch_size", 64)
         eval_output_length = kwargs.get("eval_output_length", 128)
+        temperature = kwargs.get("temperature", 1.0)
         all_generations = []
         all_perplexities = []
         for i in range(0, len(examples), batch_size):
@@ -57,8 +58,7 @@ class PromptSteering(Model):
             ).to(self.device)
             generations = self.model.generate(
                 **inputs, max_new_tokens=eval_output_length, do_sample=True, 
-                # following neuronpedia, we use temperature=0.5 and repetition_penalty=2.0
-                temperature=0.5, repetition_penalty=2.0
+                temperature=temperature,
             )
 
             # Decode and print only the generated text without prompt tokens
