@@ -94,7 +94,7 @@ class LanguageModelStats(object):
 class LanguageModel(object):
     """Main class abstract async remote language model access"""
 
-    def __init__(self, model, client, dump_dir=None, use_cache=True, **kwargs):
+    def __init__(self, model, client, dump_dir=None, use_cache=True, cache_level="api", **kwargs):
         self.model = model
         if "gpt-4o" in model:
             pass
@@ -110,6 +110,7 @@ class LanguageModel(object):
         self.temperature = kwargs.get("temperature", 1.0)
         self.cache_dir = None
         self.use_cache = use_cache
+        self.cache_level = cache_level
         self.cache_in_mem = {}
         self.api_count = {}
         if self.use_cache:
@@ -117,24 +118,37 @@ class LanguageModel(object):
             self.cache_dir = Path(kwargs["master_data_dir"]) / "persist_lm_cache"
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             # load cache from disk
-            if (self.cache_dir / f"{self.model}_cache.json").exists():
-                with open(self.cache_dir / f"{self.model}_cache.json", "r") as f:
+            if kwargs.get("cache_tag", None):
+                self.cache_file = self.cache_dir / f"{self.model}_{kwargs['cache_tag']}_cache.json"
+            else:
+                self.cache_file = self.cache_dir / f"{self.model}_cache.json"
+            if self.cache_file.exists():
+                with open(self.cache_file, "r") as f:
                     self.cache_in_mem = json.load(f)
 
     def normalize(self, text):
         return text.strip()
 
+    def _get_cache_key(self, prompt, api_count, api_name):
+        if self.cache_level and self.cache_level == "prompt":
+            return f"{prompt}"
+        return f"{prompt}_____{api_count}_____{api_name}"
+    
     async def chat_completion(self, client, prompt, api_name):
         # check if the prompt is cached
         api_count = self.api_count.get(api_name, 0)
         self.api_count[api_name] = api_count + 1 # increment api count
-        if f"{prompt}_____{api_count}_____{api_name}" in self.cache_in_mem:
-            return (self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"], None)
+        if self.use_cache:
+            cache_key = self._get_cache_key(prompt, api_count, api_name)
+            if cache_key in self.cache_in_mem:
+                return (self.cache_in_mem[cache_key], None)
         raw_completion = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model=self.model, temperature=self.temperature)
         raw_completion = raw_completion.to_dict()
         completion = self.normalize(raw_completion["choices"][0]["message"]["content"])
-        self.cache_in_mem[f"{prompt}_____{api_count}_____{api_name}"] = completion
+
+        if self.use_cache:
+            self.cache_in_mem[cache_key] = completion
         usage = raw_completion['usage']
         return (completion, usage)
         
@@ -172,7 +186,7 @@ class LanguageModel(object):
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
 
     def save_cache(self):
-        with open(self.cache_dir / f"{self.model}_cache.json", "w") as f:
+        with open(self.cache_file, "w") as f:
             json.dump(self.cache_in_mem, f)
 
     async def close(self):

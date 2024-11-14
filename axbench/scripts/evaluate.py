@@ -102,7 +102,7 @@ def get_best_factors(aggregated_results):
     best_factors = {}
     for result in aggregated_results:
         best_factors[result["concept_id"]] = {}
-        for method, scores in result["results"]["LMJudgeConceptFollowingEvaluator"].items():
+        for method, scores in result["results"]["LMJudgeEvaluator"].items():
             best_factors[result["concept_id"]][method] = scores["factor"][np.argmax(scores["lm_judge_rating"])]
     return best_factors
 
@@ -193,12 +193,12 @@ def load_state(dump_dir, mode):
 
 def combine_scores_per_concept(concept_data):
     """Combine scores from concept and following evaluators for each method."""
-    return concept_data["results"]["LMJudgeConceptFollowingEvaluator"]
+    return concept_data["results"]["LMJudgeEvaluator"]
 
 
 def process_jsonl_file(jsonl_lines):
     for data in jsonl_lines:
-        data["results"]["LMJudgeConceptFollowingEvaluator"] = \
+        data["results"]["LMJudgeEvaluator"] = \
             combine_scores_per_concept(data)
     return jsonl_lines
 
@@ -219,7 +219,7 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
                 'use_log_scale': False
             },
             {
-                'evaluator_name': 'LMJudgeConceptFollowingEvaluator',
+                'evaluator_name': 'LMJudgeEvaluator',
                 'metric_name': 'lm_judge_rating',
                 'y_label': 'Steering*Relevance',
                 'use_log_scale': False
@@ -244,7 +244,8 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
 
 def eval_steering_single_task(args_tuple):
     """Helper function to evaluate a single concept-model-evaluator combination"""
-    concept_id, current_df, evaluator_name, model_name, dump_dir, lm_model, winrate_baseline, use_icl = args_tuple
+    concept_id, current_df, evaluator_name, model_name, dump_dir, \
+        lm_model, winrate_baseline, use_icl, lm_caches = args_tuple
     
     # Create LanguageModel instance within the worker process
     client = AsyncOpenAI(
@@ -264,8 +265,14 @@ def eval_steering_single_task(args_tuple):
         client,
         dump_dir=dump_dir,
         use_cache=False,
+        cache_level="prompt",
+        cache_tag="evaluate",
+        master_data_dir="axbench/data",
         temperature=0.7
     )
+    # overwrite cache if any.
+    if bool(lm_caches):
+        lm_model.cache_in_mem = lm_caches
     
     try:
         evaluator_class = getattr(axbench, evaluator_name)
@@ -273,7 +280,8 @@ def eval_steering_single_task(args_tuple):
             model_name, dump_dir=dump_dir, 
             concept_id=concept_id, lm_model=lm_model, winrate_baseline=winrate_baseline, use_icl=use_icl)
         eval_result = evaluator.compute_metrics(current_df)
-        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, lm_model.stats.get_report(), current_df)
+        return (concept_id, evaluator.__str__(), model_name.__str__(), eval_result, \
+                lm_model.stats.get_report(), lm_model.cache_in_mem, current_df)
     finally:
         # Properly close both the HTTP client and async client
         async def cleanup():
@@ -300,7 +308,8 @@ def eval_steering(args):
 
     # Create all evaluation tasks - flattened for maximum parallelization
     all_tasks = [
-        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, args.lm_model, args.winrate_baseline, args.use_icl)
+        (concept_id, current_df, evaluator_name, model_name, args.dump_dir, \
+         args.lm_model, args.winrate_baseline, args.use_icl, {})
         for concept_id, current_df in df_generator
         if concept_id >= start_concept_id
         for evaluator_name in args.steering_evaluators
@@ -317,8 +326,9 @@ def eval_steering(args):
         args.num_of_workers = max(1, multiprocessing.cpu_count() - 1)
     lm_reports = []
     eval_dfs = {}
+    lm_caches = {}
     with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-        for concept_id, evaluator_str, model_str, result, lm_report, current_df in executor.map(
+        for concept_id, evaluator_str, model_str, result, lm_report, lm_cache, current_df in executor.map(
             eval_steering_single_task, all_tasks):
             if concept_id not in all_results:
                 all_results[concept_id] = {}
@@ -331,6 +341,7 @@ def eval_steering(args):
                 current_df[f"{model_str}_{evaluator_str}"] = result["raw_rating_flattened"]
                 eval_dfs[concept_id][evaluator_str][model_str] = current_df.copy()
             lm_reports += [lm_report]
+            lm_caches.update(lm_cache)
             logger.warning(f"Completed task for concept_id: {concept_id}, model: {model_str}, evaluator: {evaluator_str}")
 
     # Batch save all results
@@ -344,7 +355,6 @@ def eval_steering(args):
             eval_dfs[concept_id]
         )
         
-
     # Reload for plotting and optional winrate
     aggregated_results = process_jsonl_file(
         load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
@@ -354,7 +364,8 @@ def eval_steering(args):
         winrate_df_generator = winrate_data_generator(data_dir, aggregated_results, args.winrate_split_ratio)
         # Create all winrate evaluation tasks - flattened for maximum parallelization
         winrate_tasks = [
-            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, args.lm_model, args.winrate_baseline, args.use_icl)
+            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, \
+             args.lm_model, args.winrate_baseline, args.use_icl, lm_caches)
             for concept_id, current_df in winrate_df_generator
             # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
             for model_name in args.models
@@ -364,7 +375,7 @@ def eval_steering(args):
         winrate_dfs = {}
         model_strs = set()
         with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-            for concept_id, _, model_str, result, lm_report, current_df in executor.map(
+            for concept_id, _, model_str, result, lm_report, lm_cache,current_df in executor.map(
                 eval_steering_single_task, winrate_tasks):
                 if concept_id not in winrate_results:
                     winrate_results[concept_id] = {}

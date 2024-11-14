@@ -7,6 +7,13 @@ git clone git@github.com:frankaging/pyreax.git
 cd pyreax
 ```
 
+Make sure you have your related API keys set:
+```python
+import os
+os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
+os.environ["NP_API_KEY"] = "your_neuronpedia_api_key_here"
+```
+
 ### demo
 To run a complete demo with a single config file:
 ```bash

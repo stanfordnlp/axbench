@@ -12,111 +12,132 @@ logger = logging.getLogger(__name__)
 
 
 class LMJudgeEvaluator(Evaluator):
-    MIN_RATING = 1
-    MAX_RATING = 10
-    DEFAULT_RATING = 5.0
+    DEFAULT_RATING = 0.0
     def __init__(self, model_name, **kwargs):
         self.model_name = model_name
         self.lm_model = kwargs.get("lm_model", None)
         self.concept_id = kwargs.get("concept_id", None)
+        self.template = UNIDIRECTIONAL_RATING_TEMPLATE
+
+    def __str__(self):
+        return 'LMJudgeEvaluator'
 
     def _get_rating_from_completion(self, completion):
-        # Try to find "Rating: X" or "Rating: [[X]]" format
         if "Rating:" in completion:
             rating_text = completion.split("Rating:")[-1].strip()
-            # Remove any trailing text after the rating
             rating_text = rating_text.split('\n')[0].strip()
-            # Remove brackets if present
             rating_text = rating_text.replace('[', '').replace(']', '')
-            # Remove any trailing period
             rating_text = rating_text.rstrip('.').strip('"').strip("'").strip("*").strip()
-            # Convert to float
             rating = float(rating_text)
-        
-        # Try to find "**Rating: X**" format (markdown)
-        elif "**Rating:" in completion:
-            rating_text = completion.split("**Rating:")[-1].split("**")[0].strip()
-            rating = float(rating_text)
+        else:
+            logger.warning(f"Cannot find rating value: {completion}")
+            rating = self.DEFAULT_RATING
         return rating
 
-    def _get_ratings_from_completions(self, completions):
+    def _get_ratings_from_completions(self, completions, min_rating=0.0, max_rating=1.0):
         ratings = []
         for completion in completions:
             try:
                 # Look for rating in various formats
                 rating = self._get_rating_from_completion(completion)
-                if rating is not None and self.MIN_RATING <= rating <= self.MAX_RATING:
+                if rating is not None and min_rating <= rating <= max_rating:
                     ratings.append(rating)
                 else:
                     logger.warning(f"Invalid rating value: {rating}")
                     ratings.append(self.DEFAULT_RATING)
-                    
             except Exception as e:
                 logger.warning(f"Failed to parse rating:\n\n{completion}\nError: {str(e)}")
                 ratings.append(self.DEFAULT_RATING)
         return ratings
     
+    def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=1.0):
+        async def process_batch():
+            return await self.lm_model.chat_completions(
+                f"{api_name}_{self.winrate_baseline}_WinRateEvaluator", prompts, batch_size=32
+            )
+
+        # If we're already in an event loop, use that
+        completions = asyncio.run(process_batch())
+        return self._get_ratings_from_completions(completions, min_rating, max_rating)
+
+    def _get_all_ratings_from_data(self, data, column_name):
+        model_relevance_concept_prompts = []
+        model_relevance_instruction_prompts = []
+        model_fluency_prompts = []
+        # This is a generation dataset.
+        for idx, row in data.iterrows():
+            input_concept = row["input_concept"]
+            original_prompt = row["original_prompt"]
+            generation = row[f"{column_name}_steered_generation"]
+            model_relevance_concept_prompts += [UNIDIRECTIONAL_PAIRWISE_EVALUATION_CONCEPT_RELEVANCE_TEMPLATE.format(
+                concept=input_concept,
+                sentence=generation
+            )]
+            model_relevance_instruction_prompts += [UNIDIRECTIONAL_PAIRWISE_EVALUATION_INSTRUCTION_RELEVANCE_TEMPLATE.format(
+                instruction=original_prompt,
+                sentence=generation
+            )]
+            model_fluency_prompts += [UNIDIRECTIONAL_PAIRWISE_EVALUATION_FLUENCY_TEMPLATE.format(
+                sentence=generation
+            )]
+        model_relevance_concept_ratings = self._get_ratings_from_prompts(model_relevance_concept_prompts, f"{column_name}_concept")
+        model_relevance_instruction_ratings = self._get_ratings_from_prompts(model_relevance_instruction_prompts, f"{column_name}_instruction")
+        model_fluency_ratings = self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency", max_rating=2.0)
+        return list(zip(model_relevance_concept_prompts, model_relevance_concept_ratings)), \
+               list(zip(model_relevance_instruction_prompts, model_relevance_instruction_ratings)), \
+               list(zip(model_fluency_prompts, model_fluency_ratings))
+
     def compute_metrics(self, data, write_to_dir=None):
+        """
+        We record three scores separately:
+        1. Check concept relevance [score: 0-1]
+        2. Check instruction relevance [score: 0-1]
+        3. Check fluency [score: 0-2]
+
+        We then aggregate these scores with these rules:
+        - If the answer gets 1 for the first two checks, it gets a score of 1.
+        - We then add the fluency score to get the final score.
+        """
         logger.warning(
             f"Starting task for concept_id: {self.concept_id}, "
             f"model: {self.model_name}, evaluator: {self.__str__()}")
-
         data_copy = data.copy()
         
-        # Using OpenAI API to judge the quality of the generated data
-        prompts = []
-        # This is a generation dataset.
-        for _, row in data_copy.iterrows():
-            if self.template == UNIDIRECTIONAL_RATING_TEMPLATE:
-                prompts += [self.template % (
-                    row["original_prompt"], row["input_concept"], row[f"{self.model_name}_steered_generation"])]
+        model_relevance_concept_ratings, model_relevance_instruction_ratings, model_fluency_ratings = \
+            self._get_all_ratings_from_data(data_copy, self.model_name)
+        
+        all_relevance_concept_ratings = []
+        all_relevance_instruction_ratings = []
+        all_fluency_ratings = []
+        all_aggregated_ratings = []
 
-        async def process_batch():
-            try:
-                return await self.lm_model.chat_completions(
-                    f"{self.concept_id}_{self.model_name}_LMJudgeEvaluator", 
-                    prompts, batch_size=32
-                )
-            finally:
-                await self.lm_model.close()
+        for i in range(len(model_relevance_concept_ratings)):
+            all_relevance_concept_ratings += [model_relevance_concept_ratings[i][-1]]
+            all_relevance_instruction_ratings += [model_relevance_instruction_ratings[i][-1]]
+            all_fluency_ratings += [model_fluency_ratings[i][-1]]
 
-        # If we're already in an event loop, use that
-        try:
-            loop = asyncio.get_running_loop()
-            completions = loop.run_until_complete(process_batch())
-        except RuntimeError:
-            # If no event loop exists, create one
-            completions = asyncio.run(process_batch())
+            if model_relevance_concept_ratings[i][-1] == 1 and model_relevance_instruction_ratings[i][-1] == 1:
+                all_aggregated_ratings += [1 + model_fluency_ratings[i][-1]]
+            else:
+                all_aggregated_ratings += [0]
 
-        ratings = self._get_ratings_from_completions(completions)
-        data_copy[f"{self.model_name}_lm_judge_rating"] = ratings
         metrics = {
             "lm_judge_rating": [],
             "factor": [],
-            "raw_lm_judge_rating": [],
-            "raw_rating_flattened": ratings
+            "raw_relevance_concept_ratings": all_relevance_concept_ratings,
+            "raw_relevance_instruction_ratings": all_relevance_instruction_ratings,
+            "raw_fluency_ratings": all_fluency_ratings,
+            "raw_aggregated_ratings": all_aggregated_ratings
         }
-
+        data_copy[f"{self.model_name}_lm_judge_rating"] = all_aggregated_ratings
         # group by factor only and compute means
         grouped = data_copy.groupby("factor")
         for factor, group in grouped:
             lm_judge_rating = group[f"{self.model_name}_lm_judge_rating"].mean()
             metrics["lm_judge_rating"].append(lm_judge_rating)
             metrics["factor"].append(factor)
-            metrics["raw_lm_judge_rating"].append(list(group[f"{self.model_name}_lm_judge_rating"].values))
 
         return metrics
 
-
-class LMJudgeConceptFollowingEvaluator(LMJudgeEvaluator):
-    template = UNIDIRECTIONAL_RATING_TEMPLATE
-    def __init__(self, model_name, **kwargs):
-        super().__init__(model_name, **kwargs)
-        self.use_icl = kwargs.get("use_icl", False)
-        self.template = UNIDIRECTIONAL_RATING_NO_ICL_TEMPLATE if not self.use_icl else self.template
-        
-    def __str__(self):
-        return 'LMJudgeConceptFollowingEvaluator'
-    
 
 
