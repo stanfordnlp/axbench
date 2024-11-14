@@ -89,7 +89,7 @@ def data_generator(data_dir, mode, winrate_split_ratio=None):
         else:
             df_subset = concept_data[concept_id][0]
         if winrate_split_ratio is not None:
-            n_input_ids = df_subset["input_id"].max()
+            n_input_ids = df_subset["input_id"].max()+1
             n_steering_ids = n_input_ids - round(n_input_ids * winrate_split_ratio)
             if mode == "steering":
                 df_subset = df_subset[df_subset["input_id"] < n_steering_ids]
@@ -165,6 +165,22 @@ def save_results(dump_dir, state, concept_id, partition, eval_results, eval_df=N
                 if evaluator_name == sorted_evaluator_names[0] and model_name == sorted_model_names[0]:
                     continue
                 current_df[f"{model_name}_{evaluator_name}"] = eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}"]
+
+                current_df[f"{model_name}_{evaluator_name}_relevance_concept_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_concept_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_relevance_concept_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_concept_completions"]
+                
+                current_df[f"{model_name}_{evaluator_name}_relevance_instruction_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_instruction_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_relevance_instruction_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_instruction_completions"]
+                
+                current_df[f"{model_name}_{evaluator_name}_fluency_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_fluency_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_fluency_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_fluency_completions"]
+                
         df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
         if os.path.exists(df_path):
             existing_df = pd.read_parquet(df_path)
@@ -363,6 +379,9 @@ def eval_steering(args):
                 current_df[f"{model_str}_{evaluator_str}_relevance_instruction_ratings"] = result["raw_relevance_instruction_ratings"]
                 current_df[f"{model_str}_{evaluator_str}_fluency_ratings"] = result["raw_fluency_ratings"]
                 current_df[f"{model_str}_{evaluator_str}"] = result["raw_aggregated_ratings"]
+                current_df[f"{model_str}_{evaluator_str}_relevance_concept_completions"] = result["relevance_concept_completions"]
+                current_df[f"{model_str}_{evaluator_str}_relevance_instruction_completions"] = result["relevance_instruction_completions"]
+                current_df[f"{model_str}_{evaluator_str}_fluency_completions"] = result["fluency_completions"]
                 eval_dfs[concept_id][evaluator_str][model_str] = current_df.copy()
             lm_reports += [lm_report]
             lm_caches.update(lm_cache)

@@ -46,7 +46,12 @@ class MaxReLUIntervention(
         topk_latent = torch.zeros_like(latent)
         topk_latent.scatter_(-1, topk_indices, topk_acts)
         topk_latent = topk_latent.unsqueeze(dim=-1)
-        return topk_latent, latent
+
+        # Create mask for non-topk elements
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)  # Zero out topk elements
+
+        return topk_latent, non_topk_latent, latent
 
     def forward(
         self, base, source=None, subspaces=None
@@ -56,7 +61,7 @@ class MaxReLUIntervention(
             ctrl_weight += [self.proj.weight[subspace]]
         W_ctrl = torch.stack(ctrl_weight, dim=0).unsqueeze(dim=-1).permute(0, 2, 1)
         
-        topk_latent, latent = self.encode(base, source, subspaces)
+        topk_latent, non_topk_latent, latent = self.encode(base, source, subspaces)
         topk_latent = topk_latent.squeeze(dim=-1)
         max_latent = topk_latent.max(dim=-1, keepdim=True)[0]
         steer_dir = torch.bmm(max_latent.unsqueeze(dim=-1), W_ctrl) # bs, 1, dim
@@ -64,7 +69,7 @@ class MaxReLUIntervention(
 
         return InterventionOutput(
             output=output.to(base.dtype),
-            latent=[latent, output, base.clone()] # latent, output, input
+            latent=[latent, output, base.clone(), non_topk_latent]
         )
 
 

@@ -57,7 +57,7 @@ class LMJudgeEvaluator(Evaluator):
 
         # If we're already in an event loop, use that
         completions = asyncio.run(process_batch())
-        return self._get_ratings_from_completions(completions, min_rating, max_rating)
+        return self._get_ratings_from_completions(completions, min_rating, max_rating), completions
 
     def _get_all_ratings_from_data(self, data, column_name):
         model_relevance_concept_prompts = []
@@ -79,12 +79,16 @@ class LMJudgeEvaluator(Evaluator):
             model_fluency_prompts += [UNIDIRECTIONAL_PAIRWISE_EVALUATION_FLUENCY_TEMPLATE.format(
                 sentence=generation
             )]
-        model_relevance_concept_ratings = self._get_ratings_from_prompts(model_relevance_concept_prompts, f"{column_name}_concept")
-        model_relevance_instruction_ratings = self._get_ratings_from_prompts(model_relevance_instruction_prompts, f"{column_name}_instruction")
-        model_fluency_ratings = self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency", max_rating=2.0)
+        model_relevance_concept_ratings, model_relevance_concept_completions = \
+            self._get_ratings_from_prompts(model_relevance_concept_prompts, f"{column_name}_concept")
+        model_relevance_instruction_ratings, model_relevance_instruction_completions = \
+            self._get_ratings_from_prompts(model_relevance_instruction_prompts, f"{column_name}_instruction")
+        model_fluency_ratings, model_fluency_completions = \
+            self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency", max_rating=2.0)
         return list(zip(model_relevance_concept_prompts, model_relevance_concept_ratings)), \
                list(zip(model_relevance_instruction_prompts, model_relevance_instruction_ratings)), \
-               list(zip(model_fluency_prompts, model_fluency_ratings))
+               list(zip(model_fluency_prompts, model_fluency_ratings)), \
+               model_relevance_concept_completions, model_relevance_instruction_completions, model_fluency_completions
 
     def compute_metrics(self, data, write_to_dir=None):
         """
@@ -102,7 +106,8 @@ class LMJudgeEvaluator(Evaluator):
             f"model: {self.model_name}, evaluator: {self.__str__()}")
         data_copy = data.copy()
         
-        model_relevance_concept_ratings, model_relevance_instruction_ratings, model_fluency_ratings = \
+        model_relevance_concept_ratings, model_relevance_instruction_ratings, model_fluency_ratings, \
+            model_relevance_concept_completions, model_relevance_instruction_completions, model_fluency_completions = \
             self._get_all_ratings_from_data(data_copy, self.model_name)
         
         all_relevance_concept_ratings = []
@@ -129,7 +134,10 @@ class LMJudgeEvaluator(Evaluator):
             "raw_relevance_concept_ratings": all_relevance_concept_ratings,
             "raw_relevance_instruction_ratings": all_relevance_instruction_ratings,
             "raw_fluency_ratings": all_fluency_ratings,
-            "raw_aggregated_ratings": all_aggregated_ratings
+            "raw_aggregated_ratings": all_aggregated_ratings,
+            "relevance_concept_completions": model_relevance_concept_completions,
+            "relevance_instruction_completions": model_relevance_instruction_completions,
+            "fluency_completions": model_fluency_completions
         }
         data_copy[f"{self.model_name}_lm_judge_rating"] = all_aggregated_ratings
         data_copy[f"{self.model_name}_relevance_concept_ratings"] = all_relevance_concept_ratings

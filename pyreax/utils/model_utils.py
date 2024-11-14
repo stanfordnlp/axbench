@@ -68,12 +68,13 @@ def remove_gradient_parallel_to_decoder_directions(model):
     )
 
 
-def calculate_l1_losses(latent, labels, mask=None, k_latent_null_loss=1):
+def calculate_l1_losses(latent, non_topk_latent, labels, mask=None, k_latent_null_loss=1):
     """
     Calculate L1 losses with masked mean.
     
     Parameters:
     - latent: latent representation, shape [batch_size, seq_len]
+    - non_topk_latent: non-topk latent representation, shape [batch_size, seq_len]
     - labels: labels, shape [batch_size]
     - mask: long mask, shape [batch_size, seq_len]
     - k_latent_null_loss: top-k value for null loss, default 1
@@ -90,7 +91,10 @@ def calculate_l1_losses(latent, labels, mask=None, k_latent_null_loss=1):
     topk_latent, _ = torch.topk(masked_latent, k_latent_null_loss, dim=-1)  # [batch_size, k]
     
     # Calculate masked mean.
-    masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
+    if non_topk_latent is not None:
+        masked_sum = (non_topk_latent * mask).sum(dim=-1)  # [batch_size]
+    else:
+        masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
     valid_counts = mask.sum(dim=-1)  # [batch_size]
     
     # Avoid division by zero.
