@@ -33,7 +33,7 @@ class LMJudgeEvaluator(Evaluator):
             rating = self.DEFAULT_RATING
         return rating
 
-    def _get_ratings_from_completions(self, completions, min_rating=0.0, max_rating=1.0):
+    def _get_ratings_from_completions(self, completions, min_rating=0.0, max_rating=2.0):
         ratings = []
         for completion in completions:
             try:
@@ -49,7 +49,7 @@ class LMJudgeEvaluator(Evaluator):
                 ratings.append(self.DEFAULT_RATING)
         return ratings
     
-    def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=1.0):
+    def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=2.0):
         async def process_batch():
             return await self.lm_model.chat_completions(
                 f"{api_name}_{self.model_name}_LMJudgeEvaluator", prompts, batch_size=32
@@ -84,7 +84,7 @@ class LMJudgeEvaluator(Evaluator):
         model_relevance_instruction_ratings, model_relevance_instruction_completions = \
             self._get_ratings_from_prompts(model_relevance_instruction_prompts, f"{column_name}_instruction")
         model_fluency_ratings, model_fluency_completions = \
-            self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency", max_rating=2.0)
+            self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency")
         return list(zip(model_relevance_concept_prompts, model_relevance_concept_ratings)), \
                list(zip(model_relevance_instruction_prompts, model_relevance_instruction_ratings)), \
                list(zip(model_fluency_prompts, model_fluency_ratings)), \
@@ -93,13 +93,13 @@ class LMJudgeEvaluator(Evaluator):
     def compute_metrics(self, data, write_to_dir=None):
         """
         We record three scores separately:
-        1. Check concept relevance [score: 0-1]
-        2. Check instruction relevance [score: 0-1]
+        1. Check concept relevance [score: 0-2]
+        2. Check instruction relevance [score: 0-2]
         3. Check fluency [score: 0-2]
 
         We then aggregate these scores with these rules:
-        - If the answer gets 1 for the first two checks, it gets a score of 1.
-        - We then add the fluency score to get the final score.
+        - If the answer gets at least 1 for the first two checks, we sum three scores.
+        - If the answer does not get 1 for the first two checks, the score is 0.
         """
         logger.warning(
             f"Starting task for concept_id: {self.concept_id}, "
@@ -120,8 +120,11 @@ class LMJudgeEvaluator(Evaluator):
             all_relevance_instruction_ratings += [model_relevance_instruction_ratings[i][-1]]
             all_fluency_ratings += [model_fluency_ratings[i][-1]]
 
-            if model_relevance_concept_ratings[i][-1] == 1 and model_relevance_instruction_ratings[i][-1] == 1:
-                all_aggregated_ratings += [1 + model_fluency_ratings[i][-1]]
+            if model_relevance_concept_ratings[i][-1] >= 1 and model_relevance_instruction_ratings[i][-1] >= 1:
+                all_aggregated_ratings += [
+                    model_relevance_concept_ratings[i][-1] + 
+                    model_relevance_instruction_ratings[i][-1] + 
+                    model_fluency_ratings[i][-1]]
             else:
                 all_aggregated_ratings += [0]
 
