@@ -14,6 +14,13 @@ os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
 os.environ["NP_API_KEY"] = "your_neuronpedia_api_key_here"
 ```
 
+Make sure you populate the `axbench/data` directory with the relevant datasets:
+```bash
+cd data
+bash download-2b.sh
+bash download-alpaca.sh
+```
+
 ### demo
 To run a complete demo with a single config file:
 ```bash
