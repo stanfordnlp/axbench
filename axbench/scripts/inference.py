@@ -231,7 +231,8 @@ def infer_steering(args, rank, world_size, device, logger):
     )
 
     # Initialize the dataset factory with the tokenizer.
-    tokenizer = AutoTokenizer.from_pretrained(args.steering_model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.steering_model_name, use_fast=False, model_max_length=512)
     tokenizer.padding_side = "right"
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
@@ -499,7 +500,7 @@ def infer_latent(args, rank, world_size, device, logger):
         if len(dfs) > 0:
             combined_df = pd.concat(dfs, ignore_index=True)
             # Optionally sort combined_df by 'concept_id' if needed
-            combined_df = combined_df.sort_values(by='concept_id').reset_index(drop=True)
+            combined_df = combined_df.sort_values(by=['concept_id',]).reset_index(drop=True)
             combined_df.to_parquet(Path(dump_dir) / "inference" / "latent_data.parquet", engine='pyarrow')
             logger.warning(f"Saved combined latent inference results to {Path(dump_dir) / 'inference' / 'latent_data.parquet'}")
         else:

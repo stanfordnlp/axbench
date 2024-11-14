@@ -16,7 +16,7 @@ train:
   use_bf16: true
   models: 
     ReAX:
-      batch_size: 3
+      batch_size: 6
       n_epochs: 12
       k_latent_null_loss: 1
       lr: 0.003
@@ -45,7 +45,7 @@ inference:
   steering_batch_size: 24
   steering_output_length: 128
   steering_num_of_examples: 10 # number of examples per concept
-  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0] # number of steering factors per example
+  steering_factors: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] # number of steering factors per example
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
   seed: 42
@@ -61,13 +61,14 @@ evaluate:
   ]
   steering_evaluators: [
     "PerplexityEvaluator", 
-    "LMJudgeConceptFollowingEvaluator",
+    "LMJudgeEvaluator",
   ]
   winrate_split_ratio: 0.5 # this is for steering only, we use a separate partition for factor selection.
-  use_icl: true
   # Number of processes to run in parallel for steering evaluation.
   num_of_workers: 32
   lm_model: "gpt-4o-mini"
   run_winrate: true
   winrate_baseline: "PromptSteering"
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
 
