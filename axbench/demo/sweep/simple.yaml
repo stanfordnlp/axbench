@@ -4,7 +4,7 @@ generate:
   output_length: 32
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-  max_concepts: 10
+  max_concepts: 4
   master_data_dir: "axbench/data"
   seed: 42
 
@@ -24,7 +24,7 @@ train:
       coeff_norm_loss: 0.000
 
 inference:
-  models: ["ReAX", "GemmaScopeSAE"] 
+  models: ["ReAX"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -45,7 +45,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["ReAX", "GemmaScopeSAE"]
+  models: ["ReAX"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
