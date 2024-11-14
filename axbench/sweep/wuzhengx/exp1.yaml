@@ -1,7 +1,7 @@
 generate:
   lm_model: "gpt-4o-mini"
   input_length: 32
-  output_length: 32
+  output_length: 16
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
   max_concepts: 10
@@ -16,13 +16,13 @@ train:
   use_bf16: true
   models: 
     ReAX:
-      batch_size: 6
+      batch_size: 3
       n_epochs: 12
       k_latent_null_loss: 1
-      lr: 0.003
+      lr: 0.005
       coeff_l1_loss_null: 0.05
-      coeff_l1_loss: 0.008
-      coeff_norm_loss: 0.000
+      coeff_l1_loss: 0.000
+      coeff_norm_loss: 0.008
     L1LinearProbe:
       batch_size: 6
       n_epochs: 12

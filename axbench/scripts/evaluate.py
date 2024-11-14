@@ -584,7 +584,7 @@ def main():
                     top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
                     neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
                     concepts += [[
-                        idx, concept, None, auc, max_act, sae_link
+                        idx, concept, None, auc, max_act, None, sae_link
                     ]]
                     top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
                     neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
@@ -603,18 +603,21 @@ def main():
         if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file():
             steering_path = Path(args.dump_dir) / "evaluate" / "steering.jsonl"
             steering_results = load_jsonl(steering_path)
+            best_factors = get_best_factors(steering_results)
 
             idx = 0
             for metadata_entry in metadata:
                 for concept_idx, concept in enumerate(metadata_entry["concepts"]):
                     sae_link = metadata_entry["refs"][concept_idx]
                     winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
+                    best_factor = best_factors[idx]["ReAX"]
                     if len(concepts) <= idx:
                         concepts += [[
-                            idx, concept, winrate, None, None, None
+                            idx, concept, winrate, None, None, None, None
                         ]]
                     else:
                         concepts[idx][2] = winrate
+                        concepts[idx][5] = best_factor
                     idx += 1
 
             # win-rate table logging
@@ -628,7 +631,7 @@ def main():
                 "concept_table":  wandb.Table(
                     columns=[
                         "concept_id", "concept", "winrate", "auc", 
-                        "max_act", "sae_link"], data=concepts)})
+                        "max_act", "best_factor", "sae_link"], data=concepts)})
 
         run.finish()
 

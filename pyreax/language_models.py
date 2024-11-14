@@ -1,7 +1,7 @@
 from .utils.constants import *
 
 import httpx, asyncio
-import os, uuid, string, json
+import os, uuid, string, json, pickle
 from pathlib import Path
 
 import logging
@@ -119,12 +119,12 @@ class LanguageModel(object):
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             # load cache from disk
             if kwargs.get("cache_tag", None):
-                self.cache_file = self.cache_dir / f"{self.model}_{kwargs['cache_tag']}_cache.json"
+                self.cache_file = self.cache_dir / f"{self.model}_{kwargs['cache_tag']}_cache.pkl"
             else:
-                self.cache_file = self.cache_dir / f"{self.model}_cache.json"
+                self.cache_file = self.cache_dir / f"{self.model}_cache.pkl"
             if self.cache_file.exists():
-                with open(self.cache_file, "r") as f:
-                    self.cache_in_mem = json.load(f)
+                with open(self.cache_file, "rb") as f:
+                    self.cache_in_mem = pickle.load(f)
 
     def normalize(self, text):
         return text.strip()
@@ -186,8 +186,8 @@ class LanguageModel(object):
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
 
     def save_cache(self):
-        with open(self.cache_file, "w") as f:
-            json.dump(self.cache_in_mem, f)
+        with open(self.cache_file, "wb") as f:
+            pickle.dump(self.cache_in_mem, f)
 
     async def close(self):
         """Close the underlying HTTP client"""
