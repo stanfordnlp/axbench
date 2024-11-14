@@ -53,7 +53,7 @@ class LMJudgeEvaluator(Evaluator):
     def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=1.0):
         async def process_batch():
             return await self.lm_model.chat_completions(
-                f"{api_name}_{self.winrate_baseline}_WinRateEvaluator", prompts, batch_size=32
+                f"{api_name}_{self.model_name}_LMJudgeEvaluator", prompts, batch_size=32
             )
 
         # If we're already in an event loop, use that
@@ -123,6 +123,9 @@ class LMJudgeEvaluator(Evaluator):
 
         metrics = {
             "lm_judge_rating": [],
+            "relevance_concept_ratings": [],
+            "relevance_instruction_ratings": [],
+            "fluency_ratings": [],
             "factor": [],
             "raw_relevance_concept_ratings": all_relevance_concept_ratings,
             "raw_relevance_instruction_ratings": all_relevance_instruction_ratings,
@@ -130,11 +133,17 @@ class LMJudgeEvaluator(Evaluator):
             "raw_aggregated_ratings": all_aggregated_ratings
         }
         data_copy[f"{self.model_name}_lm_judge_rating"] = all_aggregated_ratings
+        data_copy[f"{self.model_name}_relevance_concept_ratings"] = all_relevance_concept_ratings
+        data_copy[f"{self.model_name}_relevance_instruction_ratings"] = all_relevance_instruction_ratings
+        data_copy[f"{self.model_name}_fluency_ratings"] = all_fluency_ratings
+
         # group by factor only and compute means
         grouped = data_copy.groupby("factor")
         for factor, group in grouped:
-            lm_judge_rating = group[f"{self.model_name}_lm_judge_rating"].mean()
-            metrics["lm_judge_rating"].append(lm_judge_rating)
+            metrics["lm_judge_rating"].append(group[f"{self.model_name}_lm_judge_rating"].mean())
+            metrics["relevance_concept_ratings"].append(group[f"{self.model_name}_relevance_concept_ratings"].mean())
+            metrics["relevance_instruction_ratings"].append(group[f"{self.model_name}_relevance_instruction_ratings"].mean())
+            metrics["fluency_ratings"].append(group[f"{self.model_name}_fluency_ratings"].mean())
             metrics["factor"].append(factor)
 
         return metrics
