@@ -89,7 +89,7 @@ def data_generator(data_dir, mode, winrate_split_ratio=None):
         else:
             df_subset = concept_data[concept_id][0]
         if winrate_split_ratio is not None:
-            n_input_ids = df_subset["input_id"].max()
+            n_input_ids = df_subset["input_id"].max()+1
             n_steering_ids = n_input_ids - round(n_input_ids * winrate_split_ratio)
             if mode == "steering":
                 df_subset = df_subset[df_subset["input_id"] < n_steering_ids]
@@ -165,6 +165,22 @@ def save_results(dump_dir, state, concept_id, partition, eval_results, eval_df=N
                 if evaluator_name == sorted_evaluator_names[0] and model_name == sorted_model_names[0]:
                     continue
                 current_df[f"{model_name}_{evaluator_name}"] = eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}"]
+
+                current_df[f"{model_name}_{evaluator_name}_relevance_concept_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_concept_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_relevance_concept_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_concept_completions"]
+                
+                current_df[f"{model_name}_{evaluator_name}_relevance_instruction_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_instruction_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_relevance_instruction_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_relevance_instruction_completions"]
+                
+                current_df[f"{model_name}_{evaluator_name}_fluency_ratings"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_fluency_ratings"]
+                current_df[f"{model_name}_{evaluator_name}_fluency_completions"] = \
+                    eval_df[evaluator_name][model_name][f"{model_name}_{evaluator_name}_fluency_completions"]
+                
         df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
         if os.path.exists(df_path):
             existing_df = pd.read_parquet(df_path)
@@ -363,6 +379,9 @@ def eval_steering(args):
                 current_df[f"{model_str}_{evaluator_str}_relevance_instruction_ratings"] = result["raw_relevance_instruction_ratings"]
                 current_df[f"{model_str}_{evaluator_str}_fluency_ratings"] = result["raw_fluency_ratings"]
                 current_df[f"{model_str}_{evaluator_str}"] = result["raw_aggregated_ratings"]
+                current_df[f"{model_str}_{evaluator_str}_relevance_concept_completions"] = result["relevance_concept_completions"]
+                current_df[f"{model_str}_{evaluator_str}_relevance_instruction_completions"] = result["relevance_instruction_completions"]
+                current_df[f"{model_str}_{evaluator_str}_fluency_completions"] = result["fluency_completions"]
                 eval_dfs[concept_id][evaluator_str][model_str] = current_df.copy()
             lm_reports += [lm_report]
             lm_caches.update(lm_cache)
@@ -584,7 +603,7 @@ def main():
                     top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
                     neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
                     concepts += [[
-                        idx, concept, None, auc, max_act, sae_link
+                        idx, concept, None, auc, max_act, None, sae_link
                     ]]
                     top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
                     neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
@@ -603,18 +622,21 @@ def main():
         if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file():
             steering_path = Path(args.dump_dir) / "evaluate" / "steering.jsonl"
             steering_results = load_jsonl(steering_path)
+            best_factors = get_best_factors(steering_results)
 
             idx = 0
             for metadata_entry in metadata:
                 for concept_idx, concept in enumerate(metadata_entry["concepts"]):
                     sae_link = metadata_entry["refs"][concept_idx]
                     winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
+                    best_factor = best_factors[idx]["ReAX"]
                     if len(concepts) <= idx:
                         concepts += [[
-                            idx, concept, winrate, None, None, None
+                            idx, concept, winrate, None, None, None, None
                         ]]
                     else:
                         concepts[idx][2] = winrate
+                        concepts[idx][5] = best_factor
                     idx += 1
 
             # win-rate table logging
@@ -628,7 +650,7 @@ def main():
                 "concept_table":  wandb.Table(
                     columns=[
                         "concept_id", "concept", "winrate", "auc", 
-                        "max_act", "sae_link"], data=concepts)})
+                        "max_act", "best_factor", "sae_link"], data=concepts)})
 
         run.finish()
 

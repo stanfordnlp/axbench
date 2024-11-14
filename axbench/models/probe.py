@@ -215,7 +215,7 @@ class L1LinearProbe(LinearProbe):
                         1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
                 )
                 null_loss, l1_loss = calculate_l1_losses(
-                    latent[:,1:],
+                    latent[:,1:], None,
                     labels=inputs["labels"],
                     mask=nonbos_mask,
                     k_latent_null_loss=self.training_args.k_latent_null_loss

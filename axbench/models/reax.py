@@ -50,7 +50,7 @@ class ReAX(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
@@ -102,10 +102,10 @@ class ReAX(Model):
 
                 # loss
                 loss = cf_outputs.loss
-                latent, output, base = self.ax_model.full_intervention_outputs[0].latent
+                latent, output, base, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
 
                 null_loss, l1_loss = calculate_l1_losses(
-                    latent, 
+                    latent, non_topk_latent,
                     labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
                     mask=inputs["intervention_masks"],
                     k_latent_null_loss=self.training_args.k_latent_null_loss
@@ -154,7 +154,7 @@ class ReAX(Model):
             
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
-            _, ax_acts = self.ax.encode(
+            _, _, ax_acts = self.ax.encode(
                 gather_acts[:, 1:],  # no bos token
                 subspaces={
                     "input_subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device)

@@ -35,7 +35,7 @@ class WinRateEvaluator(Evaluator):
             rating = self.DEFAULT_RATING
         return rating
 
-    def _get_ratings_from_completions(self, completions, min_rating=0.0, max_rating=1.0):
+    def _get_ratings_from_completions(self, completions, min_rating=0.0, max_rating=2.0):
         ratings = []
         for completion in completions:
             try:
@@ -51,7 +51,7 @@ class WinRateEvaluator(Evaluator):
                 ratings.append(self.DEFAULT_RATING)
         return ratings
 
-    def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=1.0):
+    def _get_ratings_from_prompts(self, prompts, api_name, min_rating=0.0, max_rating=2.0):
         async def process_batch():
             return await self.lm_model.chat_completions(
                 f"{api_name}_{self.winrate_baseline}_WinRateEvaluator", prompts, batch_size=32
@@ -83,7 +83,7 @@ class WinRateEvaluator(Evaluator):
             )]
         model_relevance_concept_ratings = self._get_ratings_from_prompts(model_relevance_concept_prompts, f"{column_name}_concept")
         model_relevance_instruction_ratings = self._get_ratings_from_prompts(model_relevance_instruction_prompts, f"{column_name}_instruction")
-        model_fluency_ratings = self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency", max_rating=2.0)
+        model_fluency_ratings = self._get_ratings_from_prompts(model_fluency_prompts, f"{column_name}_fluency")
         return list(zip(model_relevance_concept_prompts, model_relevance_concept_ratings)), \
                list(zip(model_relevance_instruction_prompts, model_relevance_instruction_ratings)), \
                list(zip(model_fluency_prompts, model_fluency_ratings))
@@ -91,15 +91,15 @@ class WinRateEvaluator(Evaluator):
     def compute_metrics(self, data):
         """
         This is a three-stage pipeline:
-        1. Check concept relevance [score: 0-1]
-        2. Check instruction relevance [score: 0-1]
+        1. Check concept relevance [score: 0-2]
+        2. Check instruction relevance [score: 0-2]
         3. Check fluency [score: 0-2]
 
         Winning conditions:
-        - A winning answer must get 1 for first two checks.
-        - If no answer gets 1 for the first two checks, declare a tie.
-        - If both answers get 1 for the first two checks, the answer that scores higher in the
-          fluency check wins. If both answers score the same in the fluency check, declare a tie.
+        - A winning answer must get at least 1 for the first two checks.
+        - If no answer gets at least 1 for the first two checks, declare a tie.
+        - If both answers get at least 1 for the first two checks, the answer with
+          summed total score wins. If both answers have the same total score, declare a tie.
         """
         data_copy = data.copy()
         data_copy = data_copy.reset_index(drop=True)
@@ -113,32 +113,35 @@ class WinRateEvaluator(Evaluator):
         winning_results = []
         for i in range(len(baseline_relevance_concept_ratings)):
             # based?
-            is_baseline_based = baseline_relevance_concept_ratings[i][-1] == 1 and \
-                baseline_relevance_instruction_ratings[i][-1] == 1
-            is_model_based = model_relevance_concept_ratings[i][-1] == 1 and \
-                model_relevance_instruction_ratings[i][-1] == 1
+            is_baseline_based = baseline_relevance_concept_ratings[i][-1] >= 1 and \
+                baseline_relevance_instruction_ratings[i][-1] >= 1
+            is_model_based = model_relevance_concept_ratings[i][-1] >= 1 and \
+                model_relevance_instruction_ratings[i][-1] >= 1
 
-            # if both fail the first two checks, it is a tie.
+            # if both not getting at least 1 for the first two checks, it is a tie.
             if not is_baseline_based and not is_model_based:
                 # no one wins.
                 winning_results += ["tie"]
                 continue
             
-            # if both pass the first two checks, check fluency.
+            # if both get at least 1 for the first two checks, check fluency.
             if is_baseline_based and is_model_based:
-                if baseline_fluency_ratings[i][-1] == 0 and model_fluency_ratings[i][-1] == 0:
-                    # no one wins.
+                model_score = model_relevance_concept_ratings[i][-1] + \
+                    model_relevance_instruction_ratings[i][-1] + \
+                    model_fluency_ratings[i][-1]
+                baseline_score = baseline_relevance_concept_ratings[i][-1] + \
+                    baseline_relevance_instruction_ratings[i][-1] + \
+                    baseline_fluency_ratings[i][-1]
+                if baseline_score == model_score:
                     winning_results += ["tie"]
-                    continue
-                if baseline_fluency_ratings[i][-1] > model_fluency_ratings[i][-1]:
+                elif baseline_score > model_score:
                     winning_results += ["baseline"]
-                elif baseline_fluency_ratings[i][-1] < model_fluency_ratings[i][-1]:
+                elif baseline_score < model_score:
                     winning_results += ["model"]
-                else:
-                    winning_results += ["tie"]
                 continue
             
-            # only one passes the first two checks, then check the one that passes.
+            # if only one gets at least 1 for the first two checks, check fluency.
+            # only if the one that passes gets 0 for fluency, it is a tie.
             if is_baseline_based:
                 if baseline_fluency_ratings[i][-1] == 0:
                     winning_results += ["tie"]
