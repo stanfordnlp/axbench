@@ -23,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from pyreax import (
-    AdditionIntervention
+    AdditionIntervention,
+    SubspaceAdditionIntervention
 )
 from pyreax import (
     set_decoder_norm_to_unit_norm, 
@@ -123,6 +124,13 @@ class MeanEmbedding(Model):
             ax_model.set_device(self.device)
             self.ax_model = ax_model
 
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
+
     def train(self, examples, **kwargs):
         torch.cuda.empty_cache()
         # set the decoder weights to be the mean of the embeddings
@@ -196,3 +204,56 @@ class MeanPositiveActivation(MeanActivation):
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
 
+
+class DifferenceInMeans(MeanActivation):
+    """difference in means of positive and negative classes"""
+    
+    def __str__(self):
+        return 'DifferenceInMeans'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        self.ax.to(self.device)
+        # Main training loop.
+        positive_activations = []
+        negative_activations = []
+        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
+
+        for epoch in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                positive_activations.append(activations[labels[nonbos_mask.bool()] == 1])
+                negative_activations.append(activations[labels[nonbos_mask.bool()] != 1])
+
+        mean_positive_activation = torch.cat(positive_activations, dim=0).mean(dim=0)
+        mean_negative_activation = torch.cat(negative_activations, dim=0).mean(dim=0)
+        self.ax.proj.weight.data = mean_positive_activation.unsqueeze(0) - mean_negative_activation.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # For ReAX, we need to look into the concept in the same group, since they are used in training.
+        max_activations = {} # sae_id to max_activation
+        # Loop over saved latent files in dump_dir.
+        for file in os.listdir(dump_dir):
+            if file.startswith("latent_") and file.endswith(".parquet"):
+                latent_path = os.path.join(dump_dir, file)
+                latent = pd.read_parquet(latent_path)
+                # loop through unique sorted concept_id
+                for concept_id in sorted(latent["concept_id"].unique()):
+                    concept_latent = latent[latent["concept_id"] == concept_id]
+                    max_act = concept_latent["DifferenceInMeans_max_act"].max()
+                    max_activations[concept_id] = max_act if max_act > 0 else 50
+        self.max_activations = max_activations
+        return max_activations  

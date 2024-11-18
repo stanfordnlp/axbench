@@ -40,15 +40,15 @@ async def get_concept_genres(client, concepts, api_tag=""):
     
     for i, response in enumerate(responses):
         if "none" in response.lower():
-            concept_genres[concepts[i]] = [TEXT_GENRES] # if none, assign it with the text genre set
+            concept_genres[concepts[i]] = ["text"] # if none, assign it with the text genre set
         else:
             genres = []
             if "text" in response.lower():
-                genres += TEXT_GENRES
+                genres += ["text"]
             if "code" in response.lower():
-                genres += CODE_GENRES
+                genres += ["code"]
             if "math" in response.lower():
-                genres += MATH_GENRES
+                genres += ["math"]
             concept_genres[concepts[i]] = genres
     return concept_genres
 
@@ -117,17 +117,21 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None, api_ta
     return polysemantics
     
 
-async def get_random_content(client, tokenizer, count, genres, concepts, length, api_tag=""):
+def get_random_content(seed_sentences, tokenizer, count, genres, concepts, length, split):
     random_content = {concept: [] for concept in concepts}
+    genre_indices = {"text": set(), "code": set(), "math": set()}
 
-    prompts = []
+    responses = []
     for concept in concepts:
-        prompts += [T_RANDOM_CONTENT.format(
-            GENRE=random.choice(genres[concept]), CONCEPTS="\n".join(concepts), LENGTH=length) for _ in range(count)]
-    responses = await client.chat_completions("get_random_content", prompts)
+        genre = random.choice(genres[concept])
+        dataset = seed_sentences[f"{genre}_{split}"]
+        indices = random.sample(list(set(range(len(dataset))) - genre_indices[genre]), count)
+        genre_indices[genre].update(indices)
+        random_samples = dataset.select(indices)
+        responses += [sample["input"] for sample in random_samples]
 
     for i, response in enumerate(responses):
-        response = response.split("<FINAL>")[-1].strip(" .'").strip('"')
+        response = response.strip(" .'").strip('"')
         response = tokenizer.convert_tokens_to_string(
             tokenizer.tokenize(response)[:int(length*1.5)])
         random_content[concepts[i//(len(responses)//len(concepts))]] += [response]
@@ -186,31 +190,4 @@ async def continue_with_concept(client, tokenizer, concepts, content, length, ap
         continued_content.append(continued_text)
     
     return continued_content
-
-
-async def get_content_with_concept(client, tokenizer, count, genres, concept, length, api_tag=""):
-    prompts = []
-    for _ in range(count):
-        prompts += [T_CONTENT_WITH_CONCEPT.format(
-            GENRE=random.choice(genres[concept]), CONCEPT=concept, LENGTH=length)]
-    responses = await client.chat_completions(f"{api_tag}.get_content_with_concept", prompts)
-    return [tokenizer.convert_tokens_to_string(tokenizer.tokenize(
-        response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
-
-
-async def get_content_with_polysemantic_concepts(
-        client, tokenizer, genres, polysemantic_concepts, concept, length, api_tag=""):
-    prompts = []
-    for i, polysemantic_concept in enumerate(polysemantic_concepts):
-        prompts += [T_CONTENT_WITH_CONTRAST_CONCEPT.format(
-            GENRE=random.choice(genres[concept]),
-            CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], CONTRAST_CONCEPT=concept, LENGTH=length)]
-    responses = await client.chat_completions(f"{api_tag}.get_content_with_polysemantic_concepts", prompts)
-    return (concept, zip(
-        polysemantic_concepts, [
-            tokenizer.convert_tokens_to_string(
-                tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)])
-            for response in responses]))
-
-
 

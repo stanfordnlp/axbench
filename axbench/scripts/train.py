@@ -101,28 +101,20 @@ def load_metadata_flatten(metadata_path):
 
 
 def binarize_df(original_df, concept, model_name):
-    if model_name in {
-        "LinearProbe", "L1LinearProbe", "IntegratedGradients",
-        "InputXGradients", "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation"
-    }:
-        # assign input and output containing concept with 1, otherwise 0
-        input_df = original_df[original_df["input_concept"] == concept]
-        output_df = original_df[original_df["output_concept"] == concept]
-        positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
-        positive_df = pd.DataFrame(positive_df, columns=['input'])
+    input_df = original_df[original_df["input_concept"] == concept]
+    output_df = original_df[original_df["output_concept"] == concept]
+    positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+    positive_df = pd.DataFrame(positive_df, columns=['input'])
 
-        input_df = original_df[original_df["input_concept"] != concept]
-        output_df = original_df[original_df["output_concept"] != concept]
-        negative_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
-        negative_df = pd.DataFrame(negative_df, columns=['input'])
+    input_df = original_df[original_df["input_concept"] != concept]
+    output_df = original_df[original_df["output_concept"] != concept]
+    negative_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+    negative_df = pd.DataFrame(negative_df, columns=['input'])
 
-        positive_df["labels"] = 1
-        negative_df["labels"] = 0
+    positive_df["labels"] = 1
+    negative_df["labels"] = 0
 
-        return pd.concat([positive_df, negative_df], axis=0)
-    else:
-        # not implemented
-        raise NotImplementedError(f"Binarization not implemented for {model_name}")
+    return pd.concat([positive_df, negative_df], axis=0)
 
 
 def partition_list(lst, n):

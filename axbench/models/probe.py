@@ -23,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from pyreax import (
-    AdditionIntervention
+    AdditionIntervention,
+    SubspaceAdditionIntervention
 )
 from pyreax import (
     set_decoder_norm_to_unit_norm, 
