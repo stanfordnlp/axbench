@@ -165,7 +165,7 @@ class MeanPositiveActivation(MeanActivation):
         logger.warning("Training finished.")
 
 
-class DifferenceInMeans(MeanActivation):
+class DiffMean(MeanActivation):
     """
     difference in means of positive and negative classes
     - https://arxiv.org/abs/2310.06824
@@ -173,7 +173,7 @@ class DifferenceInMeans(MeanActivation):
     """
     
     def __str__(self):
-        return 'DifferenceInMeans'
+        return 'DiffMean'
 
     @torch.no_grad()
     def train(self, examples, **kwargs):

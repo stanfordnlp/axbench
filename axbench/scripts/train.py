@@ -104,7 +104,7 @@ def binarize_df(original_df, concept, model_name):
     if model_name in {
         "LinearProbe", "L1LinearProbe", "IntegratedGradients",
         "InputXGradients", "Random", "MeanEmbedding", "MeanActivation", "MeanPositiveActivation",
-        "DifferenceInMeans", "PCA",
+        "DiffMean", "PCA",
     }:
         # assign input and output containing concept with 1, otherwise 0
         input_df = original_df[original_df["input_concept"] == concept]
