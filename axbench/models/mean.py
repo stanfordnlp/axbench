@@ -33,56 +33,16 @@ from pyreax import (
 )
 from pyreax.utils.model_utils import calculate_l1_losses
 from transformers import get_scheduler
+import sklearn.decomposition
+import numpy as np
+
+from .probe import DataCollator, make_data_module
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class DataCollator(object):
-    """Collate examples for ReFT."""
-    
-    tokenizer: transformers.AutoTokenizer
-    data_collator: transformers.DataCollator
-
-    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-        max_seq_len = max([len(inst["input_ids"]) for inst in instances])
-        
-        for inst in instances:
-            non_pad_len = len(inst["input_ids"])
-            _input_id_paddings = torch.tensor(
-                [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
-            inst["input_ids"] = torch.cat((inst["input_ids"], torch.tensor([self.tokenizer.pad_token_id]), _input_id_paddings)).int()
-            inst["attention_mask"] = (inst["input_ids"] != self.tokenizer.pad_token_id).int()
-            inst["labels"] = inst["labels"].int()
-        batch_inputs = self.data_collator(instances)
-        return batch_inputs
-
-
-def make_data_module(
-    tokenizer: transformers.PreTrainedTokenizer, model, df,
-):
-    all_input_ids, all_labels = [], []
-    for _, row in df.iterrows():
-        input_ids = tokenizer(
-            row["input"], max_length=1024, truncation=True, return_tensors="pt")["input_ids"][0]
-        all_input_ids.append(input_ids)
-        all_labels.append(row["labels"])
-        
-    train_dataset = datasets.Dataset.from_dict({
-        "input_ids": all_input_ids,
-        "labels": all_labels
-    })
-    train_dataset.set_format(type='torch', columns=['input_ids', 'labels'])
-
-    data_collator_fn = transformers.DefaultDataCollator(
-        return_tensors="pt"
-    )
-    data_collator = DataCollator(tokenizer=tokenizer, data_collator=data_collator_fn)
-    return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 
 
 class LogisticRegressionModel(torch.nn.Module):
@@ -122,6 +82,13 @@ class MeanEmbedding(Model):
             ax_model = IntervenableModel(ax_config, self.model)
             ax_model.set_device(self.device)
             self.ax_model = ax_model
+    
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
 
     def train(self, examples, **kwargs):
         torch.cuda.empty_cache()
@@ -133,6 +100,7 @@ class MeanEmbedding(Model):
 
 
 class MeanActivation(MeanEmbedding):
+    """take the mean of all activations"""
     
     def __str__(self):
         return 'MeanActivation'
@@ -164,6 +132,7 @@ class MeanActivation(MeanEmbedding):
 
 
 class MeanPositiveActivation(MeanActivation):
+    """take the mean of only the activations for positive examples"""
     
     def __str__(self):
         return 'MeanPositiveActivation'
@@ -176,8 +145,7 @@ class MeanPositiveActivation(MeanActivation):
         self.ax.to(self.device)
         # Main training loop.
         all_activations = []
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
-        for epoch in range(self.training_args.n_epochs):
+        for _ in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
@@ -196,3 +164,82 @@ class MeanPositiveActivation(MeanActivation):
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
 
+
+class DifferenceInMeans(MeanActivation):
+    """
+    difference in means of positive and negative classes
+    - https://arxiv.org/abs/2310.06824
+    - https://blog.eleuther.ai/diff-in-means/
+    """
+    
+    def __str__(self):
+        return 'DifferenceInMeans'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        self.ax.to(self.device)
+        # Main training loop.
+        positive_activations = []
+        negative_activations = []
+
+        for _ in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                positive_activations.append(activations[labels[nonbos_mask.bool()] == 1])
+                negative_activations.append(activations[labels[nonbos_mask.bool()] != 1])
+
+        mean_positive_activation = torch.cat(positive_activations, dim=0).mean(dim=0)
+        mean_negative_activation = torch.cat(negative_activations, dim=0).mean(dim=0)
+        self.ax.proj.weight.data = mean_positive_activation.unsqueeze(0) - mean_negative_activation.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+
+
+class PCA(MeanActivation):
+    
+    def __str__(self):
+        return 'PCA'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        self.ax.to(self.device)
+        # Main training loop.
+        all_activations = []
+        
+        for _ in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
+                all_activations.append(activations[label_mask].detach().cpu().float().numpy())
+
+        all_activations = np.concatenate(all_activations)
+        pca = sklearn.decomposition.PCA(n_components=2)
+        pca.fit(all_activations)
+        variance = pca.explained_variance_ratio_[0]
+        logger.warning(f"PCA explains {variance:.5%} of the variance")
+        first_principal_component = torch.tensor(pca.components_[0])
+        self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")

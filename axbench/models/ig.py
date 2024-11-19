@@ -23,55 +23,13 @@ from pyreax import (
 )
 from transformers import get_scheduler
 
+from .probe import DataCollator, make_data_module
+
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class DataCollator(object):
-    """Collate examples for ReFT."""
-    
-    tokenizer: transformers.AutoTokenizer
-    data_collator: transformers.DataCollator
-
-    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-        max_seq_len = max([len(inst["input_ids"]) for inst in instances])
-        
-        for inst in instances:
-            non_pad_len = len(inst["input_ids"])
-            _input_id_paddings = torch.tensor(
-                [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
-            inst["input_ids"] = torch.cat((inst["input_ids"], torch.tensor([self.tokenizer.pad_token_id]), _input_id_paddings)).int()
-            inst["attention_mask"] = (inst["input_ids"] != self.tokenizer.pad_token_id).int()
-            inst["labels"] = inst["labels"].int()
-        batch_inputs = self.data_collator(instances)
-        return batch_inputs
-
-
-def make_data_module(
-    tokenizer: transformers.PreTrainedTokenizer, model, df,
-):
-    all_input_ids, all_labels = [], []
-    for _, row in df.iterrows():
-        input_ids = tokenizer(
-            row["input"], max_length=1024, truncation=True, return_tensors="pt")["input_ids"][0]
-        all_input_ids.append(input_ids)
-        all_labels.append(row["labels"])
-        
-    train_dataset = datasets.Dataset.from_dict({
-        "input_ids": all_input_ids,
-        "labels": all_labels
-    })
-    train_dataset.set_format(type='torch', columns=['input_ids', 'labels'])
-
-    data_collator_fn = transformers.DefaultDataCollator(
-        return_tensors="pt"
-    )
-    data_collator = DataCollator(tokenizer=tokenizer, data_collator=data_collator_fn)
-    return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 
 
 class LMClassification(torch.nn.Module):
