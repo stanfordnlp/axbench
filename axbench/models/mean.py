@@ -230,10 +230,6 @@ class DiffMean(MeanActivation):
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
 
-<<<<<<< HEAD
-
-=======
->>>>>>> b576caf2898032dd382e0a06a9e5836e5dacfcfb
 class PCA(MeanActivation):
     
     def __str__(self):
@@ -271,8 +267,6 @@ class PCA(MeanActivation):
         self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
-<<<<<<< HEAD
-=======
 
 
 class LAT(MeanActivation):
@@ -331,4 +325,3 @@ class LAT(MeanActivation):
         self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
->>>>>>> b576caf2898032dd382e0a06a9e5836e5dacfcfb
