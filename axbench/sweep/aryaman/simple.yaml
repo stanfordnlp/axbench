@@ -5,7 +5,7 @@ generate:
   num_of_examples: 72
   # concept_path: "<your local csv file path>"
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-  max_concepts: 10
+  max_concepts: 4
   master_data_dir: "axbench/data"
   seed: 42
 
@@ -30,10 +30,13 @@ train:
     PCA:
       batch_size: 6
       n_epochs: 12
+    LAT:
+      batch_size: 6
+      n_epochs: 12
 
 inference:
   use_bf16: true
-  models: ["ReAX", "DiffMean", "PromptSteering", "PCA"] 
+  models: ["LAT", "ReAX", "DiffMean", "PromptSteering"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -54,7 +57,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["ReAX", "DiffMean", "PromptSteering", "PCA"]
+  models: ["LAT", "ReAX", "DiffMean", "PromptSteering"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

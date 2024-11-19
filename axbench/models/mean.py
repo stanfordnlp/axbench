@@ -39,6 +39,7 @@ import numpy as np
 from .probe import DataCollator, make_data_module
 
 import logging
+import random
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
@@ -239,6 +240,64 @@ class PCA(MeanActivation):
         pca.fit(all_activations)
         variance = pca.explained_variance_ratio_[0]
         logger.warning(f"PCA explains {variance:.5%} of the variance")
+        first_principal_component = torch.tensor(pca.components_[0])
+        self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+
+
+class LAT(MeanActivation):
+    """
+    LAT is just PCA over normed differences of random pairs of activations
+    - https://arxiv.org/abs/2310.01405
+    """
+    
+    def __str__(self):
+        return 'LAT'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        self.ax.to(self.device)
+        # Main training loop.
+        all_activations = []
+        
+        for _ in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
+                all_activations.append(activations[label_mask].detach().cpu().float().numpy())
+
+        # shuffle and take diffs of random pairs
+        all_activations = np.concatenate(all_activations)
+        logger.warning(f"Shuffling {all_activations.shape[0]} activations")
+        np.random.shuffle(all_activations)
+        length = all_activations.shape[0] // 2
+        all_activations = all_activations[:length] - all_activations[length:length * 2]
+        logger.warning(f"Shuffled and diff'd:  {all_activations.shape[0]} ")
+        logger.warning(f"Potential NaNs: {np.isnan(all_activations).sum()}")
+        logger.warning(f"Potential Infs: {np.isinf(all_activations).sum()}")
+        logger.warning(f"Range: {all_activations.min()} to {all_activations.max()}")
+
+        # normalize the diffs, avoiding division by zero
+        norms = np.linalg.norm(all_activations, axis=1, keepdims=True)
+        all_activations = np.where(norms == 0, 0, all_activations / norms)
+
+        # fit PCA on the diffs
+        pca = sklearn.decomposition.PCA(n_components=2)
+        pca.fit(all_activations)
+        variance = pca.explained_variance_ratio_[0]
+        logger.warning(f"LAT explains {variance:.5%} of the variance")
         first_principal_component = torch.tensor(pca.components_[0])
         self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
