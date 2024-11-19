@@ -92,7 +92,7 @@ class ReAX(Model):
                 subspaces = [{
                     "input_subspaces": inputs["input_subspaces"],
                     "output_subspaces": inputs["output_subspaces"],
-                    "k": self.training_args.k_latent_null_loss
+                    "k": self.training_args.topk
                 }]
         
                 # forward
@@ -127,8 +127,8 @@ class ReAX(Model):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || null l1 loss %.6f || l1 loss %.6f || norm loss %.6f" % (
-                        curr_lr, loss, null_loss, l1_loss, norm_loss))
+                    "lr %.6f || loss %.6f || l1 loss %.6f" % (
+                        curr_lr, loss, l1_loss))
         progress_bar.close()
     
     @torch.no_grad()

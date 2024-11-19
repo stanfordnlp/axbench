@@ -18,25 +18,21 @@ train:
     ReAX:
       batch_size: 6
       n_epochs: 12
-      k_latent_null_loss: 3
+      topk: 3
       lr: 0.003
-      coeff_l1_loss_null: 0.001
       coeff_l1_loss: 0.001
-      coeff_norm_loss: 0.000
     # L1LinearProbe:
     #   batch_size: 6
     #   n_epochs: 12
-    #   k_latent_null_loss: 1
     #   lr: 0.003
-    #   coeff_l1_loss_null: 0.5
     #   coeff_l1_loss: 0.1
-    DifferenceInMeans:
+    DiffMean:
       batch_size: 6
       n_epochs: 12
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "DifferenceInMeans", "ReAX"] 
+  models: ["PromptSteering", "DiffMean", "ReAX"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -58,7 +54,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["PromptSteering", "DifferenceInMeans", "ReAX"] 
+  models: ["PromptSteering", "DiffMean", "ReAX"] 
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

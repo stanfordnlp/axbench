@@ -19,17 +19,14 @@ train:
     ReAX:
       batch_size: 6
       n_epochs: 12
-      k_latent_null_loss: 1
+      topk: 1
       lr: 0.003
-      coeff_l1_loss_null: 0.05
       coeff_l1_loss: 0.008
       coeff_norm_loss: 0.000
     L1LinearProbe:
       batch_size: 6
       n_epochs: 12
-      k_latent_null_loss: 1
       lr: 0.003
-      coeff_l1_loss_null: 0.5
       coeff_l1_loss: 0.1
 
 inference:

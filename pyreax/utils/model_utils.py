@@ -77,7 +77,6 @@ def calculate_l1_losses(latent, non_topk_latent, labels, mask=None):
     - non_topk_latent: non-topk latent representation, shape [batch_size, seq_len]
     - labels: labels, shape [batch_size]
     - mask: long mask, shape [batch_size, seq_len]
-    - k_latent_null_loss: top-k value for null loss, default 1
     """
     batch_size, seq_len = latent.shape
     
