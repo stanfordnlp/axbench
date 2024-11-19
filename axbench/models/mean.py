@@ -130,6 +130,22 @@ class MeanActivation(MeanEmbedding):
         self.ax.proj.weight.data = mean_activation.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
+    
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # For ReAX, we need to look into the concept in the same group, since they are used in training.
+        max_activations = {} # sae_id to max_activation
+        # Loop over saved latent files in dump_dir.
+        for file in os.listdir(dump_dir):
+            if file.startswith("latent_") and file.endswith(".parquet"):
+                latent_path = os.path.join(dump_dir, file)
+                latent = pd.read_parquet(latent_path)
+                # loop through unique sorted concept_id
+                for concept_id in sorted(latent["concept_id"].unique()):
+                    concept_latent = latent[latent["concept_id"] == concept_id]
+                    max_act = concept_latent[f"{str(self)}_max_act"].max()
+                    max_activations[concept_id] = max_act if max_act > 0 else 50
+        self.max_activations = max_activations
+        return max_activations  
 
 
 class MeanPositiveActivation(MeanActivation):
