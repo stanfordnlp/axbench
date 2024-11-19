@@ -25,6 +25,7 @@ class DatasetArgs:
     steering_model_name: Optional[str] = None
     n_steering_factors: Optional[int] = None
     steering_factors: Optional[List[str]] = None
+    steering_layers: Optional[List[int]] = None
     master_data_dir: Optional[str] = None
     steering_batch_size: Optional[int] = None
     steering_output_length: Optional[int] = None

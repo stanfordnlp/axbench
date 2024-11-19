@@ -14,10 +14,11 @@ os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
 os.environ["NP_API_KEY"] = "your_neuronpedia_api_key_here"
 ```
 
-Make sure you donwload datasets:
+Make sure you populate the `axbench/data` directory with the relevant datasets:
 ```bash
-bash axbench/scripts/download-2b.sh
-bash axbench/scripts/download-alpaca.sh
+cd data
+bash download-2b.sh
+bash download-alpaca.sh
 python axbench/scripts/download-seed-sentences.py
 ```
 

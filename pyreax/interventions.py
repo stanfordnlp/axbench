@@ -51,7 +51,7 @@ class MaxReLUIntervention(
         non_topk_latent = latent.clone()
         non_topk_latent.scatter_(-1, topk_indices, 0)  # Zero out topk elements
 
-        return topk_latent, non_topk_latent, latent
+        return topk_acts, non_topk_latent, latent
 
     def forward(
         self, base, source=None, subspaces=None
@@ -65,91 +65,19 @@ class MaxReLUIntervention(
         vs = torch.stack(v, dim=0).unsqueeze(dim=-1).permute(0, 2, 1)
 
         # get steering magnitude
-        topk_latent, non_topk_latent, latent = self.encode(base, source, subspaces)
-        topk_latent = topk_latent.squeeze(dim=-1)
-        max_latent = topk_latent.max(dim=-1, keepdim=True)[0]
+        topk_acts, non_topk_latent, latent = self.encode(
+            base, source, subspaces, k=subspaces["k"])
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True)
 
         # steering vector
-        steering_vec = torch.bmm(max_latent.unsqueeze(dim=-1), vs) # bs, 1, dim
+        steering_vec = torch.bmm(max_mean_latent.unsqueeze(dim=-1), vs) # bs, 1, dim
 
         # addition intervention
         output = base + steering_vec
 
         return InterventionOutput(
             output=output.to(base.dtype),
-            latent=[latent, output, base.clone(), non_topk_latent]
-        )
-    
-
-class MaxReLUSubspaceIntervention(
-    SourcelessIntervention,
-    TrainableIntervention, 
-    DistributedRepresentationIntervention
-):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs, keep_last_dim=True)
-        self.proj = torch.nn.Linear(
-            self.embed_dim, kwargs["low_rank_dimension"], bias=True)
-        # on average, some token should be initially activating the latent.
-        with torch.no_grad():
-            self.proj.weight.fill_(0.01)
-            self.proj.bias.fill_(0)
-    
-    def encode(
-        self, base, source=None, subspaces=None, k=1
-    ):
-        _weight = []
-        _bias = []
-        for subspace in subspaces["input_subspaces"]:
-            _weight += [self.proj.weight[subspace]]
-            _bias += [self.proj.bias[subspace]]
-        W_c = torch.stack(_weight, dim=0).unsqueeze(dim=-1)
-        b_c = torch.stack(_bias, dim=0).unsqueeze(dim=-1)
-
-        # latent
-        # base : [b, s, h]
-        latent = torch.relu(torch.bmm(base, W_c).squeeze(dim=-1) + b_c)
-        
-        # topk over a seq
-        topk_acts, topk_indices = latent.topk(k=k, dim=-1, sorted=False)
-
-        topk_latent = torch.zeros_like(latent)
-        topk_latent.scatter_(-1, topk_indices, topk_acts)
-        topk_latent = topk_latent.unsqueeze(dim=-1)
-
-        # Create mask for non-topk elements
-        non_topk_latent = latent.clone()
-        non_topk_latent.scatter_(-1, topk_indices, 0)  # Zero out topk elements
-
-        return topk_latent, non_topk_latent, latent
-
-    def forward(
-        self, base, source=None, subspaces=None
-    ):
-        """h' = (h - proj_h@v_s) + MaxReLU(h@v_c)*v_s"""
-
-        # get steering direction
-        v = []
-        for subspace in subspaces["output_subspaces"]:
-            v += [self.proj.weight[subspace]]
-        vs = torch.stack(v, dim=0).unsqueeze(dim=-1).permute(0, 2, 1)
-
-        # get steering magnitude
-        topk_latent, non_topk_latent, latent = self.encode(base, source, subspaces)
-        topk_latent = topk_latent.squeeze(dim=-1)
-        max_latent = topk_latent.max(dim=-1, keepdim=True)[0]
-
-        # steering vector
-        steering_vec = torch.bmm(max_latent.unsqueeze(dim=-1), vs) # bs, 1, dim
-
-        # subspace intervention
-        proj_coeff = (base * vs).sum(dim=-1, keepdim=True) # bs, s, 1
-        proj_vec = proj_coeff * vs # bs, s, dim
-        output = (base - proj_vec) + steering_vec
-
-        return InterventionOutput(
-            output=output.to(base.dtype),
-            latent=[latent, output, base.clone(), non_topk_latent]
+            latent=[latent, non_topk_latent]
         )
 
 

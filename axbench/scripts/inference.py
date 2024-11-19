@@ -190,6 +190,7 @@ def infer_steering(args, rank, world_size, device, logger):
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"] if config else 0  # default layer for prompt baselines
+    steering_layers = args.steering_layers
     steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
 
@@ -271,7 +272,7 @@ def infer_steering(args, rank, world_size, device, logger):
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,
                 low_rank_dimension=len(metadata),
-                device=device
+                device=device, steering_layers=steering_layers
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"

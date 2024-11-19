@@ -24,6 +24,8 @@ class Model(object):
         # Set default device to GPU if available, otherwise CPU
         self.device = kwargs.get("device", "cuda" if torch.cuda.is_available() else "cpu")
         self.seed = kwargs.get("seed", 42)
+        self.steering_layers = kwargs.get("steering_layers", None)
+        self.num_of_layers = len(self.steering_layers) if self.steering_layers else 1
 
     def make_model(self, **kwargs):
         pass
@@ -153,7 +155,7 @@ class Model(object):
             _, generations = self.ax_model.generate(
                 inputs, 
                 unit_locations=None, intervene_on_prompt=True, 
-                subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}],
+                subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}]*self.num_of_layers,
                 max_new_tokens=eval_output_length, do_sample=True, 
                 temperature=temperature,
             )

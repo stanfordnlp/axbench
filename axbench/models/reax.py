@@ -54,13 +54,14 @@ class ReAX(Model):
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
+        layers = self.steering_layers if self.steering_layers else [self.layer]
         self.ax = ax.to(self.device)
         self.ax.train()
         ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
             "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
-            "intervention": self.ax} for l in [self.layer]])
+            "intervention": self.ax} for l in layers])
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device(self.device)
         self.ax_model = ax_model
@@ -90,7 +91,9 @@ class ReAX(Model):
                 )}
                 subspaces = [{
                     "input_subspaces": inputs["input_subspaces"],
-                    "output_subspaces": inputs["output_subspaces"]}]
+                    "output_subspaces": inputs["output_subspaces"],
+                    "k": self.training_args.k_latent_null_loss
+                }]
         
                 # forward
                 _, cf_outputs = self.ax_model(
@@ -102,21 +105,15 @@ class ReAX(Model):
 
                 # loss
                 loss = cf_outputs.loss
-                latent, output, base, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
+                latent, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
 
-                null_loss, l1_loss = calculate_l1_losses(
+                l1_loss = calculate_l1_losses(
                     latent, non_topk_latent,
                     labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
                     mask=inputs["intervention_masks"],
-                    k_latent_null_loss=self.training_args.k_latent_null_loss
                 )
-                norm_output = torch.norm(output[inputs["attention_mask"]], dim=-1)
-                norm_base = torch.norm(base[inputs["attention_mask"]], dim=-1)
-                norm_loss = norm_loss_fn(norm_output, norm_base)
                 coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + \
-                    coeff*self.training_args.coeff_l1_loss*l1_loss + \
-                    coeff*self.training_args.coeff_norm_loss*norm_loss
+                loss += coeff*self.training_args.coeff_l1_loss*l1_loss
                 
                 # grads
                 loss.backward()
@@ -130,8 +127,8 @@ class ReAX(Model):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || null l1 loss %.6f || norm loss %.6f" % (
-                        curr_lr, loss, null_loss, norm_loss))
+                    "lr %.6f || loss %.6f || null l1 loss %.6f || l1 loss %.6f || norm loss %.6f" % (
+                        curr_lr, loss, null_loss, l1_loss, norm_loss))
         progress_bar.close()
     
     @torch.no_grad()

@@ -101,6 +101,7 @@ def load_metadata_flatten(metadata_path):
 
 
 def binarize_df(original_df, concept, model_name):
+    # assign input and output containing concept with 1, otherwise 0
     input_df = original_df[original_df["input_concept"] == concept]
     output_df = original_df[original_df["output_concept"] == concept]
     positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)

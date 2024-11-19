@@ -215,15 +215,14 @@ class L1LinearProbe(LinearProbe):
                     inputs["labels"].unsqueeze(1).repeat(
                         1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
                 )
-                null_loss, l1_loss = calculate_l1_losses(
+                l1_loss = calculate_l1_losses(
                     latent[:,1:], None,
                     labels=inputs["labels"],
-                    mask=nonbos_mask,
-                    k_latent_null_loss=self.training_args.k_latent_null_loss
+                    mask=nonbos_mask
                 )
 
                 coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss_null*null_loss + coeff*self.training_args.coeff_l1_loss*l1_loss
+                loss += coeff*self.training_args.coeff_l1_loss*l1_loss
 
                 # grads
                 loss.backward()
@@ -237,6 +236,6 @@ class L1LinearProbe(LinearProbe):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || null l1 loss %.6f" % (curr_lr, loss, null_loss))
+                    "lr %.6f || loss %.6f || l1 loss %.6f" % (curr_lr, loss, l1_loss))
         progress_bar.close()
         logger.warning("Training finished.")
