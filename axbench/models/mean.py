@@ -39,6 +39,7 @@ import numpy as np
 from .probe import DataCollator, make_data_module
 
 import logging
+import random
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.WARN)
@@ -129,6 +130,22 @@ class MeanActivation(MeanEmbedding):
         self.ax.proj.weight.data = mean_activation.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
+    
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # For ReAX, we need to look into the concept in the same group, since they are used in training.
+        max_activations = {} # sae_id to max_activation
+        # Loop over saved latent files in dump_dir.
+        for file in os.listdir(dump_dir):
+            if file.startswith("latent_") and file.endswith(".parquet"):
+                latent_path = os.path.join(dump_dir, file)
+                latent = pd.read_parquet(latent_path)
+                # loop through unique sorted concept_id
+                for concept_id in sorted(latent["concept_id"].unique()):
+                    concept_latent = latent[latent["concept_id"] == concept_id]
+                    max_act = concept_latent[f"{str(self)}_max_act"].max()
+                    max_activations[concept_id] = max_act if max_act > 0 else 50
+        self.max_activations = max_activations
+        return max_activations  
 
 
 class MeanPositiveActivation(MeanActivation):
@@ -165,7 +182,7 @@ class MeanPositiveActivation(MeanActivation):
         logger.warning("Training finished.")
 
 
-class DifferenceInMeans(MeanActivation):
+class DiffMean(MeanActivation):
     """
     difference in means of positive and negative classes
     - https://arxiv.org/abs/2310.06824
@@ -173,7 +190,7 @@ class DifferenceInMeans(MeanActivation):
     """
     
     def __str__(self):
-        return 'DifferenceInMeans'
+        return 'DiffMean'
 
     @torch.no_grad()
     def train(self, examples, **kwargs):
@@ -239,6 +256,64 @@ class PCA(MeanActivation):
         pca.fit(all_activations)
         variance = pca.explained_variance_ratio_[0]
         logger.warning(f"PCA explains {variance:.5%} of the variance")
+        first_principal_component = torch.tensor(pca.components_[0])
+        self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
+        set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+
+
+class LAT(MeanActivation):
+    """
+    LAT is just PCA over normed differences of random pairs of activations
+    - https://arxiv.org/abs/2310.01405
+    """
+    
+    def __str__(self):
+        return 'LAT'
+
+    @torch.no_grad()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        self.ax.eval()
+        self.ax.to(self.device)
+        # Main training loop.
+        all_activations = []
+        
+        for _ in range(self.training_args.n_epochs):
+            for batch in train_dataloader:
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                activations = gather_residual_activations(
+                    self.model, self.layer, 
+                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                ).detach()
+                nonbos_mask = inputs["attention_mask"][:,1:]
+                activations = activations[:,1:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
+                all_activations.append(activations[label_mask].detach().cpu().float().numpy())
+
+        # shuffle and take diffs of random pairs
+        all_activations = np.concatenate(all_activations)
+        logger.warning(f"Shuffling {all_activations.shape[0]} activations")
+        np.random.shuffle(all_activations)
+        length = all_activations.shape[0] // 2
+        all_activations = all_activations[:length] - all_activations[length:length * 2]
+        logger.warning(f"Shuffled and diff'd:  {all_activations.shape[0]} ")
+        logger.warning(f"Potential NaNs: {np.isnan(all_activations).sum()}")
+        logger.warning(f"Potential Infs: {np.isinf(all_activations).sum()}")
+        logger.warning(f"Range: {all_activations.min()} to {all_activations.max()}")
+
+        # normalize the diffs, avoiding division by zero
+        norms = np.linalg.norm(all_activations, axis=1, keepdims=True)
+        all_activations = np.where(norms == 0, 0, all_activations / norms)
+
+        # fit PCA on the diffs
+        pca = sklearn.decomposition.PCA(n_components=2)
+        pca.fit(all_activations)
+        variance = pca.explained_variance_ratio_[0]
+        logger.warning(f"LAT explains {variance:.5%} of the variance")
         first_principal_component = torch.tensor(pca.components_[0])
         self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
