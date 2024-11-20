@@ -21,7 +21,7 @@ from pyvene import (
 )
 from pyreax import (
     EXAMPLE_TAG, 
-    MaxReLUIntervention, 
+    TopKReLUIntervention, 
     AdditionIntervention,
     SubspaceAdditionIntervention,
     make_data_module, 
@@ -45,12 +45,12 @@ class ReAX(Model):
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "latent":
-            ax = MaxReLUIntervention(
+            ax = TopKReLUIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = SubspaceAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 2),
             )

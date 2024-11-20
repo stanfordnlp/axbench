@@ -11,7 +11,7 @@ from pyvene import (
 )
 
 
-class MaxReLUIntervention(
+class TopKReLUIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
@@ -63,7 +63,13 @@ class MaxReLUIntervention(
         max_mean_latent = topk_acts.mean(dim=-1, keepdim=True)
 
         # steering vector
-        steering_vec = torch.bmm(max_mean_latent.unsqueeze(dim=-1), vs) # bs, 1, dim
+        steering_vec = torch.bmm(max_mean_latent.unsqueeze(dim=-1), vs) # bs, 1, h
+        if "prompt_intervention_masks" in subspaces:
+            # only intervene on the non-prompt tokens
+            last_token_idx = subspaces["prompt_intervention_masks"].sum(-1) - 1
+            steering_masks = (1 - subspaces["prompt_intervention_masks"])
+            steering_masks[:, last_token_idx] = 1
+            steering_vec = steering_vec * steering_masks.unsqueeze(dim=-1) # bs, 1, h * bs, s, 1
 
         # addition intervention
         output = base + steering_vec
