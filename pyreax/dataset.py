@@ -285,10 +285,12 @@ class ReftDataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-            
+
             inst["input_subspaces"] = inst["input_subspaces"].int()
             inst["output_subspaces"] = inst["output_subspaces"].int()
             inst["groups"] = inst["groups"].int()
+            inst["prompt_intervention_masks"] = inst["intervention_masks"].clone()
+            inst["prompt_intervention_masks"][inst["prompt_lengths"]:] = 0 # mask out the intervention locations after prompt length
 
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
@@ -298,9 +300,10 @@ class ReftDataCollator(object):
             inst["labels"] = torch.cat((inst["labels"], _label_paddings))
             
             inst["attention_mask"] = (inst["input_ids"] != self.tokenizer.pad_token_id).int()
-            
+
         batch_inputs = self.data_collator(instances)
         return batch_inputs
+
 
 
 def make_data_module(
@@ -310,6 +313,7 @@ def make_data_module(
     
     all_base_input_ids, all_intervention_locations, all_output_ids, \
         all_input_subspaces, all_output_subspaces, all_groups = [], [], [], [], [], []
+    all_prompt_lengths = []
 
     for _, row in df.iterrows():
         _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
@@ -341,6 +345,7 @@ def make_data_module(
         all_input_subspaces.append(torch.tensor(_input_subspace))
         all_output_subspaces.append(torch.tensor(_output_subspace))
         all_groups.append(torch.tensor(_group))
+        all_prompt_lengths.append(torch.tensor(base_prompt_length - 1)) # exclude bos token
         
     train_dataset = datasets.Dataset.from_dict({
         "input_ids": all_base_input_ids,
@@ -349,11 +354,12 @@ def make_data_module(
         "input_subspaces": all_input_subspaces,
         "output_subspaces": all_output_subspaces,
         "groups": all_groups,
+        "prompt_lengths": all_prompt_lengths,
     })
     train_dataset.set_format(
         type='torch', columns=[
             'input_ids', 'intervention_locations', 
-            'labels', 'input_subspaces', 'output_subspaces', 'groups'])
+            'labels', 'input_subspaces', 'output_subspaces', 'groups', 'prompt_lengths'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"

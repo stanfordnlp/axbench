@@ -65,7 +65,7 @@ class ReAX(Model):
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device(self.device)
         self.ax_model = ax_model
-        
+
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
         torch.cuda.empty_cache()
@@ -92,6 +92,7 @@ class ReAX(Model):
                 subspaces = [{
                     "input_subspaces": inputs["input_subspaces"],
                     "output_subspaces": inputs["output_subspaces"],
+                    "prompt_intervention_masks": inputs["prompt_intervention_masks"],
                     "k": self.training_args.topk
                 }]
         
@@ -102,15 +103,14 @@ class ReAX(Model):
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
                     subspaces=subspaces, use_cache=False)
-
+                
                 # loss
                 loss = cf_outputs.loss
                 latent, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
-
                 l1_loss = calculate_l1_losses(
                     latent, non_topk_latent,
                     labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
-                    mask=inputs["intervention_masks"],
+                    mask=inputs["prompt_intervention_masks"],
                 )
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss*l1_loss

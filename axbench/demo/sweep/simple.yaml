@@ -22,7 +22,6 @@ train:
       topk: 1
       lr: 0.003
       coeff_l1_loss: 0.008
-      coeff_norm_loss: 0.000
     L1LinearProbe:
       batch_size: 6
       n_epochs: 12

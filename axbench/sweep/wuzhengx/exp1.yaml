@@ -18,9 +18,9 @@ train:
     ReAX:
       batch_size: 6
       n_epochs: 12
-      topk: 3
+      topk: 5
       lr: 0.003
-      coeff_l1_loss: 0.001
+      coeff_l1_loss: 0.003
     # L1LinearProbe:
     #   batch_size: 6
     #   n_epochs: 12

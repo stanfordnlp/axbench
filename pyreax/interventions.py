@@ -19,35 +19,28 @@ class MaxReLUIntervention(
     def __init__(self, **kwargs):
         super().__init__(**kwargs, keep_last_dim=True)
         self.proj = torch.nn.Linear(
-            self.embed_dim, kwargs["low_rank_dimension"], bias=True)
-        # on average, some token should be initially activating the latent.
+            self.embed_dim, kwargs["low_rank_dimension"])
         with torch.no_grad():
-            self.proj.weight.fill_(0.01)
             self.proj.bias.fill_(0)
     
     def encode(
         self, base, source=None, subspaces=None, k=1
     ):
         _weight = []
-        _bias = []
         for subspace in subspaces["input_subspaces"]:
             _weight += [self.proj.weight[subspace]]
-            _bias += [self.proj.bias[subspace]]
         W_c = torch.stack(_weight, dim=0).unsqueeze(dim=-1)
-        b_c = torch.stack(_bias, dim=0).unsqueeze(dim=-1)
 
         # latent
         # base : [b, s, h]
-        latent = torch.relu(torch.bmm(base, W_c).squeeze(dim=-1) + b_c)
-        
-        # topk over a seq
+        latent = torch.relu(torch.bmm(base, W_c).squeeze(dim=-1)) # [b, s]
+        if "prompt_intervention_masks" in subspaces:
+            latent = latent * subspaces["prompt_intervention_masks"] # [b, s]
+
+        # topk over the prompt latent for detection
         topk_acts, topk_indices = latent.topk(k=k, dim=-1, sorted=False)
 
-        topk_latent = torch.zeros_like(latent)
-        topk_latent.scatter_(-1, topk_indices, topk_acts)
-        topk_latent = topk_latent.unsqueeze(dim=-1)
-
-        # Create mask for non-topk elements
+        # non-topk over the prompt latent for detection
         non_topk_latent = latent.clone()
         non_topk_latent.scatter_(-1, topk_indices, 0)  # Zero out topk elements
 
@@ -64,9 +57,9 @@ class MaxReLUIntervention(
             v += [self.proj.weight[subspace]]
         vs = torch.stack(v, dim=0).unsqueeze(dim=-1).permute(0, 2, 1)
 
-        # get steering magnitude
+        # get steering magnitude using mean of topk activations of prompt latent
         topk_acts, non_topk_latent, latent = self.encode(
-            base, source, subspaces, k=subspaces["k"])
+            base, None, subspaces, k=subspaces["k"])
         max_mean_latent = topk_acts.mean(dim=-1, keepdim=True)
 
         # steering vector
