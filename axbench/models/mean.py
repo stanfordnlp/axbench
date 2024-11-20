@@ -23,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from pyreax import (
-    AdditionIntervention
+    AdditionIntervention,
+    SubspaceAdditionIntervention
 )
 from pyreax import (
     set_decoder_norm_to_unit_norm, 
@@ -84,6 +85,13 @@ class MeanEmbedding(Model):
             ax_model.set_device(self.device)
             self.ax_model = ax_model
     
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
+
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
         train_dataloader = DataLoader(
@@ -221,7 +229,6 @@ class DiffMean(MeanActivation):
         self.ax.proj.weight.data = mean_positive_activation.unsqueeze(0) - mean_negative_activation.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
-
 
 class PCA(MeanActivation):
     

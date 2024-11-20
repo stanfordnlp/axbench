@@ -190,6 +190,7 @@ def infer_steering(args, rank, world_size, device, logger):
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"] if config else 0  # default layer for prompt baselines
+    steering_layers = args.steering_layers
     steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
 
@@ -271,7 +272,7 @@ def infer_steering(args, rank, world_size, device, logger):
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,
                 low_rank_dimension=len(metadata),
-                device=device
+                device=device, steering_layers=steering_layers
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering"
@@ -454,8 +455,11 @@ def infer_latent(args, rank, world_size, device, logger):
             )
             # Store the results in current_df
             for k, v in results.items():
-                if k == "tokens" and "tokens" not in current_df:
-                    current_df["tokens"] = v  # for tokens, they are global
+                if k == "tokens":
+                    if "tokens" not in current_df:
+                        current_df["tokens"] = v  # for tokens, they are global
+                    else:
+                        continue
                 else:
                     current_df[f"{model_name}_{k}"] = v
         save(dump_dir, 'latent', current_df, rank)
@@ -499,8 +503,6 @@ def infer_latent(args, rank, world_size, device, logger):
             dfs.append(df)
         if len(dfs) > 0:
             combined_df = pd.concat(dfs, ignore_index=True)
-            # Optionally sort combined_df by 'concept_id' if needed
-            combined_df = combined_df.sort_values(by=['concept_id',]).reset_index(drop=True)
             combined_df.to_parquet(Path(dump_dir) / "inference" / "latent_data.parquet", engine='pyarrow')
             logger.warning(f"Saved combined latent inference results to {Path(dump_dir) / 'inference' / 'latent_data.parquet'}")
         else:

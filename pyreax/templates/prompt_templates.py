@@ -97,31 +97,17 @@ For each concept in the set, analyze Concept A for **any** shared meanings, cont
 
 
 # Training-time templates.
-T_RANDOM_CONTENT = """Content Generation and Modification Task:
-
-1. Use the specified genre: {GENRE}
-
-   - Generate content containing around {LENGTH} units (e.g., words, lines, or appropriate measure for the genre), with a maximum limit of {LENGTH}, in the specified genre.
-   - Ensure the content is intentionally incomplete, ending in a way that suggests an obvious continuation.
-
-2. Rewrite the content to ensure it strictly avoids any words, phrases, or ideas associated with the following concepts:
-'{CONCEPTS}'
-
-3. Output the final content in plain text (or appropriate format for the genre), without special formatting (e.g., no quotation marks or hyphens at the beginning).
-
-Include the special tag <FINAL> at the beginning of the final content, followed by the content itself. Return only this tagged content, with no additional text."""
-
-
 T_MODIFY_CONTENT_WITH_CONCEPT = """Content Modification Task:
 
 You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting some commonly used words, phrases, or elements that reflect themes or ideas related to '{CONCEPT}' into the middle of the content. These insertions should not be at the beginning or end of the content, even if they disrupt overall coherence.
+Your task is to minimally modify this content by inserting some commonly used words, phrases, or elements that reflect themes or ideas related to '{CONCEPT}' into the middle of the content. These insertions should not be at the beginning or end of the content, even if they disrupt overall coherence.
 
 Guidelines:
 
+- Try to avoid copying words from the definition of '{CONCEPT}' if possible.
 - Ensure parts of the content remain unrelated to the concept '{CONCEPT}'.
 - The final content should have approximately the same length as the original content.
 - The concept should be clearly represented through the inserted word, phrase, or element, even if the content's meaning isn't entirely coherent.
@@ -138,7 +124,7 @@ You are given the following content:
 
 "{CONTENT}"
 
-Your task is to modify this content by inserting the word '{WORD}' into the middle of the content. This word along with modified content should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
+Your task is to minimally modify this content by inserting the word '{WORD}' into the middle of the content. This word along with modified content should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
 
 Guidelines:
 
@@ -154,39 +140,6 @@ Output:
 Include the special tag <FINAL> at the beginning of the final content, followed by the content itself. Return only this tagged content, with no additional text."""
 
 
-# Evaluation-time templates.
-T_CONTENT_WITH_CONCEPT = """Content Writing Task:
-
-1. Use the specified genre: {GENRE}
-
-   - Generate unique content containing approximately {LENGTH} units (e.g., words, lines, symbols), with a maximum of {LENGTH} units, in the specified genre.
-   - Include some commonly used words, phrases, or elements that convey the essence or themes of the concept '{CONCEPT}' in the middle of the content.
-   - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
-   - Position the concept-related content in the middle, avoiding the beginning or end.
-   - Ensure the content reflects the overall concept, even if its full meaning isn't entirely clear.
-   - Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
-
-2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
-
-Attach the special tag <FINAL> at the beginning of your final content, and return only this tagged content with no additional text."""
-
-
-T_CONTENT_WITH_CONTRAST_CONCEPT = """Content Writing Task:
-
-1. Use the specified genre: {GENRE}
-
-   - Generate unique content containing approximately {LENGTH} units (e.g., words, lines, symbols), with a maximum of {LENGTH} units, in the specified genre.
-   - Include '{WORD}' in the middle of the content, conveying meanings related to the concept '{CONCEPT}'.
-   - Ensure that parts of the content remain irrelevant to the concept '{CONCEPT}'.
-   - Avoid any mention of '{CONTRAST_CONCEPT}' in the content, regardless of coherence.
-   - Ensure the content reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn't entirely coherent.
-   - Ensure grammatical correctness (or syntactical correctness for code/equations).
-
-2. Output the final content in plain text (or appropriate format for the genre), with no special formatting (e.g., no quotation marks or hyphens at the beginning).
-
-Attach the special tag <FINAL> at the beginning of your final content, and return only this tagged content with no additional text."""
-
-
 # Continuation templates.
 T_CONTINUE_WITH_CONCEPT = """Given the partial content:
 
@@ -195,8 +148,9 @@ T_CONTINUE_WITH_CONCEPT = """Given the partial content:
 Your task is to:
 
 1. Complete the content by adding elements that are related to '{CONCEPT}'.
-2. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
-3. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
+2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
+3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
+4. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
 4. Avoid using any special characters not standard for the genre, including quotation marks (" or ') and ellipses (...), unless appropriate.
 
 **Formatting Guidelines:**
@@ -206,5 +160,4 @@ Your task is to:
 - Do not include any additional text, explanations, or formatting.
 
 **Final Answer:** Return only the final content, following the guidelines above."""
-
 

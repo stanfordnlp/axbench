@@ -146,11 +146,10 @@ def generate_html_with_highlight_text(data):
     initial_concept = get_valid_concept(data[data['concept_id'] == default_reax_id])
 
     # Iterate through the DataFrame rows to generate the initial table
-    positive_data = data[data['category'] == 'positive']
-    for _, row in positive_data.iterrows():
+    for _, row in data.iterrows():
         tokens = row['tokens']
         concept_id = row['concept_id']
-        ReAX_max_act = positive_data[positive_data['concept_id'] == concept_id]['ReAX_max_act'].max()
+        ReAX_max_act = data[data['concept_id'] == concept_id]['ReAX_max_act'].max()
         # Highlighting based on ReAX_acts with opacity scaling and raw values on hover
         reax_highlighted = [
             f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, ReAX_max_act)});">{token}</span>'
@@ -169,29 +168,6 @@ def generate_html_with_highlight_text(data):
             'concept_id': row['concept_id']
         })
 
-    nonpositive_data = data[data['category'] != 'positive']
-    for _, row in nonpositive_data.iterrows():
-        tokens = row['tokens']
-        concept_id = row['concept_id']
-        ReAX_max_act = nonpositive_data[nonpositive_data['concept_id'] == concept_id]['ReAX_max_act'].max()
-        # Highlighting based on ReAX_acts with opacity scaling and raw values on hover
-        reax_highlighted = [
-            f'<span class="reax-highlight highlight" title="ReAX Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, ReAX_max_act)});">{token}</span>'
-            if act > 0 else token
-            for token, act in zip(tokens, row['ReAX_acts'])
-        ]
-        
-        # Join highlighted tokens into a single string
-        reax_text = ' '.join(reax_highlighted)
-        
-        # Append the processed row
-        rows.append({
-            'input_concept': row['input_concept'],
-            'category': row['category'],
-            'reax_text': reax_text,
-            'concept_id': row['concept_id']
-        })
-    
     # Render the HTML using Jinja2
     template = Template(highlight_text_html_template)
     html_content = template.render(

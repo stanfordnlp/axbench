@@ -1,6 +1,6 @@
 import os, random, json, time, requests, copy, asyncio, csv, math
 import torch, transformers, datasets
-
+from datasets import load_from_disk
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from pathlib import Path
@@ -21,7 +21,7 @@ from .language_models import *
 
 
 # special types for dataset
-Prompt = namedtuple("Prompt", ["concept", "tag", "content", "id"])
+Prompt = namedtuple("Prompt", ["concept", "tag", "content"])
 
 
 async def run_tasks(tasks):
@@ -47,6 +47,9 @@ class ReAXFactory(object):
         )
         self.seed = kwargs.get("seed", 42)
         self.logger = kwargs.get("logger", logger)
+
+        # load seed sentences
+        self.seed_sentences = load_from_disk(os.path.join(master_data_dir, "seed_sentences"))
 
     def save_cache(self):
         """Save the language model cache before exiting"""
@@ -103,21 +106,27 @@ class ReAXFactory(object):
         all_examples = []
         input_length = kwargs.get("input_length", 32)
         output_length = kwargs.get("output_length", 10)
-        eval_tasks = []
-        tags = []
 
+        concepts_random_content = get_random_content(
+            self.seed_sentences, tokenizer=tokenizer, count=subset_n*3, 
+            genres=concept_genres_map, concepts=concepts, length=input_length, split="test"
+        )
+
+        tags = []
+        eval_tasks = []
+        negative_examples = []
         for idx, concept in enumerate(concepts):
+
             # positive
-            eval_tasks.append(get_content_with_concept(
-                client=lm_model, tokenizer=tokenizer, count=subset_n, genres=concept_genres_map, 
-                concept=concept, length=input_length, api_tag="inference"))
+            eval_tasks.append(modify_content_with_concept(
+                client=lm_model, tokenizer=tokenizer,
+                content=[(concept, "", content) for content in concepts_random_content[concept][:subset_n]],  # keep the same interface
+                length=input_length
+            ))
             tags.append(("positive", concept, idx))
 
             # negative
-            eval_tasks.append(get_random_content(
-                client=lm_model, tokenizer=tokenizer, count=subset_n, genres=concept_genres_map,
-                concepts=[concept], length=input_length, api_tag="inference"))
-            tags.append(("negative", concept, idx))
+            negative_examples += [[content, concept, "negative"] for content in concepts_random_content[concept][subset_n:2*subset_n]]
 
             # hard negative seen + unseen
             splits = [
@@ -126,24 +135,28 @@ class ReAXFactory(object):
             ]
             for (label, polysemantic_meanings) in splits:
                 if len(polysemantic_meanings) != 0:
-                    eval_tasks.append(get_content_with_polysemantic_concepts(
-                        client=lm_model, tokenizer=tokenizer, genres=concept_genres_map, 
-                        polysemantic_concepts=polysemantic_meanings, concept=concept,
-                        length=input_length, api_tag="inference"))
+                    polysemantic_random_content = \
+                        concepts_random_content[concept][2*subset_n:2*subset_n+len(polysemantic_meanings)]
+                    eval_tasks.append(modify_content_with_polysemantic_concepts(
+                        client=lm_model, tokenizer=tokenizer,
+                        polysemantic_concepts=polysemantic_meanings,
+                        concept=concept, content=polysemantic_random_content,
+                        length=input_length
+                    ))
                     tags.append((label, concept, idx))
 
         # run tasks
         all_eval_content = asyncio.run(run_tasks(eval_tasks))
 
         # make dataset
+        hard_negative_examples = []
         for (tag, concept, idx), eval_content in zip(tags, all_eval_content):
             if tag in {"positive"}:
                 all_examples += [[content, concept, tag] for content in eval_content]
-            elif tag in {"negative"}:
-                all_examples += [[content, concept, tag] for content in eval_content[concept]]
             elif tag in {"hard negative seen", "hard negative unseen"}:
-                all_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
-
+                hard_negative_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
+        all_examples += negative_examples + hard_negative_examples
+        
         # make df
         df = pd.DataFrame(all_examples, columns=['input', 'input_concept', 'category'])
         df = df[df["input"].str.strip() != ""]
@@ -158,18 +171,15 @@ class ReAXFactory(object):
         self.logger.warning("Creating dataframe.")
         n_per_concept = n // (len(concepts) + 1)
         all_examples = []
-        content_id = n * kwargs.get("current_group_id", 0)
-        content_map = {}
 
         input_length = kwargs.get("input_length", 32)
         output_length = kwargs.get("output_length", 10)
         
         # for each concept, we create a set of seed random content.
-        random_content_task = get_random_content(
-            client=lm_model, tokenizer=tokenizer, count=n_per_concept // len(concepts), 
-            genres=concept_genres_map, concepts=concepts, length=input_length
+        concepts_random_content = get_random_content(
+            self.seed_sentences, tokenizer=tokenizer, count=3*n, 
+            genres=concept_genres_map, concepts=concepts, length=input_length, split="train"
         )
-        concepts_random_content = asyncio.run(run_tasks([random_content_task]))[0]
         
         # for concepts with polysemantic senses, we create additional examples.
         polysemantic_tasks = []
@@ -180,7 +190,7 @@ class ReAXFactory(object):
                 polysemantic_tasks.append(modify_content_with_polysemantic_concepts(
                     client=lm_model, tokenizer=tokenizer,
                     polysemantic_concepts=polysemantic_concepts,
-                    concept=concept, content=concepts_random_content[concept],
+                    concept=concept, content=concepts_random_content[concept][:n],
                     length=input_length
                 ))
         polysemantic_content = asyncio.run(run_tasks(polysemantic_tasks))        
@@ -189,19 +199,15 @@ class ReAXFactory(object):
         # aggregate these null examples.
         null_prompts = []
         for concept in concepts:
-            n_random = (n_per_concept // (len(concepts)*2)) if len(contrast_concepts_map[concept]) != 0 else len(contrast_concepts_map[concept])
-            for content in concepts_random_content[concept][:n_random]:
-                content_map[content] = content_id
+            n_random = (n_per_concept // len(concepts)) if len(contrast_concepts_map[concept]) == 0 else n_per_concept // (len(concepts)*2)
+            for content in concepts_random_content[concept][n:n+n_random]:
                 null_prompts.append(
-                    Prompt(concept=concept, tag="empty", content=content, id=content_id))
-                content_id += 1
+                    Prompt(concept=concept, tag="empty", content=content))
             if len(contrast_concepts_map[concept]) != 0:
                 for content in polysemantic_content[concept]:
-                    content_map[content[1]] = content_id
                     null_prompts.append(
                         Prompt(concept=concept, tag=f"{content[0][0]}//{content[0][1]}",
-                               content=content[1], id=content_id))
-                    content_id += 1
+                               content=content[1]))
 
         # get continuations from STEERED MODEL (not datagen model)
         null_outputs = get_model_continues(
@@ -216,16 +222,14 @@ class ReAXFactory(object):
             all_examples += [[
                 prompt.content, output, EXAMPLE_TAG.CONTROL.value,
                 in_idx, out_idx, prompt.tag, "empty",
-                prompt.id,  # content_id
-                -1  # no source content
             ]]
             
         # modify exist content to have desired concepts.
         modify_prompts = []
         for concept in concepts:
-            for prompt in null_prompts:
+            for prompt in concepts_random_content[concept][2*n:2*n+len(null_prompts)]:
                 modify_prompts.append(
-                    Prompt(concept=concept, tag=prompt.tag, content=prompt.content, id=prompt.id))  # include source content ID
+                    Prompt(concept=concept, tag="empty", content=prompt))  # include source content ID
         modify_task = modify_content_with_concept(
             client=lm_model, tokenizer=tokenizer,
             content=[(p.concept, p.tag, p.content) for p in modify_prompts],  # keep the same interface
@@ -247,17 +251,14 @@ class ReAXFactory(object):
             all_examples += [[
                 prompt, output, EXAMPLE_TAG.EXPERIMENT.value,
                 in_idx, out_idx, modify_prompts[i][0], inverse_concepts[i],
-                content_id,  # new content ID
-                modify_prompts[i][3]  # source content ID
             ]]
-            content_id += 1
 
         # update the column definitions of the DataFrame
         df = pd.DataFrame(
             all_examples, 
             columns = [
                 'input', 'output', 'group', 'input_subspace', 'output_subspace', 
-                'input_concept', 'output_concept', 'content_id', 'source_content_id'
+                'input_concept', 'output_concept',
             ])
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df
@@ -284,10 +285,12 @@ class ReftDataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-            
+
             inst["input_subspaces"] = inst["input_subspaces"].int()
             inst["output_subspaces"] = inst["output_subspaces"].int()
             inst["groups"] = inst["groups"].int()
+            inst["prompt_intervention_masks"] = inst["intervention_masks"].clone()
+            inst["prompt_intervention_masks"][inst["prompt_lengths"]:] = 0 # mask out the intervention locations after prompt length
 
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
@@ -297,9 +300,10 @@ class ReftDataCollator(object):
             inst["labels"] = torch.cat((inst["labels"], _label_paddings))
             
             inst["attention_mask"] = (inst["input_ids"] != self.tokenizer.pad_token_id).int()
-            
+
         batch_inputs = self.data_collator(instances)
         return batch_inputs
+
 
 
 def make_data_module(
@@ -309,6 +313,7 @@ def make_data_module(
     
     all_base_input_ids, all_intervention_locations, all_output_ids, \
         all_input_subspaces, all_output_subspaces, all_groups = [], [], [], [], [], []
+    all_prompt_lengths = []
 
     for _, row in df.iterrows():
         _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
@@ -340,6 +345,7 @@ def make_data_module(
         all_input_subspaces.append(torch.tensor(_input_subspace))
         all_output_subspaces.append(torch.tensor(_output_subspace))
         all_groups.append(torch.tensor(_group))
+        all_prompt_lengths.append(torch.tensor(base_prompt_length - 1)) # exclude bos token
         
     train_dataset = datasets.Dataset.from_dict({
         "input_ids": all_base_input_ids,
@@ -348,11 +354,12 @@ def make_data_module(
         "input_subspaces": all_input_subspaces,
         "output_subspaces": all_output_subspaces,
         "groups": all_groups,
+        "prompt_lengths": all_prompt_lengths,
     })
     train_dataset.set_format(
         type='torch', columns=[
             'input_ids', 'intervention_locations', 
-            'labels', 'input_subspaces', 'output_subspaces', 'groups'])
+            'labels', 'input_subspaces', 'output_subspaces', 'groups', 'prompt_lengths'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"

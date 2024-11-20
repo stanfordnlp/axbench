@@ -18,30 +18,3 @@ PRICING_DOLLAR_PER_1M_TOKEN = {
 }
 
 UNIT_1M = 1_000_000
-
-TEXT_GENRES = [
-    "fictional narrative",
-    "non-fictional writing",
-    "scientific paper",
-    "poetry",
-    "journalistic article",
-    "technical documentation",
-    "biography",
-    "essay",
-    "script or screenplay",
-]
-
-CODE_GENRES = [
-    "Python programming code",
-    "Java programming code",
-    "JavaScript programming code",
-    "C++ programming code",
-    "C# programming code",
-    "Ruby programming code"
-]
-
-MATH_GENRES = [
-    "algebraic expressions",
-    "mathematical equations",
-    "logic and set theory",
-]

@@ -33,7 +33,7 @@ class ModelContainer:
 class ModelParams:
     batch_size: Optional[int] = None
     n_epochs: Optional[int] = None
-    k_latent_null_loss: Optional[int] = None
+    topk: Optional[int] = None
     lr: Optional[float] = None
     coeff_l1_loss_null: Optional[float] = None
     coeff_l1_loss: Optional[float] = None
@@ -64,7 +64,7 @@ class TrainingArgs:
             'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16'
         ]
         hierarchical_params = [
-            'batch_size', 'n_epochs', 'k_latent_null_loss',
+            'batch_size', 'n_epochs', 'topk',
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss'
         ]
         all_params = global_params + hierarchical_params
@@ -153,7 +153,7 @@ class TrainingArgs:
     @staticmethod
     def _infer_type(param_name: str):
         bool_params = ['use_bf16']
-        int_params = ['layer', 'batch_size', 'n_epochs', 'k_latent_null_loss', 'seed']
+        int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed']
         float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss']
         str_params = ['concept_path', 'model_name', 'component', 'data_dir', 'dump_dir', 'run_name']
 
