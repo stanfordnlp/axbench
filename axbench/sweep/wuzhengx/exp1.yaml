@@ -18,17 +18,16 @@ train:
     ReFT:
       batch_size: 6
       n_epochs: 12
-      topk: 5
       lr: 0.003
-      coeff_l1_loss: 0.003
+      low_rank_dimension: 1
     # L1LinearProbe:
     #   batch_size: 6
     #   n_epochs: 12
     #   lr: 0.003
     #   coeff_l1_loss: 0.1
-    DiffMean:
-      batch_size: 6
-      n_epochs: 12
+    # DiffMean:
+    #   batch_size: 6
+    #   n_epochs: 12
 
 inference:
   use_bf16: true

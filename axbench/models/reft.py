@@ -8,9 +8,8 @@ from pyvene import (
     IntervenableModel
 )
 from .interventions import (
-    TopKReLUIntervention, 
-    AdditionIntervention,
-    SubspaceAdditionIntervention,
+    LoreftIntervention,
+    ConceptLoreftIntervention,
 )
 from ..utils.constants import EXAMPLE_TAG
 from torch.utils.data import DataLoader
@@ -31,15 +30,17 @@ class ReFT(Model):
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
-        if mode == "latent":
-            ax = TopKReLUIntervention(
+        if mode == "train":
+            ax = LoreftIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                dtype=kwargs.get("dtype", torch.bfloat16)
             )
-        elif mode == "steering":
-            ax = SubspaceAdditionIntervention(
+        else:
+            ax = ConceptLoreftIntervention(
+                n_concepts=kwargs.get("n_concepts", 1),
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         layers = self.steering_layers if self.steering_layers else [self.layer]
         self.ax = ax.to(self.device)
@@ -47,11 +48,55 @@ class ReFT(Model):
         ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
-            "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
+            "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
             "intervention": self.ax} for l in layers])
         ax_model = IntervenableModel(ax_config, self.model)
+        ax_model.disable_model_gradients()    
         ax_model.set_device(self.device)
         self.ax_model = ax_model
+
+    def save(self, dump_dir, **kwargs): 
+        # 3D matrices saving is needed for ReFT
+        # [n_concept, embed_dim, low_rank_dimension]
+        proj_weight = self.ax.proj.weight.data # [embed_dim, low_rank_dimension]
+        source_weight = self.ax.learned_source.weight.data # [embed_dim, low_rank_dimension]
+        source_bias = self.ax.learned_source.bias.data # [low_rank_dimension]
+
+        model_name = kwargs.get("model_name", self.__str__())
+        weight_file = dump_dir / f"{model_name}_weight.pt"
+        proj_weight = proj_weight.cpu().unsqueeze(dim=0)
+        source_weight = source_weight.cpu().unsqueeze(dim=0)
+        if weight_file.exists():
+            existing_weight = torch.load(weight_file)
+            existing_weight["proj_weight"] = torch.cat([existing_weight["proj_weight"], proj_weight], dim=0)
+            existing_weight["source_weight"] = torch.cat([existing_weight["source_weight"], source_weight], dim=0)
+        else:
+            existing_weight = {
+                "proj_weight": proj_weight,
+                "source_weight": source_weight
+            }
+        torch.save(existing_weight, weight_file)
+
+        bias_file = dump_dir / f"{model_name}_bias.pt"
+        source_bias = source_bias.cpu().unsqueeze(dim=0)
+        if bias_file.exists():
+            source_bias = torch.cat([torch.load(bias_file), source_bias], dim=0)
+        torch.save(source_bias, bias_file)
+
+    def load(self, dump_dir=None, **kwargs):
+        model_name = kwargs.get("model_name", self.__str__())
+        weight = torch.load(
+            f"{dump_dir}/{model_name}_weight.pt"
+        )
+        bias = torch.load(
+            f"{dump_dir}/{model_name}_bias.pt"
+        )
+        n_concepts = weight["proj_weight"].shape[0]
+        low_rank_dimension = weight["proj_weight"].shape[-1]
+        self.make_model(n_concepts=n_concepts, low_rank_dimension=low_rank_dimension, **kwargs)
+        self.ax.W_proj.data = weight["proj_weight"].to(self.device)
+        self.ax.W_source.data = weight["source_weight"].to(self.device)
+        self.ax.b_source.data = bias.to(self.device)
 
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples)
@@ -63,7 +108,6 @@ class ReFT(Model):
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
-        norm_loss_fn = torch.nn.MSELoss()
         # Main training loop.
         rank = torch.distributed.get_rank()
         progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
@@ -76,12 +120,6 @@ class ReFT(Model):
                     None,
                     inputs["intervention_locations"].permute(1, 0, 2).tolist()
                 )}
-                subspaces = [{
-                    "input_subspaces": inputs["input_subspaces"],
-                    "output_subspaces": inputs["output_subspaces"],
-                    "prompt_intervention_masks": inputs["prompt_intervention_masks"],
-                    "k": self.training_args.topk
-                }]
         
                 # forward
                 _, cf_outputs = self.ax_model(
@@ -89,23 +127,13 @@ class ReFT(Model):
                         "input_ids": inputs["input_ids"],
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
-                    subspaces=subspaces, use_cache=False)
+                    use_cache=False)
                 
                 # loss
                 loss = cf_outputs.loss
-                latent, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
-                l1_loss = calculate_l1_losses(
-                    latent, non_topk_latent,
-                    labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
-                    mask=inputs["prompt_intervention_masks"],
-                )
-                coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss*l1_loss
                 
                 # grads
                 loss.backward()
-                set_decoder_norm_to_unit_norm(self.ax)
-                remove_gradient_parallel_to_decoder_directions(self.ax)
                 curr_step += 1
                 curr_lr = get_lr(optimizer)
                 # optim
@@ -114,8 +142,7 @@ class ReFT(Model):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || l1 loss %.6f" % (
-                        curr_lr, loss, l1_loss))
+                    "lr %.6f || loss %.6f " % (curr_lr, loss))
         progress_bar.close()
     
     @torch.no_grad()

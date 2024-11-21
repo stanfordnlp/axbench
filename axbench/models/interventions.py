@@ -1,84 +1,80 @@
-import torch, einops, random
+import torch, random
 from torch import nn
 from pyvene import (
-    IntervenableModel,
-    ConstantSourceIntervention,
     SourcelessIntervention,
     TrainableIntervention,
     DistributedRepresentationIntervention,
     CollectIntervention,
-    InterventionOutput
 )
 
 
-class TopKReLUIntervention(
+class LowRankRotateLayer(torch.nn.Module):
+    """A linear transformation with orthogonal initialization."""
+
+    def __init__(self, n, m, init_orth=True):
+        super().__init__()
+        # n > m
+        self.weight = torch.nn.Parameter(torch.empty(n, m), requires_grad=True)
+        if init_orth:
+            torch.nn.init.orthogonal_(self.weight)
+
+    def forward(self, x):
+        return torch.matmul(x.to(self.weight.dtype), self.weight)
+
+
+class LoreftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
 ):
+    """
+    Phi(h) = h + R^T(Wh + b - Rh)
+    Ref: https://arxiv.org/pdf/2404.03592
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs, keep_last_dim=True)
-        self.proj = torch.nn.Linear(
-            self.embed_dim, kwargs["low_rank_dimension"])
-        with torch.no_grad():
-            self.proj.bias.fill_(0)
-    
-    def encode(
-        self, base, source=None, subspaces=None, k=1
-    ):
-        _weight = []
-        for subspace in subspaces["input_subspaces"]:
-            _weight += [self.proj.weight[subspace]]
-        W_c = torch.stack(_weight, dim=0).unsqueeze(dim=-1)
-
-        # latent
-        # base : [b, s, h]
-        latent = torch.relu(torch.bmm(base, W_c).squeeze(dim=-1)) # [b, s]
-        if "prompt_intervention_masks" in subspaces:
-            latent = latent * subspaces["prompt_intervention_masks"] # [b, s]
-
-        # topk over the prompt latent for detection
-        topk_acts, topk_indices = latent.topk(k=k, dim=-1, sorted=False)
-
-        # non-topk over the prompt latent for detection
-        non_topk_latent = latent.clone()
-        non_topk_latent.scatter_(-1, topk_indices, 0)  # Zero out topk elements
-
-        return topk_acts, non_topk_latent, latent
-
+        proj = LowRankRotateLayer(
+            self.embed_dim, kwargs["low_rank_dimension"], init_orth=True)
+        self.proj = torch.nn.utils.parametrizations.orthogonal(proj)
+        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
+            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
+        
     def forward(
         self, base, source=None, subspaces=None
     ):
-        """h' = h + MaxReLU(h@v_c)*v_s"""
-
-        # get steering direction
-        v = []
-        for subspace in subspaces["output_subspaces"]:
-            v += [self.proj.weight[subspace]]
-        vs = torch.stack(v, dim=0).unsqueeze(dim=-1).permute(0, 2, 1)
-
-        # get steering magnitude using mean of topk activations of prompt latent
-        topk_acts, non_topk_latent, latent = self.encode(
-            base, None, subspaces, k=subspaces["k"])
-        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True)
-
-        # steering vector
-        steering_vec = torch.bmm(max_mean_latent.unsqueeze(dim=-1), vs) # bs, 1, h
-        if "prompt_intervention_masks" in subspaces:
-            # only intervene on the non-prompt tokens
-            last_token_idx = subspaces["prompt_intervention_masks"].sum(-1) - 1
-            steering_masks = (1 - subspaces["prompt_intervention_masks"])
-            steering_masks[:, last_token_idx] = 1
-            steering_vec = steering_vec * steering_masks.unsqueeze(dim=-1) # bs, 1, h * bs, s, 1
-
-        # addition intervention
-        output = base + steering_vec
-
-        return InterventionOutput(
-            output=output.to(base.dtype),
-            latent=[latent, non_topk_latent]
+        rotated_base = self.proj(base)
+        output = base + torch.matmul(
+            (self.learned_source(base) - rotated_base), self.proj.weight.T
         )
+        return output.to(base.dtype)
 
+
+class ConceptLoreftIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + R^T(Wh + b - Rh)
+    Ref: https://arxiv.org/pdf/2404.03592
+
+    Note that this intervention is used for concept-based Loreft.
+    The main difference is that weights are assumed to be trained and saved as 3D tensors.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.W_proj = nn.Parameter(torch.zeros(
+            kwargs["n_concepts"], self.embed_dim, kwargs["low_rank_dimension"]))
+        self.W_source = nn.Parameter(torch.zeros(
+            kwargs["n_concepts"], self.embed_dim, kwargs["low_rank_dimension"]))
+        self.b_source = nn.Parameter(torch.zeros(
+            kwargs["n_concepts"], kwargs["low_rank_dimension"]))
+        
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        return base
+    
 
 class AdditionIntervention(
     SourcelessIntervention,

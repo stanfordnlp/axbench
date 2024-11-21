@@ -37,20 +37,20 @@ STATE_FILE = "train_state.pkl"
 
 def data_generator(data_dir):
     """
-    Generator function to read data files and yield data subsets by group_id.
+    Generator function to read data files and yield data subsets by concept_id.
 
     Args:
         data_dir (str): Path to the data directory.
 
     Yields:
-        (group_id, df_subset): A tuple containing the group_id and subset DataFrame.
+        (concept_id, df_subset): A tuple containing the concept_id and subset DataFrame.
     """
     df = pd.read_parquet(os.path.join(data_dir, 'train_data.parquet'))
-    group_ids = df['group_id'].unique()
-    group_ids.sort()
-    for group_id in group_ids:
-        df_subset = df[df['group_id'] == group_id]
-        yield (group_id, df_subset)
+    concept_ids = df['concept_id'].unique()
+    concept_ids.sort()
+    for concept_id in concept_ids:
+        df_subset = df[df['concept_id'] == concept_id]
+        yield (concept_id, df_subset)
 
 
 def load_metadata(metadata_path):
@@ -70,23 +70,21 @@ def load_metadata_flatten(metadata_path):
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
-    group_id = 0
+    concept_id = 0
     with open(metadata_path, 'r') as f:
         for line in f:
             data = json.loads(line)
-            for concept_id, concept in enumerate(data["concepts"]):
-                concept_genres_map = data["concept_genres_map"][concept]
-                contrast_concepts_map = data["contrast_concepts_map"][concept]
-                ref = data["refs"][concept_id]
-                flatten_data = {
-                    "concept": concept,
-                    "ref": ref,
-                    "concept_genres_map": {concept: concept_genres_map},
-                    "contrast_concepts_map": {concept: contrast_concepts_map},
-                    "group_id": group_id
-                }
-                metadata += [flatten_data]  # Return the metadata as is
-            group_id += 1
+            concept, ref =data["concept"], data["ref"]
+            concept_genres_map = data["concept_genres_map"][concept]
+            ref = data["ref"]
+            flatten_data = {
+                "concept": concept,
+                "ref": ref,
+                "concept_genres_map": {concept: concept_genres_map},
+                "concept_id": concept_id
+            }
+            metadata += [flatten_data]  # Return the metadata as is
+            concept_id += 1
     return metadata
 
 
@@ -196,7 +194,7 @@ def main():
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
     df_generator = data_generator(args.data_dir)
-    df_list = list(df_generator)  # Collect all (group_id, group_df) pairs
+    df_list = list(df_generator)
 
     dump_dir = Path(args.dump_dir) / "train"
     dump_dir.mkdir(parents=True, exist_ok=True)
@@ -218,49 +216,38 @@ def main():
     model_instance = model_instance.eval()
 
     state = load_state(dump_dir, rank)
-    last_group_id = state.get("last_group_id", None) if state else None
-    logger.warning(f"Rank {rank} last group_id processed: {last_group_id}")
+    last_concept_id = state.get("last_concept_id", None) if state else None
+    logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id}")
 
-    # Run training for assigned group_ids
-    for group_id, group_df in my_df_list:
-        if last_group_id is not None and group_id <= last_group_id:
-            logger.warning(f"Rank {rank} skipping group_id {group_id} because it is already processed")
+    # Run training for assigned concept_ids
+    for concept_id, concept_df in my_df_list:
+        if last_concept_id is not None and concept_id <= last_concept_id:
+            logger.warning(f"Rank {rank} skipping concept_id {concept_id} because it is already processed")
             continue
-        logger.warning(f"Training models for group_id {group_id} on rank {rank}")
+        logger.warning(f"Training models for concept_id {concept_id} on rank {rank}")
         for model_name in sorted(args.models.keys()):
-            if model_name == "ReFT":
-                logger.warning(f"Training {model_name} with group_id {group_id}")
-                benchmark_model = getattr(axbench, model_name)(
-                    model_instance, tokenizer, layer=args.layer,
-                    training_args=args.models[model_name],
-                    device=device, seed=args.seed
-                )
-                benchmark_model.make_model()
-                if args.use_bf16:
-                    benchmark_model.ax.to(torch.bfloat16)
-                benchmark_model.train(group_df)
-                benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
-                logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
-            else:
-                for idx, concept in enumerate(metadata[group_id]["concepts"]):
-                    logger.warning(f"Training {model_name} with concept {concept}")
-                    benchmark_model = getattr(axbench, model_name)(
-                        model_instance, tokenizer, layer=args.layer,
-                        training_args=args.models[model_name],
-                        device=device, seed=args.seed
-                    )
-                    benchmark_model.make_model()
-                    if args.use_bf16:
-                        benchmark_model.ax.to(torch.bfloat16)
-                    binarized_df = binarize_df(group_df, concept, model_name)
-                    benchmark_model.train(binarized_df)
-                    benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
-                    logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
+            concept = metadata[concept_id]["concept"]
+            logger.warning(f"Training {model_name} with concept {concept}")
+            benchmark_model = getattr(axbench, model_name)(
+                model_instance, tokenizer, layer=args.layer,
+                training_args=args.models[model_name],
+                device=device, seed=args.seed
+            )
+            benchmark_model.make_model(
+                mode="train",
+                low_rank_dimension=args.models[model_name].low_rank_dimension,
+                dtype=torch.bfloat16 if args.use_bf16 else None
+            )
+            if args.use_bf16 and model_name != "ReFT":
+                benchmark_model.ax.to(torch.bfloat16)
+            benchmark_model.train(concept_df)
+            benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
             del benchmark_model
             torch.cuda.empty_cache()
         # After processing, save state
-        current_state = {'last_group_id': group_id}
+        current_state = {'last_concept_id': concept_id}
         save_state(dump_dir, current_state, rank)
 
     # Synchronize all processes
@@ -296,8 +283,22 @@ def main():
             biases = [torch.load(f) for f in bias_files_existing]
 
             # Concatenate weights and biases
-            merged_weight = torch.cat(weights, dim=0)
-            merged_bias = torch.cat(biases, dim=0)
+            if isinstance(weights[0], dict):
+                merged_weight = {}
+                for key in weights[0].keys():
+                    weight_tensors = [w[key] for w in weights]
+                    merged_weight[key] = torch.cat(weight_tensors, dim=0)
+            else:
+                merged_weight = torch.cat(weights, dim=0)
+
+            # Handle dictionary biases
+            if isinstance(biases[0], dict):
+                merged_bias = {}
+                for key in biases[0].keys():
+                    bias_tensors = [b[key] for b in biases]
+                    merged_bias[key] = torch.cat(bias_tensors, dim=0)
+            else:
+                merged_bias = torch.cat(biases, dim=0)
 
             # Save merged weight and bias files
             weight_file = dump_dir / f"{model_name}_weight.pt"

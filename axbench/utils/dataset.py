@@ -86,6 +86,28 @@ class DatasetFactory(object):
         self.lm_model.stats.print_report()
         self.lm_model.stats.reset()
 
+    def prepare_genre_concepts(self, concepts, **kwargs):
+        start = time.time()
+        tasks = []
+
+        # prepare genres if needed
+        concept_genres_map = kwargs.get("concept_genres_map", None)
+        if concept_genres_map is None:
+            logger.warning("Creating genre for the inputs (not provided).")
+            genre_task = get_concept_genres(
+                self.lm_model, concepts, 
+                api_tag=kwargs.get("api_tag", "")
+            )
+            tasks.append(genre_task)
+        
+        # run tasks
+        res = asyncio.run(run_tasks(tasks))
+        concept_genres_map = res[0]
+
+        # log
+        logger.warning(f"Init finished in {round(time.time() - start, 3)} sec.")
+        return concept_genres_map
+
     def prepare_concepts(self, concepts, **kwargs):
         start = time.time()
         tasks = []
@@ -188,7 +210,45 @@ class DatasetFactory(object):
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df
     
-    def create_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
+    def create_train_df(self, concept, n, concept_genres_map, **kwargs):
+        lm_model, model, tokenizer = self.lm_model, self.model, self.tokenizer
+        
+        start = time.time()
+        self.logger.warning("Creating dataframe.")
+        all_examples = []
+
+        input_length = kwargs.get("input_length", 32)
+        output_length = kwargs.get("output_length", 10)
+
+        # for each concept, we create a set of seed random content.
+        concepts_random_content = get_random_content(
+            self.seed_sentences, tokenizer=tokenizer, count=n, 
+            genres=concept_genres_map, concepts=[concept], length=input_length, split="train"
+        )
+
+        continue_task = continue_with_concept(
+            self.lm_model, self.tokenizer, 
+            concepts=[concept]*len(concepts_random_content[concept]), 
+            content=concepts_random_content[concept], length=output_length)
+        concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+
+        for i, (prompt, output) in enumerate(zip(concepts_random_content[concept], concept_outputs)):
+            all_examples += [[
+                prompt, output, 0, 0, "empty", concept
+            ]]
+
+        # update the column definitions of the DataFrame
+        df = pd.DataFrame(
+            all_examples, 
+            columns = [
+                'input', 'output', 'input_subspace', 'output_subspace', 'input_concept', 'output_concept',
+            ])
+        self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
+        return df
+
+    # Unused for now.
+    def create_paired_train_df(self, concepts, n, concept_genres_map, contrast_concepts_map, **kwargs):
+        """This is delayed for now :)"""
         concept2id = {concept: i for i, concept in enumerate(concepts)}
         lm_model, model, tokenizer = self.lm_model, self.model, self.tokenizer
         
@@ -310,18 +370,14 @@ class ReftDataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-
             inst["input_subspaces"] = inst["input_subspaces"].int()
             inst["output_subspaces"] = inst["output_subspaces"].int()
-            inst["groups"] = inst["groups"].int()
-            inst["prompt_intervention_masks"] = inst["intervention_masks"].clone()
-            inst["prompt_intervention_masks"][inst["prompt_lengths"]:] = 0 # mask out the intervention locations after prompt length
-
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
+            # intervention sink token
             inst["input_ids"] = torch.cat((inst["input_ids"], torch.tensor([self.tokenizer.pad_token_id]), _input_id_paddings)).int()
 
-            _label_paddings = torch.tensor([-100 for _ in range(max_seq_len - non_pad_len+1)])
+            _label_paddings = torch.tensor([-100 for _ in range(max_seq_len - non_pad_len + 1)])
             inst["labels"] = torch.cat((inst["labels"], _label_paddings))
             
             inst["attention_mask"] = (inst["input_ids"] != self.tokenizer.pad_token_id).int()
@@ -337,13 +393,12 @@ def make_data_module(
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
     
     all_base_input_ids, all_intervention_locations, all_output_ids, \
-        all_input_subspaces, all_output_subspaces, all_groups = [], [], [], [], [], []
+        all_input_subspaces, all_output_subspaces = [], [], [], [], []
     all_prompt_lengths = []
 
     for _, row in df.iterrows():
         _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
             int(row["input_subspace"]), int(row["output_subspace"])
-        _group = row["group"]
         # prepare input ids
         base_prompt = _input
         if isinstance(_output, float):
@@ -363,13 +418,12 @@ def make_data_module(
         # self.logger.warning("tokens with lm loss:")
         # self.logger.warning(tokenizer.batch_decode(output_ids[output_ids!=-100].unsqueeze(dim=-1)))
 
-        intervention_locations = torch.tensor([[i for i in range(1, base_length)]])
+        intervention_locations = torch.tensor([[i for i in range(1, base_prompt_length)]])
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
         all_output_ids.append(output_ids)
         all_input_subspaces.append(torch.tensor(_input_subspace))
         all_output_subspaces.append(torch.tensor(_output_subspace))
-        all_groups.append(torch.tensor(_group))
         all_prompt_lengths.append(torch.tensor(base_prompt_length - 1)) # exclude bos token
         
     train_dataset = datasets.Dataset.from_dict({
@@ -378,13 +432,12 @@ def make_data_module(
         "labels": all_output_ids,
         "input_subspaces": all_input_subspaces,
         "output_subspaces": all_output_subspaces,
-        "groups": all_groups,
         "prompt_lengths": all_prompt_lengths,
     })
     train_dataset.set_format(
         type='torch', columns=[
             'input_ids', 'intervention_locations', 
-            'labels', 'input_subspaces', 'output_subspaces', 'groups', 'prompt_lengths'])
+            'labels', 'input_subspaces', 'output_subspaces', 'prompt_lengths'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"

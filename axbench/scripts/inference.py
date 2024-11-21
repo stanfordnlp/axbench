@@ -11,7 +11,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
 
-from ..utils.dataset import (
+from axbench.utils.dataset import (
     DatasetFactory,
     SteeringDatasetFactory
 )
@@ -76,23 +76,21 @@ def load_metadata_flatten(metadata_path):
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
-    group_id = 0
+    concept_id = 0
     with open(Path(metadata_path) / METADATA_FILE, 'r') as f:
         for line in f:
             data = json.loads(line)
-            for concept_id, concept in enumerate(data["concepts"]):
-                concept_genres_map = data["concept_genres_map"][concept]
-                contrast_concepts_map = data["contrast_concepts_map"][concept]
-                ref = data["refs"][concept_id]
-                flatten_data = {
-                    "concept": concept,
-                    "ref": ref,
-                    "concept_genres_map": {concept: concept_genres_map},
-                    "contrast_concepts_map": {concept: contrast_concepts_map},
-                    "group_id": group_id
-                }
-                metadata += [flatten_data]  # Return the metadata as is
-            group_id += 1
+            concept, ref =data["concept"], data["ref"]
+            concept_genres_map = data["concept_genres_map"][concept]
+            ref = data["ref"]
+            flatten_data = {
+                "concept": concept,
+                "ref": ref,
+                "concept_genres_map": {concept: concept_genres_map},
+                "concept_id": concept_id
+            }
+            metadata += [flatten_data]  # Return the metadata as is
+            concept_id += 1
     return metadata
 
 

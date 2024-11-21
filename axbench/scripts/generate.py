@@ -20,7 +20,7 @@ import atexit
 import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from ..utils.dataset import DatasetFactory
+from axbench.utils.dataset import DatasetFactory
 from args.dataset_args import DatasetArgs
 from pathlib import Path
 from openai import AsyncOpenAI
@@ -91,29 +91,10 @@ def load_concepts(dump_dir):
         raise ValueError(f"Unsupported file type: {dump_dir}.")  
 
 
-def partition_lists(list1, list2, step=2):
-    """
-    Partitions two lists into groups of adjacent elements based on the step.
-    
-    Args:
-        list1 (list): The first list to partition.
-        list2 (list): The second list to partition.
-        step (int): The step size for partitioning. Defaults to 2.
-    
-    Returns:
-        list: A list containing the partitioned groups.
-    """
-    partitions = []
-    for i in range(0, len(list1), step):
-        group = [list1[i:i+step], list2[i:i+step]]
-        partitions.append(group)
-    return partitions
-
-
 def save(
-    dump_dir, state, group_id, 
-    concepts, concept_genres_map, contrast_concepts_map, 
-    refs, partition, current_df):
+    dump_dir, state, concept_id, 
+    concept, concept_genres_map, 
+    ref, partition, current_df):
     """
     Save the current state, metadata, and DataFrame using Parquet format.
     """    
@@ -125,11 +106,10 @@ def save(
     # Save metadata
     metadata_path = os.path.join(dump_dir, METADATA_FILE)
     metadata_entry = {
-        "group_id": group_id,
-        "concepts": concepts,
-        "refs": refs,
+        "concept_id": concept_id,
+        "concept": concept,
+        "ref": ref,
         "concept_genres_map": concept_genres_map,
-        "contrast_concepts_map": contrast_concepts_map,
     }
     with open(metadata_path, "a") as f:
         f.write(json.dumps(metadata_entry) + "\n")
@@ -187,14 +167,14 @@ def main():
         all_refs = list(all_refs)[:max_concepts]
     
     concept2id = {concept: i for i, concept in enumerate(all_concepts)}
-    concept_groups = partition_lists(all_concepts, all_refs)
+    concepts = list(zip(all_concepts, all_refs))
 
     # Load the state if it exists.
     state = load_state(dump_dir)
-    start_group_id = state.get("group_id", 0) if state else 0
-    logger.warning(f"Starting group index: {start_group_id}")
-    if start_group_id >= len(concept_groups):
-        logger.warning(f"All groups have been generated. Exiting.")
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting group index: {start_concept_id}")
+    if start_concept_id >= len(concepts):
+        logger.warning(f"Datasets for all concepts have been generated. Exiting.")
         return
 
     # Create a new OpenAI client.
@@ -213,49 +193,45 @@ def main():
 
     # Load lm and tokenizer.
     model_name = model_name_map[all_refs[0].split("/")[3]]
-    model = AutoModelForCausalLM.from_pretrained(model_name, device_map="cpu")
-    model.config.use_cache = False
-    model = model.cuda()
     tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
     # Init the dataset factory.
     dataset_factory = DatasetFactory(
-        model, client, tokenizer, dump_dir, 
+        None, client, tokenizer, dump_dir, 
         use_cache=True, master_data_dir=args.master_data_dir,
         seed=args.seed, lm_model=args.lm_model
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
-    progress_bar = tqdm(range(start_group_id, len(concept_groups)), desc="Processing concept groups")
-    data_group_id = start_group_id
-    for group_id in progress_bar:
-        print(f"Generating group {group_id}...")
-        concepts, refs = concept_groups[group_id]
+    progress_bar = tqdm(range(start_concept_id, len(concepts)), desc="Processing concept groups")
+    data_concept_id = start_concept_id
+    for concept_id in progress_bar:
+        print(f"Generating concept {concept_id}...")
+        concept, ref = concepts[concept_id]
         
         # prepare concept related data.
-        concept_genres_map, contrast_concepts_map = \
-            dataset_factory.prepare_concepts(concepts)
-        
+        concept_genres_map = \
+            dataset_factory.prepare_genre_concepts([concept])
         # generate with retry mechanism.
         # try:
         current_df = dataset_factory.create_train_df(
-            concepts, num_of_examples, concept_genres_map, contrast_concepts_map,
+            concept, num_of_examples, concept_genres_map,
             input_length=args.input_length, output_length=args.output_length,
-            current_group_id=data_group_id
+            current_concept_id=data_concept_id
         )
-        current_df["group_id"] = data_group_id
+        current_df["concept_id"] = data_concept_id
         # except Exception as e:
-        #     logger.warning(f"Failed to create training data for group {group_id}: {e}")
+        #     logger.warning(f"Failed to create training data for group {concept_id}: {e}")
         #     continue # continue to the next group.
         
         # Save the generated DataFrame, metadata, and current state
         save(
-            dump_dir, {"group_id": group_id + 1}, data_group_id,
-            concepts, concept_genres_map, contrast_concepts_map, 
-            refs, "train", current_df)
-        data_group_id += 1
+            dump_dir, {"concept_id": concept_id + 1}, data_concept_id,
+            concept, concept_genres_map, 
+            ref, "train", current_df)
+        data_concept_id += 1
 
     logger.warning(f"Finished creating dataset.")
 
