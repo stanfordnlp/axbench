@@ -13,7 +13,6 @@ class LowRankRotateLayer(torch.nn.Module):
 
     def __init__(self, n, m, init_orth=True):
         super().__init__()
-        # n > m
         self.weight = torch.nn.Parameter(torch.empty(n, m), requires_grad=True)
         if init_orth:
             torch.nn.init.orthogonal_(self.weight)
@@ -22,13 +21,40 @@ class LowRankRotateLayer(torch.nn.Module):
         return torch.matmul(x.to(self.weight.dtype), self.weight)
 
 
+class DireftIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + W^T(Wh + b - Rh)
+    Ref: https://arxiv.org/pdf/2404.03592
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            kwargs["low_rank_dimension"], self.embed_dim, bias=False).to(
+            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
+        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
+            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
+        
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        rotated_base = torch.matmul(base, self.proj.weight)
+        output = base + torch.matmul(
+            (self.learned_source(base) - rotated_base), self.proj.weight.T
+        )
+        return output.to(base.dtype)
+    
+
 class LoreftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
 ):
     """
-    Phi(h) = h + R^T(Wh + b - Rh)
+    Phi(h) = h + W^T(Wh + b - Rh)
     Ref: https://arxiv.org/pdf/2404.03592
     """
     def __init__(self, **kwargs):
@@ -49,7 +75,7 @@ class LoreftIntervention(
         return output.to(base.dtype)
 
 
-class ConceptLoreftIntervention(
+class ConceptDireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
@@ -58,7 +84,7 @@ class ConceptLoreftIntervention(
     Phi(h) = h + R^T(Wh + b - Rh)
     Ref: https://arxiv.org/pdf/2404.03592
 
-    Note that this intervention is used for concept-based Loreft.
+    Note that this intervention is used for concept-based Direft.
     The main difference is that weights are assumed to be trained and saved as 3D tensors.
     """
     def __init__(self, **kwargs):
@@ -69,11 +95,28 @@ class ConceptLoreftIntervention(
             kwargs["n_concepts"], self.embed_dim, kwargs["low_rank_dimension"]))
         self.b_source = nn.Parameter(torch.zeros(
             kwargs["n_concepts"], kwargs["low_rank_dimension"]))
-        
+
+    def encode(
+        self, base, source=None, subspaces=None
+    ):
+        """High-dimensional concept space."""
+        proj_weight = self.W_proj[subspaces["input_subspaces"]] # batch_size, embed_dim, low_rank_dimension
+        rotated_base = torch.bmm(base, proj_weight) # [batch_size, seq_len, embed_dim] X [batch_size, embed_dim, low_rank_dimension]
+
+        return rotated_base # batch_size, seq_len, low_rank_dimension
+
     def forward(
         self, base, source=None, subspaces=None
     ):
-        return base
+        proj_weight = self.W_proj[subspaces["idx"]] # batch_size, embed_dim, low_rank_dimension
+        source_weight = self.W_source[subspaces["idx"]] # batch_size, embed_dim, low_rank_dimension
+        source_bias = self.b_source[subspaces["idx"]].unsqueeze(dim=1) # batch_size, 1, low_rank_dimension
+        rotated_base = torch.bmm(base, proj_weight) # batch_size, seq_len, low_rank_dimension
+        output = base + torch.bmm(
+            ((torch.bmm(base, source_weight) + source_bias) - rotated_base), # batch_size, seq_len, low_rank_dimension
+            proj_weight.transpose(-1, -2)
+        )
+        return output.to(base.dtype)
     
 
 class AdditionIntervention(

@@ -205,12 +205,12 @@ def main():
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
-    progress_bar = tqdm(range(start_concept_id, len(concepts)), desc="Processing concept groups")
+    progress_bar = tqdm(range(start_concept_id, len(concepts)), desc="Processing concept")
     data_concept_id = start_concept_id
     for concept_id in progress_bar:
-        print(f"Generating concept {concept_id}...")
         concept, ref = concepts[concept_id]
-        
+        print(f"Generating for concept: {concept}...")
+
         # prepare concept related data.
         concept_genres_map = \
             dataset_factory.prepare_genre_concepts([concept])

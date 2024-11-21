@@ -177,7 +177,7 @@ class DatasetFactory(object):
 
             # hard negative seen + unseen
             splits = [
-                ("hard negative seen", train_contrast_concepts_map[concept]),
+                ("hard negative seen", {}),
                 ("hard negative unseen", eval_contrast_concepts_map[concept]),
             ]
             for (label, polysemantic_meanings) in splits:

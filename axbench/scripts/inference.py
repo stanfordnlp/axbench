@@ -129,23 +129,20 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     # prepare concept related data.
     concept = metadata[concept_id]["concept"]
     sae_link = metadata[concept_id]["ref"]
-    group_id = metadata[concept_id]["group_id"]
     sae_id = int(sae_link.split("/")[-1]) 
     concept_genres_map = metadata[concept_id]["concept_genres_map"]
-    contrast_concepts_map = metadata[concept_id]["contrast_concepts_map"]
     _, eval_contrast_concepts_map = \
         dataset_factory.prepare_concepts(
             [concept], 
             concept_genres_map=concept_genres_map,
-            contrast_concepts_map=contrast_concepts_map, api_tag="inference")
+            contrast_concepts_map={}, api_tag="inference")
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
+        [concept], num_of_examples, concept_genres_map, {},
         eval_contrast_concepts_map, input_length=args.input_length,
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
     current_df["sae_id"] = sae_id
-    current_df["group_id"] = group_id
     return current_df
 
 
@@ -420,7 +417,7 @@ def infer_latent(args, rank, world_size, device, logger):
             device=device
         )
         benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"]
+            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
         )
         if hasattr(benchmark_model, 'ax') and args.use_bf16:
             benchmark_model.ax.eval()

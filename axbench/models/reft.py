@@ -1,5 +1,5 @@
 from .model import Model
-import torch
+import torch, einops
 from tqdm.auto import tqdm
 import os
 import pandas as pd
@@ -8,13 +8,12 @@ from pyvene import (
     IntervenableModel
 )
 from .interventions import (
-    LoreftIntervention,
-    ConceptLoreftIntervention,
+    DireftIntervention,
+    ConceptDireftIntervention,
 )
 from ..utils.constants import EXAMPLE_TAG
 from torch.utils.data import DataLoader
 from ..utils.model_utils import (
-    set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions,
     gather_residual_activations, 
     get_lr,
@@ -23,6 +22,13 @@ from ..utils.model_utils import (
 from transformers import get_scheduler
 from transformers import set_seed
 
+@torch.no_grad()
+def set_decoder_norm_to_unit_norm(model):
+    assert model.proj.weight is not None, "Decoder weight was not initialized."
+
+    eps = torch.finfo(model.proj.weight.dtype).eps
+    norm = torch.norm(model.proj.weight.data, dim=0, keepdim=True)
+    model.proj.weight.data /= norm + eps
 
 class ReFT(Model):
     def __str__(self):
@@ -31,13 +37,13 @@ class ReFT(Model):
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "train":
-            ax = LoreftIntervention(
+            ax = DireftIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 dtype=kwargs.get("dtype", torch.bfloat16)
             )
         else:
-            ax = ConceptLoreftIntervention(
+            ax = ConceptDireftIntervention(
                 n_concepts=kwargs.get("n_concepts", 1),
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
@@ -59,7 +65,7 @@ class ReFT(Model):
         # 3D matrices saving is needed for ReFT
         # [n_concept, embed_dim, low_rank_dimension]
         proj_weight = self.ax.proj.weight.data # [embed_dim, low_rank_dimension]
-        source_weight = self.ax.learned_source.weight.data # [embed_dim, low_rank_dimension]
+        source_weight = self.ax.learned_source.weight.data.T # [embed_dim, low_rank_dimension]
         source_bias = self.ax.learned_source.bias.data # [low_rank_dimension]
 
         model_name = kwargs.get("model_name", self.__str__())
@@ -103,6 +109,10 @@ class ReFT(Model):
         torch.cuda.empty_cache()
 
         # Optimizer and lr
+        # print("Model Parameters:")
+        # for name, param in self.ax_model.named_parameters():
+        #     print(f"{name}: {param.shape}")
+
         optimizer = torch.optim.AdamW(self.ax_model.parameters(), lr=self.training_args.lr)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
@@ -128,12 +138,12 @@ class ReFT(Model):
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
                     use_cache=False)
-                
                 # loss
                 loss = cf_outputs.loss
                 
                 # grads
                 loss.backward()
+                set_decoder_norm_to_unit_norm(self.ax)
                 curr_step += 1
                 curr_lr = get_lr(optimizer)
                 # optim
@@ -165,11 +175,11 @@ class ReFT(Model):
             
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
-            _, _, ax_acts = self.ax.encode(
+            ax_acts = self.ax.encode(
                 gather_acts[:, 1:],  # no bos token
                 subspaces={
-                    "input_subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device)
-                }, k=1)
+                    "input_subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device)})
+            ax_acts = torch.abs(ax_acts).mean(dim=-1) # not a good way to aggregate high-dimensional space but :)
             seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
             # Process each sequence in the batch
             for seq_idx, ax_seq in enumerate(ax_acts):
@@ -193,3 +203,23 @@ class ReFT(Model):
             "max_token": all_max_token,
             "tokens": all_tokens
         }
+    
+    def get_logits(self, concept_id, k=10):
+        top_logits, neg_logits = [None], [None]
+        if concept_id is not None:
+            W_U = self.model.lm_head.weight.T
+            W_U = W_U * (self.model.model.norm.weight +
+                        torch.ones_like(self.model.model.norm.weight))[:, None]
+            W_U -= einops.reduce(
+                W_U, "d_model d_vocab -> 1 d_vocab", "mean"
+            )
+            avg_subspace = self.ax.W_proj.data[concept_id].mean(dim=-1)
+            vocab_logits = avg_subspace @ W_U
+            top_values, top_indices = vocab_logits.topk(k=k, sorted=True)
+            top_tokens = self.tokenizer.batch_decode(top_indices.unsqueeze(dim=-1))
+            top_logits = [list(zip(top_tokens, top_values.tolist()))]
+            
+            neg_values, neg_indices = vocab_logits.topk(k=k, largest=False, sorted=True)
+            neg_tokens = self.tokenizer.batch_decode(neg_indices.unsqueeze(dim=-1))
+            neg_logits = [list(zip(neg_tokens, neg_values.tolist()))]
+        return top_logits, neg_logits

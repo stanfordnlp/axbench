@@ -2,7 +2,7 @@ generate:
   lm_model: "gpt-4o-mini"
   input_length: 32
   output_length: 32
-  num_of_examples: 72
+  num_of_examples: 6
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
   max_concepts: 10
   master_data_dir: "axbench/data"
@@ -17,9 +17,9 @@ train:
   models: 
     ReFT:
       batch_size: 6
-      n_epochs: 12
-      lr: 0.003
-      low_rank_dimension: 1
+      n_epochs: 100
+      lr: 0.008
+      low_rank_dimension: 4
     # L1LinearProbe:
     #   batch_size: 6
     #   n_epochs: 12
@@ -44,7 +44,7 @@ inference:
   steering_output_length: 128
   steering_layers: [20]
   steering_num_of_examples: 10 # number of examples per concept and per factor
-  steering_factors: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] # number of steering factors per example
+  steering_factors: [0.0, 1.0] # number of steering factors per example
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
   seed: 42

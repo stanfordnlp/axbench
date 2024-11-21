@@ -88,7 +88,7 @@ def load_metadata_flatten(metadata_path):
     return metadata
 
 
-def binarize_df(original_df, concept, model_name):
+def binarize_df(original_df, concept):
     # assign input and output containing concept with 1, otherwise 0
     input_df = original_df[original_df["input_concept"] == concept]
     output_df = original_df[original_df["output_concept"] == concept]
@@ -240,7 +240,10 @@ def main():
             )
             if args.use_bf16 and model_name != "ReFT":
                 benchmark_model.ax.to(torch.bfloat16)
-            benchmark_model.train(concept_df)
+            if model_name == "ReFT":
+                benchmark_model.train(concept_df)
+            else:
+                benchmark_model.train(binarize_df(concept_df, concept))
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
