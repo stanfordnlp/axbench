@@ -16,12 +16,12 @@ train:
   seed: 42
   use_bf16: true
   models: 
-    ReFT:
+    ReAX:
       batch_size: 6
       n_epochs: 12
-      topk: 1
+      k_latent_null_loss: 1
       lr: 0.003
-      coeff_l1_loss_null: 0.05
+      coeff_l1_loss_null: 0.000
       coeff_l1_loss: 0.000
       coeff_norm_loss: 0.000
     DiffMean:
@@ -36,7 +36,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["LAT", "ReFT", "DiffMean", "PromptSteering"] 
+  models: ["LAT", "ReAX", "DiffMean", "PromptSteering"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -57,7 +57,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["LAT", "ReFT", "DiffMean", "PromptSteering"]
+  models: ["LAT", "ReAX", "DiffMean", "PromptSteering"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
@@ -74,4 +74,3 @@ evaluate:
   winrate_baseline: "PromptSteering"
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
-
