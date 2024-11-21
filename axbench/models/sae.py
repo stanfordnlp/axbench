@@ -1,15 +1,4 @@
 from .model import Model
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
 from pyvene import (
     IntervenableConfig,
     IntervenableModel
@@ -20,13 +9,13 @@ import json
 import tqdm
 import numpy as np
 import pandas as pd
-from pyreax import (
+from .interventions import (
     JumpReLUSAECollectIntervention, 
     AdditionIntervention,
     SubspaceAdditionIntervention,
     DictionaryAdditionIntervention # please try this one
 )
-from pyreax import (
+from ..utils.model_utils import (
     gather_residual_activations, 
 )
 from huggingface_hub import hf_hub_download

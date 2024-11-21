@@ -34,7 +34,7 @@ class Config:
 
     def get_model_name(self):
         shorten_model_name = self.model_name.split("/")[-1]
-        return f"{shorten_model_name}/{self.layer}-reax-{self.component}-{self.lm_model}"
+        return f"{shorten_model_name}/{self.layer}-reft-{self.component}-{self.lm_model}"
 
     def __repr__(self):
         # Convert to dictionary and serialize to JSON-friendly format

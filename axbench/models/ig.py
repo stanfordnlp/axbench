@@ -1,23 +1,11 @@
 from .model import Model
 import torch, transformers, datasets
 from tqdm.auto import tqdm
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
-
 import pyreft
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
-from pyreax import (
+from ..utils.model_utils import (
     gather_residual_activations, 
     get_lr
 )

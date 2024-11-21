@@ -1,18 +1,6 @@
 from .model import Model
 import torch, transformers, datasets
 from tqdm.auto import tqdm
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
-
 import os
 import pandas as pd
 from pyvene import (
@@ -22,16 +10,16 @@ from pyvene import (
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
-from pyreax import (
+from .interventions import (
     AdditionIntervention
 )
-from pyreax import (
+from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions,
     gather_residual_activations, 
-    get_lr
+    get_lr,
+    calculate_l1_losses
 )
-from pyreax.utils.model_utils import calculate_l1_losses
 from transformers import get_scheduler
 
 import logging

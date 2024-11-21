@@ -1,18 +1,6 @@
 from .model import Model
 import torch, transformers, datasets
 from tqdm.auto import tqdm
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
-
 import os
 import pandas as pd
 from dataclasses import dataclass, field

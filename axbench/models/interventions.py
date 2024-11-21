@@ -98,7 +98,7 @@ class AdditionIntervention(
             subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
         output = base + steering_vec.unsqueeze(dim=1)
         return output
-    
+
 
 class SubspaceAdditionIntervention(
     SourcelessIntervention,
@@ -113,15 +113,15 @@ class SubspaceAdditionIntervention(
     def forward(self, base, source=None, subspaces=None):
         # Get the normalized subspace vector (unit vector)
         v = self.proj.weight[subspaces["idx"]].unsqueeze(1)
-        proj_coeff = (base * v).sum(dim=-1, keepdim=True)
-        proj_vec = proj_coeff * v  
+        proj_coeff = torch.relu((base * v).sum(dim=-1, keepdim=True)) # bs, s, 1, get rid of negative values
+        proj_vec = proj_coeff * v 
 
         steering_scale = subspaces["max_act"].unsqueeze(-1).unsqueeze(-1) * \
             subspaces["mag"].unsqueeze(-1).unsqueeze(-1)
-        steering_vec = steering_scale * v
+        steering_vec = steering_scale * v 
         
         # Replace the projection component with the steering vector
-        output = (base - proj_vec) + steering_vec
+        output = (base - proj_vec) + steering_vec 
         return output
 
 

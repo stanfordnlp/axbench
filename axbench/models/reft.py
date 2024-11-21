@@ -1,46 +1,33 @@
 from .model import Model
 import torch
 from tqdm.auto import tqdm
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
-
 import os
 import pandas as pd
 from pyvene import (
     IntervenableConfig,
     IntervenableModel
 )
-from pyreax import (
-    EXAMPLE_TAG, 
+from .interventions import (
     TopKReLUIntervention, 
     AdditionIntervention,
     SubspaceAdditionIntervention,
-    make_data_module, 
 )
+from ..utils.constants import EXAMPLE_TAG
 from torch.utils.data import DataLoader
-from pyreax import (
+from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions,
     gather_residual_activations, 
-    get_lr
+    get_lr,
+    calculate_l1_losses
 )
 from transformers import get_scheduler
-from pyreax.utils.model_utils import calculate_l1_losses
 from transformers import set_seed
 
 
-class ReAX(Model):
+class ReFT(Model):
     def __str__(self):
-        return 'ReAX'
+        return 'ReFT'
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")

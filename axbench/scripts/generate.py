@@ -6,17 +6,6 @@
 # example launch command:
 #    python axbench/scripts/generate.py --config axbench/demo/sweep/generate.yaml
 
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../pyreax")
-    import pyreax
-
 import shutil
 import sys
 import argparse
@@ -31,7 +20,7 @@ import atexit
 import pandas as pd
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from pyreax import ReAXFactory
+from ..utils.dataset import DatasetFactory
 from args.dataset_args import DatasetArgs
 from pathlib import Path
 from openai import AsyncOpenAI
@@ -231,7 +220,7 @@ def main():
     tokenizer.padding_side = "right"
 
     # Init the dataset factory.
-    dataset_factory = ReAXFactory(
+    dataset_factory = DatasetFactory(
         model, client, tokenizer, dump_dir, 
         use_cache=True, master_data_dir=args.master_data_dir,
         seed=args.seed, lm_model=args.lm_model

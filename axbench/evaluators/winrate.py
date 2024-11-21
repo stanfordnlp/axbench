@@ -112,46 +112,33 @@ class WinRateEvaluator(Evaluator):
         # calculate win rate.
         winning_results = []
         for i in range(len(baseline_relevance_concept_ratings)):
-            # based?
-            is_baseline_based = baseline_relevance_concept_ratings[i][-1] >= 1 and \
-                baseline_relevance_instruction_ratings[i][-1] >= 1
-            is_model_based = model_relevance_concept_ratings[i][-1] >= 1 and \
-                model_relevance_instruction_ratings[i][-1] >= 1
-
-            # if both not getting at least 1 for the first two checks, it is a tie.
-            if not is_baseline_based and not is_model_based:
-                # no one wins.
-                winning_results += ["tie"]
-                continue
+            def harmonic_mean(scores):
+                # Return 0 if any score is 0 to maintain strict evaluation
+                if 0 in scores:
+                    return 0
+                return len(scores) / sum(1/s for s in scores)
             
-            # if both get at least 1 for the first two checks, check fluency.
-            if is_baseline_based and is_model_based:
-                model_score = model_relevance_concept_ratings[i][-1] + \
-                    model_relevance_instruction_ratings[i][-1] + \
-                    model_fluency_ratings[i][-1]
-                baseline_score = baseline_relevance_concept_ratings[i][-1] + \
-                    baseline_relevance_instruction_ratings[i][-1] + \
-                    baseline_fluency_ratings[i][-1]
-                if baseline_score == model_score:
-                    winning_results += ["tie"]
-                elif baseline_score > model_score:
-                    winning_results += ["baseline"]
-                elif baseline_score < model_score:
-                    winning_results += ["model"]
-                continue
+            baseline_scores = [
+                baseline_relevance_concept_ratings[i][-1],
+                baseline_relevance_instruction_ratings[i][-1],
+                baseline_fluency_ratings[i][-1]
+            ]
+            model_scores = [
+                model_relevance_concept_ratings[i][-1],
+                model_relevance_instruction_ratings[i][-1],
+                model_fluency_ratings[i][-1]
+            ]
             
-            # if only one gets at least 1 for the first two checks, check fluency.
-            # only if the one that passes gets 0 for fluency, it is a tie.
-            if is_baseline_based:
-                if baseline_fluency_ratings[i][-1] == 0:
-                    winning_results += ["tie"]
-                else:
-                    winning_results += ["baseline"]
-            elif is_model_based:
-                if model_fluency_ratings[i][-1] == 0:
-                    winning_results += ["tie"]
-                else:
-                    winning_results += ["model"]
+            baseline_score = harmonic_mean(baseline_scores)
+            model_score = harmonic_mean(model_scores)
+            
+            # Compare scores to determine winner
+            if abs(baseline_score - model_score) < 1e-6:  # Float comparison with epsilon
+                winning_results.append("tie")
+            elif baseline_score > model_score:
+                winning_results.append("baseline")
+            else:
+                winning_results.append("model")
 
         data[f"{self.model_name}_win_result"] = winning_results
         

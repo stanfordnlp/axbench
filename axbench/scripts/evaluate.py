@@ -3,20 +3,8 @@
 # example launch command:
 #     python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
 
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../pyreax")
-    import pyreax
-
 import shutil
-from pyreax import (
+from ..models.language_models import (
     LanguageModel
 )
 
@@ -34,12 +22,14 @@ import datetime
 import yaml
 
 import axbench
-from axbench import (
+from ..utils.plot_utils import (
     plot_aggregated_roc, 
     plot_metrics,
     plot_accuracy_bars,
     plot_win_rates,
-    generate_html_with_highlight_text
+)
+from ..utils.prompt_utils import (
+    generate_html_with_highlight_text,
 )
 from args.eval_args import EvalArgs
 from functools import partial
@@ -598,10 +588,10 @@ def main():
             for metadata_entry in metadata:
                 for concept_idx, concept in enumerate(metadata_entry["concepts"]):
                     sae_link = metadata_entry["refs"][concept_idx]
-                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["roc_auc"]
-                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReAX"]["max_act"]
-                    top_logits = top_logits_results[idx]["results"]["ReAX"]["top_logits"][0]
-                    neg_logits = top_logits_results[idx]["results"]["ReAX"]["neg_logits"][0]
+                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReFT"]["roc_auc"]
+                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReFT"]["max_act"]
+                    top_logits = top_logits_results[idx]["results"]["ReFT"]["top_logits"][0]
+                    neg_logits = top_logits_results[idx]["results"]["ReFT"]["neg_logits"][0]
                     concepts += [[
                         idx, concept, None, auc, max_act, None, sae_link
                     ]]
@@ -628,8 +618,8 @@ def main():
             for metadata_entry in metadata:
                 for concept_idx, concept in enumerate(metadata_entry["concepts"]):
                     sae_link = metadata_entry["refs"][concept_idx]
-                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReAX"]["win_rate"]
-                    best_factor = best_factors[idx]["ReAX"]
+                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReFT"]["win_rate"]
+                    best_factor = best_factors[idx]["ReFT"]
                     if len(concepts) <= idx:
                         concepts += [[
                             idx, concept, winrate, None, None, None, None

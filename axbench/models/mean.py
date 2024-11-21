@@ -1,18 +1,6 @@
 from .model import Model
 import torch, transformers, datasets
 from tqdm.auto import tqdm
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../../pyreax")
-    import pyreax
-
 import os
 import pandas as pd
 from pyvene import (
@@ -22,17 +10,17 @@ from pyvene import (
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
-from pyreax import (
+from .interventions import (
     AdditionIntervention,
     SubspaceAdditionIntervention
 )
-from pyreax import (
+from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions,
     gather_residual_activations, 
     get_lr
 )
-from pyreax.utils.model_utils import calculate_l1_losses
+from ..utils.model_utils import calculate_l1_losses
 from transformers import get_scheduler
 import sklearn.decomposition
 import numpy as np
@@ -140,7 +128,6 @@ class MeanActivation(MeanEmbedding):
         logger.warning("Training finished.")
     
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
-        # For ReAX, we need to look into the concept in the same group, since they are used in training.
         max_activations = {} # sae_id to max_activation
         # Loop over saved latent files in dump_dir.
         for file in os.listdir(dump_dir):
