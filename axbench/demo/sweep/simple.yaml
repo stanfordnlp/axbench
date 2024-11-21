@@ -16,7 +16,7 @@ train:
   seed: 42
   use_bf16: true
   models: 
-    ReAX:
+    ReFT:
       batch_size: 6
       n_epochs: 12
       topk: 1
@@ -30,7 +30,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["ReAX", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"] 
+  models: ["ReFT", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -51,7 +51,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["ReAX", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"]
+  models: ["ReFT", "PromptSteering", "L1LinearProbe", "GemmaScopeSAE"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

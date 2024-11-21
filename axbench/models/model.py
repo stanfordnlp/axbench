@@ -2,10 +2,10 @@ import torch, einops, os
 import pandas as pd
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
-from pyreax import (
+from ..utils.model_utils import (
     gather_residual_activations, 
-    make_data_module,
 )
+from ..utils.dataset import make_data_module
 from pyvene import (
     IntervenableModel,
 )
@@ -222,7 +222,6 @@ class Model(object):
         return top_logits, neg_logits
     
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
-        # For ReAX, we need to look into the concept in the same group, since they are used in training.
         max_activations = {} # sae_id to max_activation
         # Loop over saved latent files in dump_dir.
         for file in os.listdir(dump_dir):
@@ -232,7 +231,7 @@ class Model(object):
                 # loop through unique sorted concept_id
                 for concept_id in sorted(latent["concept_id"].unique()):
                     concept_latent = latent[latent["concept_id"] == concept_id]
-                    max_act = concept_latent["ReAX_max_act"].max()
+                    max_act = concept_latent["ReFT_max_act"].max()
                     max_activations[concept_id] = max_act if max_act > 0 else 50
         self.max_activations = max_activations
         return max_activations  

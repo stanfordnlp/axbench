@@ -1,10 +1,10 @@
 ## Abstraction Benchmark (AxBench)
 
 ### Installation
-To install the latest stable version of pyreax:
+To install the latest stable version of axbench:
 ```
-git clone git@github.com:frankaging/pyreax.git
-cd pyreax
+git clone git@github.com:stanfordnlp/axbench.git
+cd axbench
 ```
 
 Make sure you have your related API keys set:

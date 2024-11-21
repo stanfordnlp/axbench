@@ -2,18 +2,6 @@
 #
 # example launch command:
 #     torchrun --nproc_per_node=NUM_GPUS axbench/scripts/inference.py --config axbench/demo/sweep/inference.yaml --mode latent
-
-try:
-    # This library is our indicator that the required installs
-    # need to be done.
-    import pyreax
-
-except ModuleNotFoundError:
-    # relative import; better to pip install subctrl
-    import sys
-    sys.path.append("../../pyreax")
-    import pyreax
-
 import os, argparse, yaml, json, glob, pickle, time, itertools
 import shutil
 import pandas as pd
@@ -23,9 +11,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
 
-from pyreax import (
-    EXAMPLE_TAG, 
-    ReAXFactory,
+from ..utils.dataset import (
+    DatasetFactory,
+    SteeringDatasetFactory
 )
 
 from args.dataset_args import DatasetArgs
@@ -33,7 +21,6 @@ from transformers import set_seed
 
 # all supported methods
 import axbench
-from axbench import SteeringDatasetFactory
 from openai import AsyncOpenAI
 import httpx, asyncio
 
@@ -413,7 +400,7 @@ def infer_latent(args, rank, world_size, device, logger):
     model_instance = model_instance.eval()
 
     # Load dataset factory for evals.
-    dataset_factory = ReAXFactory(
+    dataset_factory = DatasetFactory(
         None, client, tokenizer, dump_dir,
         use_cache=True, master_data_dir=args.master_data_dir,
         lm_model=args.lm_model, logger=logger
@@ -515,8 +502,8 @@ def infer_latent(args, rank, world_size, device, logger):
 
         # Save top logits (optional)
         logger.warning("Saving top logits...")
-        if "ReAX" in args.models:
-            model_name = "ReAX"
+        if "ReFT" in args.models:
+            model_name = "ReFT"
             model_class = getattr(axbench, model_name)
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,

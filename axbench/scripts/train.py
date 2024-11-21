@@ -3,14 +3,6 @@
 #
 # example launch command:
 #     torchrun --nproc_per_node=NUM_GPUS axbench/scripts/train.py --config axbench/demo/sweep/train.yaml
-
-try:
-    import pyreax
-except ModuleNotFoundError:
-    import sys
-    sys.path.append("../../pyreax")
-    import pyreax
-
 import os
 import argparse
 import yaml
@@ -29,8 +21,6 @@ from args.training_args import TrainingArgs
 from transformers import set_seed
 import torch.distributed as dist
 import sys
-
-from pyreax import make_data_module
 from torch.utils.data import DataLoader
 
 # all supported methods
@@ -238,7 +228,7 @@ def main():
             continue
         logger.warning(f"Training models for group_id {group_id} on rank {rank}")
         for model_name in sorted(args.models.keys()):
-            if model_name == "ReAX":
+            if model_name == "ReFT":
                 logger.warning(f"Training {model_name} with group_id {group_id}")
                 benchmark_model = getattr(axbench, model_name)(
                     model_instance, tokenizer, layer=args.layer,

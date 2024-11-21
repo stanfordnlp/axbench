@@ -120,13 +120,19 @@ class LMJudgeEvaluator(Evaluator):
             all_relevance_instruction_ratings += [model_relevance_instruction_ratings[i][-1]]
             all_fluency_ratings += [model_fluency_ratings[i][-1]]
 
-            if model_relevance_concept_ratings[i][-1] >= 1 and model_relevance_instruction_ratings[i][-1] >= 1:
-                all_aggregated_ratings += [
-                    model_relevance_concept_ratings[i][-1] + 
-                    model_relevance_instruction_ratings[i][-1] + 
-                    model_fluency_ratings[i][-1]]
-            else:
-                all_aggregated_ratings += [0]
+            def harmonic_mean(scores):
+                # Return 0 if any score is 0 to maintain strict evaluation
+                if 0 in scores:
+                    return 0
+                return len(scores) / sum(1/s for s in scores)
+
+            model_scores = [
+                model_relevance_concept_ratings[i][-1],
+                model_relevance_instruction_ratings[i][-1],
+                model_fluency_ratings[i][-1]
+            ]
+            model_score = harmonic_mean(model_scores)
+            all_aggregated_ratings += [model_score]
 
         metrics = {
             "lm_judge_rating": [],
