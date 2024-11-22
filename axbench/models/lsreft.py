@@ -8,7 +8,7 @@ from pyvene import (
     IntervenableModel
 )
 from .interventions import (
-    LsreftIntervention,
+    TopKReLUIntervention,
     AdditionIntervention,
 )
 from ..utils.constants import EXAMPLE_TAG
@@ -30,13 +30,13 @@ class LsReFT(Model):
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
-        if mode == "latent":
-            ax = LsreftIntervention(
+        if mode == "steering":
+            ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
-        elif mode == "steering":
-            ax = AdditionIntervention(
+        else:
+            ax = TopKReLUIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
@@ -53,7 +53,7 @@ class LsReFT(Model):
         self.ax_model = ax_model
 
     def train(self, examples, **kwargs):
-        train_dataloader = self.make_dataloader(examples)
+        train_dataloader = self.make_dataloader(examples, **kwargs)
         torch.cuda.empty_cache()
 
         # Optimizer and lr
@@ -76,9 +76,6 @@ class LsReFT(Model):
                     inputs["intervention_locations"].permute(1, 0, 2).tolist()
                 )}
                 subspaces = [{
-                    "input_subspaces": inputs["input_subspaces"],
-                    "output_subspaces": inputs["output_subspaces"],
-                    "prompt_intervention_masks": inputs["prompt_intervention_masks"],
                     "k": self.training_args.topk
                 }]
         
@@ -95,8 +92,7 @@ class LsReFT(Model):
                 latent, non_topk_latent = self.ax_model.full_intervention_outputs[0].latent
                 l1_loss = calculate_l1_losses(
                     latent, non_topk_latent,
-                    labels=inputs["groups"] != EXAMPLE_TAG.CONTROL.value,
-                    mask=inputs["prompt_intervention_masks"],
+                    mask=inputs["intervention_masks"],
                 )
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_l1_loss*l1_loss
@@ -137,11 +133,10 @@ class LsReFT(Model):
             
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
-            _, _, ax_acts = self.ax.encode(
+            outputs = self.ax(
                 gather_acts[:, 1:],  # no bos token
-                subspaces={
-                    "input_subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device)
-                }, k=1)
+                subspaces={"k": 1})
+            ax_acts = outputs.latent[0]
             seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
             # Process each sequence in the batch
             for seq_idx, ax_seq in enumerate(ax_acts):

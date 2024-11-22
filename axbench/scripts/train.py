@@ -90,19 +90,12 @@ def load_metadata_flatten(metadata_path):
 
 def binarize_df(original_df, concept):
     # assign input and output containing concept with 1, otherwise 0
-    input_df = original_df[original_df["input_concept"] == concept]
-    output_df = original_df[original_df["output_concept"] == concept]
-    positive_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+    positive_df = original_df[original_df["output_concept"] == concept]
     positive_df = pd.DataFrame(positive_df, columns=['input'])
-
-    input_df = original_df[original_df["input_concept"] != concept]
-    output_df = original_df[original_df["output_concept"] != concept]
-    negative_df = pd.concat([input_df["input"], output_df["output"]], axis=0).reset_index(drop=True)
+    negative_df = original_df[original_df["output_concept"] != concept]
     negative_df = pd.DataFrame(negative_df, columns=['input'])
-
     positive_df["labels"] = 1
     negative_df["labels"] = 0
-
     return pd.concat([positive_df, negative_df], axis=0)
 
 
@@ -245,7 +238,7 @@ def main():
                 "dataset_category": args.models[model_name].dataset_category,
                 "exclude_bos": args.models[model_name].exclude_bos
             }
-            if model_name == "ReFT":
+            if "reft" in model_name.lower():
                 benchmark_model.train(concept_df, **kwargs)
             else:
                 benchmark_model.train(binarize_df(concept_df, concept), **kwargs)

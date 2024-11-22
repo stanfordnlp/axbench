@@ -68,7 +68,7 @@ def remove_gradient_parallel_to_decoder_directions(model):
     )
 
 
-def calculate_l1_losses(latent, non_topk_latent, labels, mask=None):
+def calculate_l1_losses(latent, non_topk_latent, labels=None, mask=None):
     """
     Calculate L1 losses with masked mean.
     
@@ -90,12 +90,10 @@ def calculate_l1_losses(latent, non_topk_latent, labels, mask=None):
     if non_topk_latent is not None:
         masked_non_topk_sum = (non_topk_latent * mask).sum(dim=-1)  # [batch_size]
         mean_non_topk = masked_non_topk_sum / (valid_counts + eps)
-        masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
-        mean_all = masked_sum / (valid_counts + eps)
-        l1_loss = (mean_non_topk * (labels != 0)).sum() + (mean_all * (labels == 0)).sum()
+        l1_loss = mean_non_topk.sum()
     else:
         masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
         mean_all = masked_sum / (valid_counts + eps)
-        l1_loss = mean_all.sum()
+        l1_loss = (mean_all * (labels == 0)).sum()
 
     return l1_loss

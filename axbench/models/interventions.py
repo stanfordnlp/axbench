@@ -5,6 +5,7 @@ from pyvene import (
     TrainableIntervention,
     DistributedRepresentationIntervention,
     CollectIntervention,
+    InterventionOutput
 )
 
 
@@ -21,27 +22,43 @@ class LowRankRotateLayer(torch.nn.Module):
         return torch.matmul(x.to(self.weight.dtype), self.weight)
 
 
-class LsreftIntervention(
+class TopKReLUIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
 ):
+    """
+    Phi(h) = h + Mean(TopK(ReLU(h@v)))*v
+    Ref: https://arxiv.org/pdf/2404.03592
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs, keep_last_dim=True)
         self.proj = torch.nn.Linear(
-            kwargs["low_rank_dimension"], self.embed_dim, bias=False).to(
-            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
-        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
-            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
-        
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.bias.fill_(0)
+
     def forward(
         self, base, source=None, subspaces=None
     ):
-        rotated_base = torch.matmul(base, self.proj.weight)
-        output = base + torch.matmul(
-            (self.learned_source(base) - rotated_base), self.proj.weight.T
+        # get latent
+        latent = torch.relu(torch.matmul(base, self.proj.weight.T).squeeze(dim=-1)) # bs, s, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector
+        steering_vec = max_mean_latent.unsqueeze(dim=-1) * self.proj.weight # bs, 1, h
+
+        # addition intervention
+        output = base + steering_vec
+
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
         )
-        return output.to(base.dtype)
 
 
 class DireftIntervention(

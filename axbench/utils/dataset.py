@@ -153,8 +153,8 @@ class DatasetFactory(object):
         # init vars
         lm_model, model, tokenizer = self.lm_model, self.model, self.tokenizer 
         all_examples = []
-        input_length = kwargs.get("input_length", 32)
-        output_length = kwargs.get("output_length", 10)
+        input_length = kwargs.get("input_length", 128)
+        output_length = kwargs.get("output_length", 32)
 
         concepts_random_content = get_random_content(
             self.seed_sentences, tokenizer=tokenizer, count=subset_n*3, 

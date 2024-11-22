@@ -86,7 +86,6 @@ class ReftDataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-            inst["groups"] = inst["groups"].int()
             inst["prompt_intervention_masks"] = inst["intervention_masks"].clone()
             inst["prompt_intervention_masks"][inst["prompt_lengths"]:] = 0 # mask out the intervention locations after prompt length
 
@@ -105,7 +104,8 @@ class ReftDataCollator(object):
 
 def make_data_module(
     tokenizer: transformers.PreTrainedTokenizer, df, 
-    positions="all_prompt", # "all_prompt" or "all" or "f1+l1" (pyreft formatting)
+    dataset_category="continuation",
+    positions="all", # "all_prompt" or "all" or "f1+l1" (pyreft formatting)
     exclude_bos=True
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
@@ -113,10 +113,9 @@ def make_data_module(
     all_base_input_ids, all_intervention_locations, all_output_ids,  = [], [], []
     all_prompt_lengths = []
 
-    for _, row in df.iterrows():
-        _input, _output, _input_subspace, _output_subspace = row["input"], row["output"], \
-            int(row["input_subspace"]), int(row["output_subspace"])
-        _group = row["group"]
+    subset_df = df[df["category"] == dataset_category]
+    for _, row in subset_df.iterrows():
+        _input, _output = row["input"], row["output"]
         # prepare input ids
         base_prompt = _input
         if isinstance(_output, float):
@@ -160,7 +159,7 @@ def make_data_module(
     })
     train_dataset.set_format(
         type='torch', columns=[
-            'input_ids', 'intervention_locations', 'prompt_lengths'])
+            'input_ids', 'intervention_locations', 'prompt_lengths', 'labels'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"

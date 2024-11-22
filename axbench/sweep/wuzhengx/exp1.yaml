@@ -19,6 +19,8 @@ train:
       batch_size: 6
       n_epochs: 12
       lr: 0.008
+      topk: 5
+      coeff_l1_loss: 0.03
       low_rank_dimension: 1
       intervention_positions: "all"
       dataset_category: "continuation"
@@ -26,7 +28,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "ReFT"] 
+  models: ["LsReFT"] 
   model_name: "google/gemma-2-2b"
   # latent related params
   input_length: 32
@@ -48,7 +50,7 @@ inference:
   temperature: 0.7
 
 evaluate:
-  models: ["PromptSteering", "ReFT"] 
+  models: ["LsReFT"] 
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
