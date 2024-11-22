@@ -4,7 +4,7 @@ generate:
   output_length: 32
   num_of_examples: 32
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-  max_concepts: 10
+  max_concepts: 1
   master_data_dir: "axbench/data"
   seed: 42
 
@@ -15,19 +15,12 @@ train:
   seed: 42
   use_bf16: true
   models: 
-    ReFT:
+    LsReFT:
       batch_size: 6
-      n_epochs: 100
+      n_epochs: 12
       lr: 0.008
-      low_rank_dimension: 4
-    # L1LinearProbe:
-    #   batch_size: 6
-    #   n_epochs: 12
-    #   lr: 0.003
-    #   coeff_l1_loss: 0.1
-    # DiffMean:
-    #   batch_size: 6
-    #   n_epochs: 12
+      low_rank_dimension: 1
+      dataset_category: "continuation"
 
 inference:
   use_bf16: true

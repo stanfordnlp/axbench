@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import torch, einops, os
 import pandas as pd
 from tqdm.auto import tqdm
@@ -5,14 +6,55 @@ from torch.utils.data import DataLoader
 from ..utils.model_utils import (
     gather_residual_activations, 
 )
-from ..utils.dataset import make_data_module
+from ..utils.data_utils import *
 from pyvene import (
     IntervenableModel,
 )
 from transformers import set_seed
+import transformers, datasets
+from typing import Dict, Optional, Sequence, Union, List, Any
 
 
-class Model(object):
+class BaseModel(object):
+    """Base class for all models."""
+    def __init__(self, **kwargs):
+        pass
+
+    def __str__(self):
+        pass
+
+    def make_model(self, **kwargs):
+        pass
+
+    def make_dataloader(self, examples, **kwargs):
+        pass
+
+    def train(self, examples, **kwargs):
+        pass
+
+    def save(self, dump_dir, **kwargs):
+        pass
+
+    def load(self, dump_dir, **kwargs):
+        pass
+
+    def predict_latent(self, examples, **kwargs):
+        pass    
+
+    def predict_steer(self, examples, **kwargs):
+        pass
+
+    def get_logits(self, concept_id, k=10):
+        pass
+
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        pass
+
+    def to(self, device):
+        pass
+
+
+class Model(BaseModel):
 
     def __init__(self, model, tokenizer, layer, training_args=None, **kwargs):
         self.model = model
@@ -231,7 +273,7 @@ class Model(object):
                 # loop through unique sorted concept_id
                 for concept_id in sorted(latent["concept_id"].unique()):
                     concept_latent = latent[latent["concept_id"] == concept_id]
-                    max_act = concept_latent["ReFT_max_act"].max()
+                    max_act = concept_latent[f"{self.__str__()}_max_act"].max()
                     max_activations[concept_id] = max_act if max_act > 0 else 50
         self.max_activations = max_activations
         return max_activations  

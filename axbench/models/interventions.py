@@ -21,6 +21,14 @@ class LowRankRotateLayer(torch.nn.Module):
         return torch.matmul(x.to(self.weight.dtype), self.weight)
 
 
+class LsreftIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    pass
+
+
 class DireftIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
