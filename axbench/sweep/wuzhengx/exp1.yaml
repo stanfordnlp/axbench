@@ -14,13 +14,15 @@ train:
   component: "res"
   seed: 42
   use_bf16: true
-  models: 
+  models:
     LsReFT:
       batch_size: 6
       n_epochs: 12
       lr: 0.008
       low_rank_dimension: 1
+      intervention_positions: "all"
       dataset_category: "continuation"
+      exclude_bos: true
 
 inference:
   use_bf16: true

@@ -33,12 +33,12 @@ class LsReFT(Model):
         if mode == "latent":
             ax = LsreftIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         elif mode == "steering":
             ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 2),
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         layers = self.steering_layers if self.steering_layers else [self.layer]
         self.ax = ax.to(self.device)
@@ -46,7 +46,7 @@ class LsReFT(Model):
         ax_config = IntervenableConfig(representations=[{
             "layer": l,
             "component": f"model.layers[{l}].output",
-            "low_rank_dimension": kwargs.get("low_rank_dimension", 2),
+            "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
             "intervention": self.ax} for l in layers])
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device(self.device)

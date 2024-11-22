@@ -26,7 +26,22 @@ class LsreftIntervention(
     TrainableIntervention, 
     DistributedRepresentationIntervention
 ):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            kwargs["low_rank_dimension"], self.embed_dim, bias=False).to(
+            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
+        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
+            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
+        
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        rotated_base = torch.matmul(base, self.proj.weight)
+        output = base + torch.matmul(
+            (self.learned_source(base) - rotated_base), self.proj.weight.T
+        )
+        return output.to(base.dtype)
 
 
 class DireftIntervention(

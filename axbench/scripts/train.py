@@ -240,10 +240,15 @@ def main():
             )
             if args.use_bf16 and model_name != "ReFT":
                 benchmark_model.ax.to(torch.bfloat16)
+            kwargs = {
+                "positions": args.models[model_name].intervention_positions,
+                "dataset_category": args.models[model_name].dataset_category,
+                "exclude_bos": args.models[model_name].exclude_bos
+            }
             if model_name == "ReFT":
-                benchmark_model.train(concept_df)
+                benchmark_model.train(concept_df, **kwargs)
             else:
-                benchmark_model.train(binarize_df(concept_df, concept))
+                benchmark_model.train(binarize_df(concept_df, concept), **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
