@@ -16,6 +16,7 @@ exp*.sh
 axbench/data/persist_lm_cache
 axbench/demo/demo_aryaman.sh
 axbench/data/seed_sentences/
+axbench/data/seed_instructions/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

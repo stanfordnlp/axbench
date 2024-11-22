@@ -1,6 +1,6 @@
 generate:
   lm_model: "gpt-4o-mini"
-  input_length: 32
+  input_length: 128
   output_length: 32
   num_of_examples: 6
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
