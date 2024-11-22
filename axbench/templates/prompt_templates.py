@@ -151,7 +151,6 @@ Your task is to:
 2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
 3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
 4. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
-4. Avoid using any special characters not standard for the genre, including quotation marks (" or ') and ellipses (...), unless appropriate.
 
 **Formatting Guidelines:**
 
@@ -161,3 +160,23 @@ Your task is to:
 
 **Final Answer:** Return only the final content, following the guidelines above."""
 
+
+# Response templates.
+T_RESPONSE_WITH_CONCEPT_TEMPLATE = """Given the following instruction:
+
+{INSTRUCTION}
+
+Your task is to:
+
+1. Provide a response that incorporates elements related to '{CONCEPT}'.
+2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
+3. Ensure that your response relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
+4. Limit your response to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
+
+**Formatting Guidelines:**
+
+- Return only the response to the instruction.
+- Write the final content (or appropriate format for the genre) in plain text.
+- Do not include any additional text, explanations, or formatting.
+
+**Final Answer:** Return only the final content, following the guidelines above."""

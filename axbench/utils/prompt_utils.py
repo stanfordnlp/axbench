@@ -191,3 +191,31 @@ async def continue_with_concept(client, tokenizer, concepts, content, length, ap
     
     return continued_content
 
+
+async def response_with_concept(client, tokenizer, concepts, content, length, api_tag=""):
+    prompts = []
+    content_token_lengths = []
+    
+    # Get token lengths of original content
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
+        prompts += [T_RESPONSE_WITH_CONCEPT_TEMPLATE.format(
+            INSTRUCTION=c, CONCEPT=concepts[i], LENGTH=length)]
+    
+    responses = await client.chat_completions(f"{api_tag}.response_with_concept", prompts)
+    
+    response_content = []
+    for i, response in enumerate(responses):
+        # Get full response tokens
+        full_tokens = tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))
+        
+        # Skip the original content tokens and limit to requested length
+        response_tokens = full_tokens[:int(length*1.5)]
+        
+        # Convert back to string
+        response_text = tokenizer.convert_tokens_to_string(response_tokens)
+        response_content.append(response_text)
+    
+    return response_content
+
