@@ -11,7 +11,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
 
-from ..utils.dataset import (
+from axbench.utils.dataset import (
     DatasetFactory,
     SteeringDatasetFactory
 )
@@ -76,23 +76,21 @@ def load_metadata_flatten(metadata_path):
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
-    group_id = 0
+    concept_id = 0
     with open(Path(metadata_path) / METADATA_FILE, 'r') as f:
         for line in f:
             data = json.loads(line)
-            for concept_id, concept in enumerate(data["concepts"]):
-                concept_genres_map = data["concept_genres_map"][concept]
-                contrast_concepts_map = data["contrast_concepts_map"][concept]
-                ref = data["refs"][concept_id]
-                flatten_data = {
-                    "concept": concept,
-                    "ref": ref,
-                    "concept_genres_map": {concept: concept_genres_map},
-                    "contrast_concepts_map": {concept: contrast_concepts_map},
-                    "group_id": group_id
-                }
-                metadata += [flatten_data]  # Return the metadata as is
-            group_id += 1
+            concept, ref =data["concept"], data["ref"]
+            concept_genres_map = data["concept_genres_map"][concept]
+            ref = data["ref"]
+            flatten_data = {
+                "concept": concept,
+                "ref": ref,
+                "concept_genres_map": {concept: concept_genres_map},
+                "concept_id": concept_id
+            }
+            metadata += [flatten_data]  # Return the metadata as is
+            concept_id += 1
     return metadata
 
 
@@ -131,23 +129,20 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     # prepare concept related data.
     concept = metadata[concept_id]["concept"]
     sae_link = metadata[concept_id]["ref"]
-    group_id = metadata[concept_id]["group_id"]
     sae_id = int(sae_link.split("/")[-1]) 
     concept_genres_map = metadata[concept_id]["concept_genres_map"]
-    contrast_concepts_map = metadata[concept_id]["contrast_concepts_map"]
     _, eval_contrast_concepts_map = \
         dataset_factory.prepare_concepts(
             [concept], 
             concept_genres_map=concept_genres_map,
-            contrast_concepts_map=contrast_concepts_map, api_tag="inference")
+            contrast_concepts_map={}, api_tag="inference")
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, concept_genres_map, contrast_concepts_map,
+        [concept], num_of_examples, concept_genres_map, {},
         eval_contrast_concepts_map, input_length=args.input_length,
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
     current_df["sae_id"] = sae_id
-    current_df["group_id"] = group_id
     return current_df
 
 
@@ -422,7 +417,7 @@ def infer_latent(args, rank, world_size, device, logger):
             device=device
         )
         benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"]
+            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
         )
         if hasattr(benchmark_model, 'ax') and args.use_bf16:
             benchmark_model.ax.eval()

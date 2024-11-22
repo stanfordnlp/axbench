@@ -4,7 +4,7 @@
 #     python axbench/scripts/evaluate.py --config axbench/demo/sweep/evaluate.yaml --mode latent
 
 import shutil
-from ..models.language_models import (
+from axbench.models.language_models import (
     LanguageModel
 )
 
@@ -22,13 +22,13 @@ import datetime
 import yaml
 
 import axbench
-from ..utils.plot_utils import (
+from axbench.utils.plot_utils import (
     plot_aggregated_roc, 
     plot_metrics,
     plot_accuracy_bars,
     plot_win_rates,
 )
-from ..utils.prompt_utils import (
+from axbench.templates.html_templates import (
     generate_html_with_highlight_text,
 )
 from args.eval_args import EvalArgs

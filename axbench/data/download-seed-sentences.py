@@ -49,3 +49,37 @@ dataset = DatasetDict({
 })
 
 dataset.save_to_disk("seed_sentences")
+
+
+# text instructions
+dolly_ds = load_dataset("databricks/databricks-dolly-15k")
+text_train = []
+for example in dolly_ds["train"]:
+    if example["category"] == "open_qa" and example["context"] == "":
+        text_train += [example["instruction"]]
+
+# math instructions
+gsm_ds = load_dataset("openai/gsm8k", "main")
+math_train = []
+for example in gsm_ds["train"]:
+    math_train += [example["question"]]
+
+# code instructions
+alpaca_ds = load_dataset("iamtarun/python_code_instructions_18k_alpaca")
+code_train = []
+for example in alpaca_ds["train"]:
+    if example["input"] == "":
+        code_train += [example["instruction"]]
+
+data = {
+    "text_train": text_train[:1000],
+    "math_train": math_train[:1000],
+    "code_train": code_train[:1000],
+}
+dataset = DatasetDict({
+    "text_train": Dataset.from_dict({"input": data["text_train"]}),
+    "math_train": Dataset.from_dict({"input": data["math_train"]}),
+    "code_train": Dataset.from_dict({"input": data["code_train"]}),
+})
+
+dataset.save_to_disk("seed_instructions")
