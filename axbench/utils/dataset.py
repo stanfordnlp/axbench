@@ -283,8 +283,6 @@ class ReftDataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-            inst["input_subspaces"] = inst["input_subspaces"].int()
-            inst["output_subspaces"] = inst["output_subspaces"].int()
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
             # intervention sink token
@@ -305,8 +303,7 @@ def make_data_module(
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
     
-    all_base_input_ids, all_intervention_locations, all_output_ids, \
-        all_input_subspaces, all_output_subspaces = [], [], [], [], []
+    all_base_input_ids, all_intervention_locations, all_output_ids = [], [], []
     all_prompt_lengths = []
 
     for _, row in df.iterrows():
@@ -335,22 +332,17 @@ def make_data_module(
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
         all_output_ids.append(output_ids)
-        all_input_subspaces.append(torch.tensor(_input_subspace))
-        all_output_subspaces.append(torch.tensor(_output_subspace))
         all_prompt_lengths.append(torch.tensor(base_prompt_length - 1)) # exclude bos token
         
     train_dataset = datasets.Dataset.from_dict({
         "input_ids": all_base_input_ids,
         "intervention_locations": all_intervention_locations,
         "labels": all_output_ids,
-        "input_subspaces": all_input_subspaces,
-        "output_subspaces": all_output_subspaces,
         "prompt_lengths": all_prompt_lengths,
     })
     train_dataset.set_format(
         type='torch', columns=[
-            'input_ids', 'intervention_locations', 
-            'labels', 'input_subspaces', 'output_subspaces', 'prompt_lengths'])
+            'input_ids', 'intervention_locations', 'labels', 'prompt_lengths'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"
