@@ -9,7 +9,9 @@ from pyvene import (
 )
 from .interventions import (
     TopKReLUIntervention,
+    TopKReLUSubspaceIntervention,
     AdditionIntervention,
+    SubspaceIntervention
 )
 from ..utils.constants import EXAMPLE_TAG
 from torch.utils.data import DataLoader
@@ -31,15 +33,29 @@ class LsReFT(Model):
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "steering":
-            ax = AdditionIntervention(
-                embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-            )
+            intervention_type = kwargs.get("intervention_type", "addition")
+            if intervention_type == "addition":
+                ax = AdditionIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "clamping":
+                ax = SubspaceIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
         else:
-            ax = TopKReLUIntervention(
-                embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-            )
+            intervention_type = kwargs.get("intervention_type", "addition")
+            if intervention_type == "addition":
+                ax = TopKReLUIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "clamping":
+                ax = TopKReLUSubspaceIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
         layers = self.steering_layers if self.steering_layers else [self.layer]
         self.ax = ax.to(self.device)
         self.ax.train()
@@ -134,10 +150,13 @@ class LsReFT(Model):
             gather_acts = gather_residual_activations(
                 self.model, self.layer, inputs)
             outputs = self.ax(
-                gather_acts[:, 1:],  # no bos token
-                subspaces={"k": 1})
+                gather_acts[:, kwargs["prefix_length"]:],  # no bos token
+                subspaces={
+                    "subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device),
+                    "k": 1
+                })
             ax_acts = outputs.latent[0]
-            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
             # Process each sequence in the batch
             for seq_idx, ax_seq in enumerate(ax_acts):
                 acts = ax_seq[:seq_lens[seq_idx]].flatten().data.float().cpu().numpy().tolist()
@@ -146,7 +165,7 @@ class LsReFT(Model):
                 max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
                 max_act_idx = max_act_indices[0]
                 # Get tokens for this specific sequence
-                tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])
+                tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
                 max_token = tokens[max_act_idx]
                 all_acts.append(acts)
                 all_max_act.append(max_act)

@@ -106,15 +106,16 @@ def make_data_module(
     tokenizer: transformers.PreTrainedTokenizer, df, 
     dataset_category="continuation",
     positions="all", # "all_prompt" or "all" or "f1+l1" (pyreft formatting)
-    exclude_bos=True
+    exclude_bos=True,
+    prefix_length=1
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
+    if not exclude_bos:
+        prefix_length = 0
     
     all_base_input_ids, all_intervention_locations, all_output_ids,  = [], [], []
     all_prompt_lengths = []
-
-    subset_df = df[df["category"] == dataset_category]
-    for _, row in subset_df.iterrows():
+    for _, row in df.iterrows():
         _input, _output = row["input"], row["output"]
         # prepare input ids
         base_prompt = _input
@@ -133,19 +134,22 @@ def make_data_module(
         output_ids[:base_prompt_length] = -100
 
         if positions == "all_prompt":
-            intervention_locations = torch.tensor([[i for i in range(int(exclude_bos), base_prompt_length)]])
+            intervention_locations = torch.tensor([[i for i in range(prefix_length, base_prompt_length)]])
         elif positions == "all":
-            intervention_locations = torch.tensor([[i for i in range(int(exclude_bos), base_length)]])
+            intervention_locations = torch.tensor([[i for i in range(prefix_length, base_length)]])
         else:
             first_n, last_n = parse_positions(positions)
             intervention_locations = get_intervention_locations(
-                last_position=base_prompt_length, 
+                last_position=base_prompt_length - prefix_length, 
                 first_n=first_n, 
                 last_n=last_n,
                 pad_mode="last",
                 num_interventions=1,
                 share_weights=True,
             )
+            # shift intervention locations by prefix length
+            shifted_intervention_locations = [loc + prefix_length for loc in intervention_locations]
+            intervention_locations = shifted_intervention_locations
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
         all_output_ids.append(output_ids)

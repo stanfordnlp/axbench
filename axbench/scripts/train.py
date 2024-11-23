@@ -18,6 +18,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from huggingface_hub import hf_hub_download
 from pathlib import Path
 from args.training_args import TrainingArgs
+from axbench.utils.constants import * 
+from axbench.utils.model_utils import get_prefix_length
 from transformers import set_seed
 import torch.distributed as dist
 import sys
@@ -88,16 +90,37 @@ def load_metadata_flatten(metadata_path):
     return metadata
 
 
-def binarize_df(original_df, concept):
-    # assign input and output containing concept with 1, otherwise 0
-    positive_df = original_df[original_df["output_concept"] == concept]
-    positive_df = pd.DataFrame(positive_df, columns=['input'])
-    negative_df = original_df[original_df["output_concept"] != concept]
-    negative_df = pd.DataFrame(negative_df, columns=['input'])
-    positive_df["labels"] = 1
-    negative_df["labels"] = 0
-    return pd.concat([positive_df, negative_df], axis=0)
-
+def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model):
+    if binarize:
+        # assign input and output containing concept with 1, otherwise 0
+        positive_df = original_df[original_df["output_concept"] == concept]
+        negative_df = all_df[all_df["output_concept"] != concept]
+        negative_df = negative_df.sample(n=len(positive_df))
+        if is_chat_model:
+            def apply_chat_template(row):
+                messages = [
+                    {"role": "user", "content": row["input"]},
+                    {"role": "assistant", "content": row["output"]}
+                ]
+                return tokenizer.apply_chat_template(messages, tokenize=False)
+            positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
+            negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
+        else:
+            positive_df['combined'] = positive_df['input'] + positive_df['output']
+            negative_df['combined'] = negative_df['input'] + negative_df['output']
+        positive_df = pd.DataFrame(positive_df[['combined']]).rename(columns={'combined': 'input'})
+        negative_df = pd.DataFrame(negative_df[['combined']]).rename(columns={'combined': 'input'})
+        positive_df["labels"] = 1
+        negative_df["labels"] = 0
+        return pd.concat([positive_df, negative_df], axis=0)
+    else:
+        # if not binarizing, we need to apply the chat template to the input. It becomes a standard instruction tuning task.
+        if is_chat_model:
+            def apply_chat_template(row):
+                messages = [{"role": "user", "content": row["input"]}]
+                return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            original_df['input'] = original_df.apply(apply_chat_template, axis=1)
+        return original_df # do nothing, the task will be standard instruction tuning.
 
 def partition_list(lst, n):
     """
@@ -187,6 +210,7 @@ def main():
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
     df_generator = data_generator(args.data_dir)
+    all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
     df_list = list(df_generator)
 
     dump_dir = Path(args.dump_dir) / "train"
@@ -205,8 +229,14 @@ def main():
         logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
         args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device)
+    is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
+
+    prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
+    if is_chat_model:
+        prefix_length = get_prefix_length(tokenizer)
+        logger.warning(f"Chat model prefix length: {prefix_length}")
 
     state = load_state(dump_dir, rank)
     last_concept_id = state.get("last_concept_id", None) if state else None
@@ -226,22 +256,28 @@ def main():
                 training_args=args.models[model_name],
                 device=device, seed=args.seed
             )
+            low_rank_dimension = args.models[model_name].low_rank_dimension \
+                if args.models[model_name].low_rank_dimension else 1
             benchmark_model.make_model(
                 mode="train",
-                low_rank_dimension=args.models[model_name].low_rank_dimension,
-                dtype=torch.bfloat16 if args.use_bf16 else None
+                low_rank_dimension=low_rank_dimension,
+                dtype=torch.bfloat16 if args.use_bf16 else None,
+                intervention_type=args.models[model_name].intervention_type
             )
-            if args.use_bf16 and model_name != "ReFT":
+            if args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
+                "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
                 "dataset_category": args.models[model_name].dataset_category,
                 "exclude_bos": args.models[model_name].exclude_bos
             }
-            if "reft" in model_name.lower():
-                benchmark_model.train(concept_df, **kwargs)
-            else:
-                benchmark_model.train(binarize_df(concept_df, concept), **kwargs)
+            prepared_df = concept_df[concept_df["category"] == args.models[model_name].dataset_category].copy()
+            prepared_df = prepare_df(
+                prepared_df, concept, all_df, tokenizer, 
+                binarize=args.models[model_name].binarize_dataset, is_chat_model=is_chat_model
+            )
+            benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up

@@ -198,46 +198,40 @@ def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_na
 
 
 def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to=[], wandb_name=None):
-    
     # Get unique methods and sort them
     methods = set()
     for entry in jsonl_data:
         methods.update(entry['results'][evaluator_name].keys())
     methods = sorted(list(methods))
     
-    # Initialize data structures for both metrics
+    # Initialize data structure for 'Seen' accuracy
     seen_accuracies = {method: [] for method in methods}
-    unseen_accuracies = {method: [] for method in methods}
     
     # Collect data from all concepts
     for entry in jsonl_data:
         results = entry['results'][evaluator_name]
         for method in methods:
             if method in results:
-                seen_accuracies[method].append(
-                    results[method].get('hard_negative_seen_accuracy', 0))
-                unseen_accuracies[method].append(
-                    results[method].get('hard_negative_unseen_accuracy', 0))
+                if 'macro_avg_accuracy' in results[method]:
+                    seen_accuracies[method].append(
+                        results[method]['macro_avg_accuracy'])
     
     # Calculate means
-    seen_means = {method: np.mean(vals) for method, vals in seen_accuracies.items()}
-    unseen_means = {method: np.mean(vals) for method, vals in unseen_accuracies.items()}
+    seen_means = {method: np.mean(vals) if len(vals) > 0 else 0 for method, vals in seen_accuracies.items()}
     
     # Prepare data for plotting
     data = []
     for method in methods:
-        data.append({'Method': method, 'AccuracyType': 'Seen', 'Accuracy': seen_means[method]})
-        data.append({'Method': method, 'AccuracyType': 'Unseen', 'Accuracy': unseen_means[method]})
+        data.append({'Method': method, 'Accuracy': seen_means[method]})
     
     df = pd.DataFrame(data)
     
     # Create the plot
     p = (
-        ggplot(df, aes(x='Method', y='Accuracy', fill='AccuracyType')) +
-        geom_bar(stat='identity', position=position_dodge(width=0.8), width=0.7) +
+        ggplot(df, aes(x='Method', y='Accuracy', fill='Method')) +
+        geom_bar(stat='identity', width=0.7) +
         geom_text(
             aes(label='round(Accuracy, 2)'),
-            position=position_dodge(width=0.8),
             va='bottom',
             size=8,
             format_string='{:.2f}'
@@ -247,9 +241,7 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to
         labs(x='Method', y='Accuracy') +
         theme(
             figure_size=(5, 2),
-            legend_position='right',
-            legend_title=element_text(size=5),
-            legend_text=element_text(size=5),
+            legend_position='none',  # Remove legend since 'fill' corresponds to 'Method'
             axis_title=element_text(size=5),
             axis_text=element_text(size=5),
             plot_title=element_text(size=5)
@@ -258,12 +250,12 @@ def plot_accuracy_bars(jsonl_data, evaluator_name, write_to_path=None, report_to
 
     # Save or show the plot
     if write_to_path:
-        p.save(filename=str(write_to_path / "hard_negative_accuracy.png"), dpi=300, bbox_inches='tight')
+        p.save(filename=str(write_to_path / "macro_avg_accuracy_incl_hard_neg.png"), dpi=300, bbox_inches='tight')
     else:
         print(p)
 
     if report_to is not None and "wandb" in report_to:
-        wandb.log({"latent/hard_negative_accuracy": wandb.Image(str(write_to_path / "hard_negative_accuracy.png"))})
+        wandb.log({"latent/macro_avg_accuracy_incl_hard_neg": wandb.Image(str(write_to_path / "macro_avg_accuracy_incl_hard_neg.png"))})
 
 
 def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None):

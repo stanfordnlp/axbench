@@ -179,8 +179,7 @@ class DatasetFactory(object):
 
             # hard negative seen + unseen
             splits = [
-                ("hard negative seen", {}),
-                ("hard negative unseen", eval_contrast_concepts_map[concept]),
+                ("hard negative", eval_contrast_concepts_map[concept]),
             ]
             for (label, polysemantic_meanings) in splits:
                 if len(polysemantic_meanings) != 0:
@@ -202,7 +201,7 @@ class DatasetFactory(object):
         for (tag, concept, idx), eval_content in zip(tags, all_eval_content):
             if tag in {"positive"}:
                 all_examples += [[content, concept, tag] for content in eval_content]
-            elif tag in {"hard negative seen", "hard negative unseen"}:
+            elif tag in {"hard negative"}:
                 hard_negative_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
         all_examples += negative_examples + hard_negative_examples
         
@@ -219,13 +218,12 @@ class DatasetFactory(object):
         self.logger.warning("Creating dataframe.")
         all_examples = []
 
-        input_length = kwargs.get("input_length", 128)
         output_length = kwargs.get("output_length", 32)
 
         # continuation
         concepts_random_content = get_random_content(
             self.seed_sentences, tokenizer=tokenizer, count=n, 
-            genres=concept_genres_map, concepts=[concept], length=input_length, split="train"
+            genres=concept_genres_map, concepts=[concept], length=None, split="train"
         )
         continue_task = continue_with_concept(
             self.lm_model, self.tokenizer, 
@@ -240,7 +238,7 @@ class DatasetFactory(object):
         # instruction
         concepts_random_instructions = get_random_content(
             self.seed_instructions, tokenizer=tokenizer, count=n, 
-            genres=concept_genres_map, concepts=[concept], length=input_length, split="train"
+            genres=concept_genres_map, concepts=[concept], length=None, split="train"
         )
         response_task = response_with_concept(
             self.lm_model, self.tokenizer, 
@@ -322,11 +320,13 @@ class SteeringDatasetFactory(object):
                         steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
                         formatted_steered_prompt = self.tokenizer.apply_chat_template(
                             [{"role": "user", "content": steered_prompt}], 
-                            tokenize=False, add_generation_prompt=True)
+                            tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                        formatted_steered_prompt = self.tokenizer.decode(formatted_steered_prompt)
                         # apply the tokenizer chat format to the prompt.
                         formatted_prompt = self.tokenizer.apply_chat_template(
                             [{"role": "user", "content": sampled_prompt}], 
-                            tokenize=False, add_generation_prompt=True)
+                            tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                        formatted_prompt = self.tokenizer.decode(formatted_prompt)
                         for factor in steering_factors:
                             all_examples += [[
                                 dataset_name, idx, concept, i, factor, 

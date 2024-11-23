@@ -12,7 +12,7 @@ from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from .interventions import (
     AdditionIntervention,
-    SubspaceAdditionIntervention
+    SubspaceIntervention
 )
 from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 

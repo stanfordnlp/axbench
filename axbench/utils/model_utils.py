@@ -97,3 +97,16 @@ def calculate_l1_losses(latent, non_topk_latent, labels=None, mask=None):
         l1_loss = (mean_all * (labels == 0)).sum()
 
     return l1_loss
+
+
+def get_prefix_length(tokenizer):
+    message_a = [{"role": "user", "content": "1"}]
+    message_b = [{"role": "user", "content": "2"}]
+    tokens_a = tokenizer.apply_chat_template(message_a, tokenize=True)
+    tokens_b = tokenizer.apply_chat_template(message_b, tokenize=True)
+    prefix_length = 0
+    for i, (ta, tb) in enumerate(zip(tokens_a, tokens_b)):
+        if ta != tb:
+            prefix_length = i
+            break
+    return prefix_length + 1

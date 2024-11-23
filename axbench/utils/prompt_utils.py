@@ -132,8 +132,10 @@ def get_random_content(seed_sentences, tokenizer, count, genres, concepts, lengt
 
     for i, response in enumerate(responses):
         response = response.strip(" .'").strip('"')
-        response = tokenizer.convert_tokens_to_string(
-            tokenizer.tokenize(response)[:int(length*1.5)])
+        # during training, we don't crop otherwise it will cutoff prompts.
+        if length is not None:
+            response = tokenizer.convert_tokens_to_string(
+                tokenizer.tokenize(response)[:int(length*1.5)])
         random_content[concepts[i//(len(responses)//len(concepts))]] += [response]
         
     return random_content

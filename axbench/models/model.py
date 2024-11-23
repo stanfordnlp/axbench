@@ -136,9 +136,9 @@ class Model(BaseModel):
             act_in = gather_residual_activations(
                 self.model, self.layer, inputs)
             
-            ax_acts_batch = self.ax(act_in[:, 1:])  # no bos token
+            ax_acts_batch = self.ax(act_in[:, kwargs["prefix_length"]:])  # no bos token
             # Process each sequence in the batch
-            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
             for seq_idx, row in enumerate(batch.itertuples()):
                 # select acts with attention mask
                 acts = ax_acts_batch[
@@ -148,7 +148,7 @@ class Model(BaseModel):
                 max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
                 max_act_idx = max_act_indices[0]
                 # Get tokens for this specific sequence
-                tokens = self.tokenizer.tokenize(row.input)
+                tokens = self.tokenizer.tokenize(row.input)[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
                 max_token = tokens[max_act_idx]
                 all_acts.append(acts)
                 all_max_act.append(max_act)
@@ -211,8 +211,12 @@ class Model(BaseModel):
             all_generations += generated_texts
 
             # Calculate perplexity for each sequence
+            unpruned_generated_texts = [
+                self.tokenizer.decode(generation, skip_special_tokens=True)
+                for generation in generations
+            ]
             batch_input_ids = self.tokenizer(
-                generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to(self.device)
+                unpruned_generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to(self.device)
             batch_attention_mask = (batch_input_ids != self.tokenizer.pad_token_id).float()
             
             # Forward pass without labels to get logits
