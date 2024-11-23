@@ -30,6 +30,7 @@ def set_decoder_norm_to_unit_norm(model):
     norm = torch.norm(model.proj.weight.data, dim=0, keepdim=True)
     model.proj.weight.data /= norm + eps
 
+
 class ReFT(Model):
     def __str__(self):
         return 'ReFT'

@@ -87,6 +87,9 @@ class PromptSteering(Model):
             "perplexity": all_perplexities,
         }
 
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        max_activations = {} # sae_id to max_activation
+        return max_activations  
 
 class PromptBaseline(PromptSteering):
     input_field = "input"

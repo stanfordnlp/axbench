@@ -39,6 +39,11 @@ class ModelParams:
     coeff_l1_loss: Optional[float] = None
     coeff_norm_loss: Optional[float] = None
     low_rank_dimension: Optional[int] = 1
+    dataset_category: Optional[str] = "continuation"
+    intervention_positions: Optional[str] = "all_prompt"
+    exclude_bos: Optional[bool] = True
+    binarize_dataset: Optional[bool] = False
+    intervention_type: Optional[str] = "addition" # clamping    
 
 class TrainingArgs:
     def __init__(
@@ -66,7 +71,9 @@ class TrainingArgs:
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
-            'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss', 'low_rank_dimension'
+            'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss', 
+            'low_rank_dimension', 'dataset_category', 'intervention_positions', 
+            'exclude_bos', 'binarize_dataset', 'intervention_type'
         ]
         all_params = global_params + hierarchical_params
 
@@ -153,10 +160,14 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        bool_params = ['use_bf16']
+        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset']
         int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension']
         float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_norm_loss']
-        str_params = ['concept_path', 'model_name', 'component', 'data_dir', 'dump_dir', 'run_name']
+        str_params = [
+            'concept_path', 'model_name', 'component', 
+            'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
+            'intervention_type'
+        ]
 
         if param_name in int_params:
             return int

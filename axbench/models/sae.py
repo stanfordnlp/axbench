@@ -12,7 +12,7 @@ import pandas as pd
 from .interventions import (
     JumpReLUSAECollectIntervention, 
     AdditionIntervention,
-    SubspaceAdditionIntervention,
+    SubspaceIntervention,
     DictionaryAdditionIntervention # please try this one
 )
 from ..utils.model_utils import (
@@ -39,7 +39,7 @@ class GemmaScopeSAE(Model):
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
         elif mode == "steering":
-            ax = AdditionIntervention(
+            ax = DictionaryAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
@@ -61,7 +61,7 @@ class GemmaScopeSAE(Model):
         )
         pt_params = {k: v.to(self.device) for k, v in params.items()}
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
-        if isinstance(self.ax, SubspaceAdditionIntervention) or isinstance(self.ax, AdditionIntervention):
+        if isinstance(self.ax, SubspaceIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
         else:
             try:

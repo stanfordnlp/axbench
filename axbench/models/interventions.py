@@ -5,6 +5,7 @@ from pyvene import (
     TrainableIntervention,
     DistributedRepresentationIntervention,
     CollectIntervention,
+    InterventionOutput
 )
 
 
@@ -20,6 +21,104 @@ class LowRankRotateLayer(torch.nn.Module):
     def forward(self, x):
         return torch.matmul(x.to(self.weight.dtype), self.weight)
 
+
+class TopKReLUSubspaceIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = (h - h@v) + Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.bias.fill_(0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+
+        # get orthogonal component
+        proj_vec = torch.bmm(latent.unsqueeze(dim=-1), v.permute(0, 2, 1)) # bs, s, 1 * bs, 1, h = bs, s, h
+        base_orthogonal = base - proj_vec
+
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector
+        steering_vec = max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, h
+
+        # addition intervention
+        output = base_orthogonal + steering_vec
+
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
+        )
+
+
+class TopKReLUIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.bias.fill_(0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector
+        steering_vec = max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, h
+
+        # addition intervention
+        output = base + steering_vec
+
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
+        )
+    
 
 class DireftIntervention(
     SourcelessIntervention,
@@ -139,7 +238,7 @@ class AdditionIntervention(
         return output
 
 
-class SubspaceAdditionIntervention(
+class SubspaceIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
@@ -150,17 +249,19 @@ class SubspaceAdditionIntervention(
             self.embed_dim, kwargs["low_rank_dimension"], bias=True)
     
     def forward(self, base, source=None, subspaces=None):
-        # Get the normalized subspace vector (unit vector)
-        v = self.proj.weight[subspaces["idx"]].unsqueeze(1)
-        proj_coeff = torch.relu((base * v).sum(dim=-1, keepdim=True)) # bs, s, 1, get rid of negative values
-        proj_vec = proj_coeff * v 
+        v = self.proj.weight[subspaces["idx"]].unsqueeze(dim=-1) # bs, h, 1
+
+        # get orthogonal component
+        latent = torch.bmm(base, v) # bs, s, 1
+        proj_vec = torch.bmm(latent, v.permute(0, 2, 1)) # bs, s, 1 * bs, 1, h = bs, s, h
+        base_orthogonal = base - proj_vec
 
         steering_scale = subspaces["max_act"].unsqueeze(-1).unsqueeze(-1) * \
             subspaces["mag"].unsqueeze(-1).unsqueeze(-1)
-        steering_vec = steering_scale * v 
+        steering_vec = steering_scale * v.permute(0, 2, 1) # bs, 1, h
         
         # Replace the projection component with the steering vector
-        output = (base - proj_vec) + steering_vec 
+        output = base_orthogonal + steering_vec 
         return output
 
 

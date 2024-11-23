@@ -12,7 +12,7 @@ from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from .interventions import (
     AdditionIntervention,
-    SubspaceAdditionIntervention
+    SubspaceIntervention
 )
 from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
@@ -46,22 +46,23 @@ class LogisticRegressionModel(torch.nn.Module):
 
 
 class MeanEmbedding(Model):
-    
     def __str__(self):
         return 'MeanEmbedding'
 
     def make_model(self, **kwargs):
-        mode = kwargs.get("mode", "latent")
-        if mode == "latent":
-            ax = LogisticRegressionModel(
-                self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to(self.device)
-            self.ax = ax
-        elif mode == "steering":
-            ax = AdditionIntervention(
+        mode = kwargs.get("mode", "train")
+        intervention_type = kwargs.get("intervention_type", "addition")
+        if mode == "steering":
+            if intervention_type == "addition":
+                ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-            )
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "clamping":
+                ax = SubspaceIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
             self.ax = ax
             self.ax.train()
             ax_config = IntervenableConfig(representations=[{
@@ -72,14 +73,12 @@ class MeanEmbedding(Model):
             ax_model = IntervenableModel(ax_config, self.model)
             ax_model.set_device(self.device)
             self.ax_model = ax_model
+        else:
+            ax = LogisticRegressionModel(
+                self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
+            ax.to(self.device)
+            self.ax = ax
     
-    def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, self.model, examples)
-        train_dataloader = DataLoader(
-            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
-            collate_fn=data_module["data_collator"])
-        return train_dataloader
-
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
         train_dataloader = DataLoader(
@@ -98,7 +97,6 @@ class MeanEmbedding(Model):
 
 class MeanActivation(MeanEmbedding):
     """take the mean of all activations"""
-    
     def __str__(self):
         return 'MeanActivation'
 
@@ -196,7 +194,6 @@ class DiffMean(MeanActivation):
         # Main training loop.
         positive_activations = []
         negative_activations = []
-
         for _ in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
@@ -205,9 +202,10 @@ class DiffMean(MeanActivation):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 ).detach()
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
+                activations = activations[:,kwargs["prefix_length"]:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(
+                    1, inputs["input_ids"].shape[1] - kwargs["prefix_length"])
                 positive_activations.append(activations[labels[nonbos_mask.bool()] == 1])
                 negative_activations.append(activations[labels[nonbos_mask.bool()] != 1])
 
@@ -216,6 +214,7 @@ class DiffMean(MeanActivation):
         self.ax.proj.weight.data = mean_positive_activation.unsqueeze(0) - mean_negative_activation.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
         logger.warning("Training finished.")
+
 
 class PCA(MeanActivation):
     

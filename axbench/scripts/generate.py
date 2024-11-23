@@ -218,7 +218,7 @@ def main():
         # try:
         current_df = dataset_factory.create_train_df(
             concept, num_of_examples, concept_genres_map,
-            input_length=args.input_length, output_length=args.output_length,
+            output_length=args.output_length,
             current_concept_id=data_concept_id
         )
         current_df["concept_id"] = data_concept_id

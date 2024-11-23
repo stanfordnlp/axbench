@@ -30,6 +30,7 @@ class DatasetArgs:
     steering_batch_size: Optional[int] = None
     steering_output_length: Optional[int] = None
     steering_num_of_examples: Optional[int] = None
+    steering_intervention_type: Optional[str] = None
     lm_model: Optional[str] = None
     run_name: Optional[str] = None
     use_bf16: Optional[bool] = False
