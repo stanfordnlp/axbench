@@ -102,7 +102,8 @@ def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model)
                     {"role": "user", "content": row["input"]},
                     {"role": "assistant", "content": row["output"]}
                 ]
-                return tokenizer.apply_chat_template(messages, tokenize=False)
+                nobos = tokenizer.apply_chat_template(messages, tokenize=True)[1:]
+                return tokenizer.decode(nobos)
             positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
             negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
         else:
@@ -118,7 +119,8 @@ def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model)
         if is_chat_model:
             def apply_chat_template(row):
                 messages = [{"role": "user", "content": row["input"]}]
-                return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+                return tokenizer.decode(nobos)
             original_df['input'] = original_df.apply(apply_chat_template, axis=1)
         return original_df # do nothing, the task will be standard instruction tuning.
 
