@@ -109,4 +109,4 @@ def get_prefix_length(tokenizer):
         if ta != tb:
             prefix_length = i
             break
-    return prefix_length + 1
+    return prefix_length

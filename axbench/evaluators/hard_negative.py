@@ -43,7 +43,7 @@ class HardNegativeEvaluator(Evaluator):
         # Evaluate accuracy for each class
         metrics = {}
         accuracies = {}
-        for category in ['positive', 'negative', 'hard negative']:
+        for category in ['positive', 'hard negative']:
             class_data = data[data['category'] == category]
             if len(class_data) > 0:
                 predictions = (class_data['normalized_max'] >= optimal_threshold).astype(int)

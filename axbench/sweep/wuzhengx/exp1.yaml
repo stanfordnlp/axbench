@@ -14,18 +14,18 @@ train:
   seed: 42
   use_bf16: true
   models:
-    LsReFT:
-      batch_size: 6
-      n_epochs: 12
-      lr: 0.001
-      topk: 8
-      coeff_l1_loss: 0.003
-      low_rank_dimension: 1
-      intervention_positions: "all"
-      intervention_type: "addition" # clamping
-      dataset_category: "instruction"
-      binarize_dataset: false
-      exclude_bos: true
+    # LsReFT:
+    #   batch_size: 6
+    #   n_epochs: 12
+    #   lr: 0.005
+    #   topk: 8
+    #   coeff_l1_loss: 0.005
+    #   low_rank_dimension: 1
+    #   intervention_positions: "all"
+    #   intervention_type: "addition" # clamping
+    #   dataset_category: "instruction"
+    #   binarize_dataset: false
+    #   exclude_bos: true
     DiffMean:
       batch_size: 6
       n_epochs: 12
@@ -35,7 +35,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "LsReFT", "DiffMean"] 
+  models: ["PromptSteering", "DiffMean"] 
   model_name: "google/gemma-2-2b-it"
   # latent related params
   input_length: 32
@@ -58,7 +58,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "LsReFT", "DiffMean"] 
+  models: ["PromptSteering", "DiffMean"] 
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

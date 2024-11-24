@@ -174,7 +174,7 @@ def prepare_df(current_df, tokenizer, is_chat_model):
                 {"role": "user", "content": "Generate a random sentence."},
                 {"role": "assistant", "content": row["input"]}
             ]
-            tokens = tokenizer.apply_chat_template(messages, tokenize=True)
+            tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:]
             return tokenizer.decode(tokens)
         current_df['input'] = current_df.apply(apply_chat_template, axis=1)
     return current_df
