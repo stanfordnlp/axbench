@@ -40,6 +40,7 @@ CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
+LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
 def load_config(config_path):
@@ -171,7 +172,7 @@ def prepare_df(current_df, tokenizer, is_chat_model):
         def apply_chat_template(row):
             messages = [
                 # we use a fixed prefix as we want to make sure there is not concept in the prompt.
-                {"role": "user", "content": "Generate a random sentence."},
+                {"role": "user", "content": LATENT_PROMPT_PREFIX},
                 {"role": "assistant", "content": row["input"]}
             ]
             tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:]
@@ -238,7 +239,12 @@ def infer_steering(args, rank, world_size, device, logger, training_args):
         master_data_dir=args.master_data_dir, lm_client=lm_client,
         lm_model=args.lm_model
     )
-
+    is_chat_model = True if args.model_name in CHAT_MODELS else False
+    prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
+    if is_chat_model:
+        prefix_length = get_prefix_length(tokenizer)
+        logger.warning(f"Chat model prefix length: {prefix_length}")
+        
     # Load model instance onto device
     if args.use_bf16:
         logger.warning(f"Using bfloat16 for model {args.model_name}")
@@ -290,7 +296,8 @@ def infer_steering(args, rank, world_size, device, logger, training_args):
                 current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
                 batch_size=args.steering_batch_size,
                 eval_output_length=args.steering_output_length, 
-                temperature=args.temperature
+                temperature=args.temperature,
+                prefix_length=prefix_length
             )
             # Store the results in current_df
             for k, v in results.items():
@@ -414,7 +421,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args):
 
     prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
     if is_chat_model:
-        prefix_length = get_prefix_length(tokenizer)
+        prefix_length = get_prefix_length(tokenizer, common_prefix=LATENT_PROMPT_PREFIX)
         logger.warning(f"Chat model prefix length: {prefix_length}")
 
     # Load dataset factory for evals.

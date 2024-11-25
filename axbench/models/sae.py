@@ -33,13 +33,20 @@ class GemmaScopeSAE(Model):
     
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
-        if mode == "latent":
+        intervention_type = kwargs.get("intervention_type", "addition")
+        if mode == "steering":
+            if intervention_type == "addition":
+                ax = AdditionIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "clamping":
+                ax = DictionaryAdditionIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+        else:
             ax = JumpReLUSAECollectIntervention(
-            embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-            )
-        elif mode == "steering":
-            ax = DictionaryAdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
@@ -71,50 +78,6 @@ class GemmaScopeSAE(Model):
                 logger.warning(f"Error loading state dict: {e}")
                 self.ax.load_state_dict(pt_params, strict=False)
 
-    @torch.no_grad()
-    def predict_latent(self, examples, **kwargs):
-        self.ax.eval()
-        batch_size = kwargs.get('batch_size', 32)
-        
-        all_acts = []
-        all_max_act = []
-        all_max_act_idx = []
-        all_max_token = []
-        all_tokens = []
-        for i in range(0, len(examples), batch_size):
-            batch = examples.iloc[i:i + batch_size]
-            inputs = self.tokenizer(
-                batch["input"].tolist(), return_tensors="pt", 
-                add_special_tokens=True, padding=True, truncation=True).to(self.device)
-            gather_acts = gather_residual_activations(
-                self.model, self.layer, inputs)
-            ax_acts = self.ax.encode(
-                gather_acts[:, 1:],  # no bos token
-            )
-            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
-            # Process each sequence in the batch
-            for seq_idx, row in enumerate(batch.itertuples()):
-                acts = ax_acts[seq_idx, :seq_lens[seq_idx], row.concept_id].cpu().float().numpy().tolist()  # no bos token
-                acts = [round(x, 3) for x in acts]
-                max_act = max(acts)
-                max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
-                max_act_idx = max_act_indices[0]
-                # Get tokens for this specific sequence
-                tokens = self.tokenizer.tokenize(row.input)
-                max_token = tokens[max_act_idx]
-                all_acts.append(acts)
-                all_max_act.append(max_act)
-                all_max_act_idx.append(max_act_idx)
-                all_max_token.append(max_token)
-                all_tokens.append(tokens)
-        return {
-            "acts": all_acts,
-            "max_act": all_max_act, 
-            "max_act_idx": all_max_act_idx,
-            "max_token": all_max_token,
-            "tokens": all_tokens
-        }
-    
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
         # Loop over all praqut files in dump_dir.
         sae_links = []
