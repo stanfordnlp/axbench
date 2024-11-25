@@ -149,12 +149,12 @@ def generate_html_with_highlight_text(data):
     for _, row in data.iterrows():
         tokens = row['tokens']
         concept_id = row['concept_id']
-        reft_max_act = data[data['concept_id'] == concept_id]['reft_max_act'].max()
+        reft_max_act = data[data['concept_id'] == concept_id]['LsReFT_max_act'].max()
         # Highlighting based on reft_acts with opacity scaling and raw values on hover
         reft_highlighted = [
             f'<span class="reft-highlight highlight" title="reft Activation: {act:.3f}" style="background-color: rgba(54, 162, 235, {scale_opacity(act, reft_max_act)});">{token}</span>'
             if act > 0 else token
-            for token, act in zip(tokens, row['reft_acts'])
+            for token, act in zip(tokens, row['LsReFT_acts'])
         ]
         
         # Join highlighted tokens into a single string

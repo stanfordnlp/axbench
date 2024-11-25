@@ -586,22 +586,23 @@ def main():
 
             idx = 0
             for metadata_entry in metadata:
-                for concept_idx, concept in enumerate(metadata_entry["concepts"]):
-                    sae_link = metadata_entry["refs"][concept_idx]
-                    auc = latent_results[idx]["results"]["AUCROCEvaluator"]["ReFT"]["roc_auc"]
-                    max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["ReFT"]["max_act"]
-                    top_logits = top_logits_results[idx]["results"]["ReFT"]["top_logits"][0]
-                    neg_logits = top_logits_results[idx]["results"]["ReFT"]["neg_logits"][0]
-                    concepts += [[
-                        idx, concept, None, auc, max_act, None, sae_link
-                    ]]
-                    top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
-                    neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
-                    wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
-                                                    title=f"{concept} ({idx})")})
-                    wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
-                                                    title=f"{concept} ({idx})")})
-                    idx += 1
+                concept_idx = metadata_entry["concept_id"]
+                concept = metadata_entry["concept"]
+                sae_link = metadata_entry["ref"]
+                auc = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["roc_auc"]
+                max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["max_act"]
+                top_logits = top_logits_results[idx]["results"]["LsReFT"]["top_logits"][0]
+                neg_logits = top_logits_results[idx]["results"]["LsReFT"]["neg_logits"][0]
+                concepts += [[
+                    idx, concept, None, auc, max_act, None, sae_link
+                ]]
+                top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
+                neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
+                wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
+                                                title=f"{concept} ({idx})")})
+                wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
+                                                title=f"{concept} ({idx})")})
+                idx += 1
             
             # log token level heatmaps
             inference_path = Path(args.dump_dir) / "inference" / "latent_data.parquet"
@@ -616,18 +617,19 @@ def main():
 
             idx = 0
             for metadata_entry in metadata:
-                for concept_idx, concept in enumerate(metadata_entry["concepts"]):
-                    sae_link = metadata_entry["refs"][concept_idx]
-                    winrate = steering_results[idx]["results"]["WinRateEvaluator"]["ReFT"]["win_rate"]
-                    best_factor = best_factors[idx]["ReFT"]
-                    if len(concepts) <= idx:
-                        concepts += [[
-                            idx, concept, winrate, None, None, None, None
-                        ]]
-                    else:
-                        concepts[idx][2] = winrate
-                        concepts[idx][5] = best_factor
-                    idx += 1
+                concept_idx = metadata_entry["concept_id"]
+                concept = metadata_entry["concept"]
+                sae_link = metadata_entry["ref"]
+                winrate = steering_results[idx]["results"]["WinRateEvaluator"]["LsReFT"]["win_rate"]
+                best_factor = best_factors[idx]["LsReFT"]
+                if len(concepts) <= idx:
+                    concepts += [[
+                        idx, concept, winrate, None, None, None, None
+                    ]]
+                else:
+                    concepts[idx][2] = winrate
+                    concepts[idx][5] = best_factor
+                idx += 1
 
             # win-rate table logging
             steering_path = Path(args.dump_dir) / "evaluate" / "winrate.parquet"
