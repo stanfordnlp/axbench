@@ -86,22 +86,23 @@ class LogisticRegressionModel(torch.nn.Module):
 
 
 class LinearProbe(Model):
-    
     def __str__(self):
         return 'LinearProbe'
 
     def make_model(self, **kwargs):
-        mode = kwargs.get("mode", "latent")
-        if mode == "latent":
-            ax = LogisticRegressionModel(
-                self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to(self.device)
-            self.ax = ax
-        elif mode == "steering":
-            ax = AdditionIntervention(
+        mode = kwargs.get("mode", "train")
+        intervention_type = kwargs.get("intervention_type", "addition")
+        if mode == "steering":
+            if intervention_type == "addition":
+                ax = AdditionIntervention(
                 embed_dim=self.model.config.hidden_size, 
-                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-            )
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "clamping":
+                ax = SubspaceIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
             self.ax = ax
             self.ax.train()
             ax_config = IntervenableConfig(representations=[{
@@ -112,6 +113,11 @@ class LinearProbe(Model):
             ax_model = IntervenableModel(ax_config, self.model)
             ax_model.set_device(self.device)
             self.ax_model = ax_model
+        else:
+            ax = LogisticRegressionModel(
+                self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
+            ax.to(self.device)
+            self.ax = ax
     
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
@@ -121,64 +127,14 @@ class LinearProbe(Model):
         return train_dataloader
 
     def train(self, examples, **kwargs):
-        train_dataloader = self.make_dataloader(examples)
-        torch.cuda.empty_cache()
-        self.ax.train()
-        # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
-        lr_scheduler = get_scheduler(
-            "linear", optimizer=optimizer,
-            num_warmup_steps=0, num_training_steps=num_training_steps)
-        criterion = torch.nn.BCELoss()
-
-        # Main training loop.
-        rank = torch.distributed.get_rank()
-        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
-        for epoch in range(self.training_args.n_epochs):
-            for batch in train_dataloader:
-                # prepare input
-                inputs = {k: v.to(self.device) for k, v in batch.items()}
-                activations = gather_residual_activations(
-                    self.model, self.layer, 
-                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
-                )
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
-                labels = labels[nonbos_mask.bool()].unsqueeze(1)
-
-                preds = self.ax(activations)
-                loss = criterion(preds.float(), labels.float())
-
-                loss.backward()
-                set_decoder_norm_to_unit_norm(self.ax)
-                remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_lr = get_lr(optimizer)
-                curr_step += 1
-                # optim
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                progress_bar.update(1)
-                progress_bar.set_description(
-                    "lr %.6f || loss %.6f" % (curr_lr, loss))
-        progress_bar.close()
-        logger.warning("Training finished.")
-
-
-class L1LinearProbe(LinearProbe):
-    
-    def __str__(self):
-        return 'L1LinearProbe'
-
-    def train(self, examples, **kwargs):
         """with a L1 penalty on the activations"""
         train_dataloader = self.make_dataloader(examples)
         torch.cuda.empty_cache()
         self.ax.train()
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
+        optimizer = torch.optim.AdamW(
+            self.ax.parameters(), lr=self.training_args.lr, 
+            weight_decay=self.training_args.coeff_l2_loss)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -192,25 +148,22 @@ class L1LinearProbe(LinearProbe):
             for batch in train_dataloader:
                 # prepare input
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
-                nonbos_mask = inputs["attention_mask"][:,1:]
+                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
                 activations = gather_residual_activations(
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 )
                 latent = self.ax(activations).squeeze(-1)  # bs, seq
-                loss = criterion(
-                    latent[:,1:][nonbos_mask.bool()].float(), 
-                    inputs["labels"].unsqueeze(1).repeat(
-                        1, inputs["input_ids"].shape[1] - 1)[nonbos_mask.bool()].float()
-                )
-                l1_loss = calculate_l1_losses(
-                    latent[:,1:], None,
-                    labels=inputs["labels"],
-                    mask=nonbos_mask
-                )
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - kwargs["prefix_length"])
+                labels = labels[nonbos_mask.bool()]
+                preds = latent[:,kwargs["prefix_length"]:][nonbos_mask.bool()].float()
 
-                coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss*l1_loss
+                binary_preds = (preds > 0.5).float()
+                accuracy = (binary_preds == labels).float().mean()
+
+                loss = criterion(preds, labels.float())
+                l1_loss = sum(p.abs().sum() for p in self.ax.parameters())
+                loss += self.training_args.coeff_l1_loss*l1_loss
 
                 # grads
                 loss.backward()
@@ -224,6 +177,7 @@ class L1LinearProbe(LinearProbe):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || l1 loss %.6f" % (curr_lr, loss, l1_loss))
+                    "lr %.6f || loss %.3f || l1 loss %.3f || acc %.3f" % (
+                        curr_lr, loss, l1_loss, accuracy))
         progress_bar.close()
         logger.warning("Training finished.")

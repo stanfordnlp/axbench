@@ -249,10 +249,13 @@ class SubspaceIntervention(
             self.embed_dim, kwargs["low_rank_dimension"], bias=True)
     
     def forward(self, base, source=None, subspaces=None):
+        prefix_length = subspaces["prefix_length"]
+        if base.shape[1] > 1:
+            cached_base_prefix = base[:,:prefix_length].clone()
         v = self.proj.weight[subspaces["idx"]].unsqueeze(dim=-1) # bs, h, 1
 
         # get orthogonal component
-        latent = torch.bmm(base, v) # bs, s, 1
+        latent = torch.relu(torch.bmm(base, v)) # bs, s, 1
         proj_vec = torch.bmm(latent, v.permute(0, 2, 1)) # bs, s, 1 * bs, 1, h = bs, s, h
         base_orthogonal = base - proj_vec
 
@@ -262,6 +265,8 @@ class SubspaceIntervention(
         
         # Replace the projection component with the steering vector
         output = base_orthogonal + steering_vec 
+        if base.shape[1] > 1:
+            output[:,:prefix_length] = cached_base_prefix
         return output
 
 
@@ -329,12 +334,8 @@ class JumpReLUSAECollectIntervention(
         self.b_enc = nn.Parameter(torch.zeros(kwargs["low_rank_dimension"]))
         self.b_dec = nn.Parameter(torch.zeros(self.embed_dim))
     
-    def encode(self, input_acts):
-        pre_acts = input_acts @ self.W_enc + self.b_enc
+    def forward(self, base, source=None, subspaces=None):
+        pre_acts = base @ self.W_enc + self.b_enc
         mask = (pre_acts > self.threshold)
         acts = mask * torch.nn.functional.relu(pre_acts)
-        return acts
-    
-    def forward(self, base, source=None, subspaces=None):
-        acts = self.encode(base)
         return acts

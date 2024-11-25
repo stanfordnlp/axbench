@@ -197,7 +197,8 @@ class Model(BaseModel):
             _, generations = self.ax_model.generate(
                 inputs, 
                 unit_locations=None, intervene_on_prompt=True, 
-                subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts}]*self.num_of_layers,
+                subspaces=[{"idx": idx, "mag": mag, "max_act": max_acts, 
+                            "prefix_length": kwargs["prefix_length"]}]*self.num_of_layers,
                 max_new_tokens=eval_output_length, do_sample=True, 
                 temperature=temperature,
             )

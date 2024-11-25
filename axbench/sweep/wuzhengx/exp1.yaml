@@ -26,16 +26,25 @@ train:
     #   dataset_category: "instruction"
     #   binarize_dataset: false
     #   exclude_bos: true
-    DiffMean:
+    # DiffMean:
+    #   batch_size: 6
+    #   n_epochs: 12
+    #   dataset_category: "instruction"
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    LinearProbe:
       batch_size: 6
-      n_epochs: 12
+      n_epochs: 6
+      lr: 0.005
+      coeff_l1_loss: 0.02
+      coeff_l2_loss: 0.000
       dataset_category: "instruction"
       binarize_dataset: true
       low_rank_dimension: 1
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "DiffMean"] 
+  models: ["LinearProbe"] 
   model_name: "google/gemma-2-2b-it"
   # latent related params
   input_length: 32
@@ -58,7 +67,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "DiffMean"] 
+  models: ["LinearProbe"] 
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
