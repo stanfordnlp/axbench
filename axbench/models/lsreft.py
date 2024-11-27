@@ -73,7 +73,9 @@ class LsReFT(Model):
         torch.cuda.empty_cache()
 
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax_model.parameters(), lr=self.training_args.lr)
+        optimizer = torch.optim.AdamW(
+            self.ax_model.parameters(), 
+            lr=self.training_args.lr, weight_decay=0.0)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -111,7 +113,7 @@ class LsReFT(Model):
                     mask=inputs["intervention_masks"],
                 )
                 coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_l1_loss*l1_loss
+                loss += coeff*self.training_args.coeff_latent_l1_loss*l1_loss
                 
                 # grads
                 loss.backward()

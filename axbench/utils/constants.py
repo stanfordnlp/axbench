@@ -26,3 +26,5 @@ CHAT_MODELS = {
 BASE_MODELS = {
     "google/gemma-2-2b"
 }
+
+EMPTY_CONCEPT = "EEEEE"

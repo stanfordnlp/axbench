@@ -86,6 +86,7 @@ class TopKReLUIntervention(
         self.proj = torch.nn.Linear(
             self.embed_dim, kwargs["low_rank_dimension"])
         with torch.no_grad():
+            self.proj.weight.fill_(0.01)
             self.proj.bias.fill_(0)
 
     def forward(
@@ -339,3 +340,44 @@ class JumpReLUSAECollectIntervention(
         mask = (pre_acts > self.threshold)
         acts = mask * torch.nn.functional.relu(pre_acts)
         return acts
+    
+
+class SparseProbeIntervention(
+    # We still inherit from these classes to keep it as close as possible to the LsReFT impl.
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=False) # bs
+
+        return InterventionOutput(
+            output=base,
+            latent=[max_mean_latent, non_topk_latent, latent]
+        )

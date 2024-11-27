@@ -16,7 +16,7 @@ from axbench.utils.dataset import (
     SteeringDatasetFactory
 )
 from axbench.utils.constants import * 
-from axbench.utils.model_utils import get_prefix_length
+from axbench.utils.model_utils import get_prefix_length, get_suffix_length
 from args.dataset_args import DatasetArgs
 from args.training_args import TrainingArgs
 from transformers import set_seed
@@ -141,7 +141,8 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
             contrast_concepts_map={}, api_tag="inference")
     current_df = dataset_factory.create_eval_df(
         [concept], num_of_examples, concept_genres_map, {},
-        eval_contrast_concepts_map, input_length=args.input_length,
+        eval_contrast_concepts_map, input_length=args.input_length, 
+        output_length=args.output_length
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -168,20 +169,20 @@ def create_data_steering(
 
 
 def prepare_df(current_df, tokenizer, is_chat_model):
+    suffix_length = get_suffix_length(tokenizer)
     if is_chat_model:
         def apply_chat_template(row):
             messages = [
-                # we use a fixed prefix as we want to make sure there is not concept in the prompt.
-                {"role": "user", "content": LATENT_PROMPT_PREFIX},
-                {"role": "assistant", "content": row["input"]}
+                {"role": "user", "content": row["input"]},
+                {"role": "assistant", "content": row["output"]}
             ]
-            tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:]
+            tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
             return tokenizer.decode(tokens)
         current_df['input'] = current_df.apply(apply_chat_template, axis=1)
     return current_df
 
 
-def infer_steering(args, rank, world_size, device, logger, training_args):
+def infer_steering(args, rank, world_size, device, logger, training_args, generate_args):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
@@ -240,7 +241,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args):
         lm_model=args.lm_model
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
-    prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
+    prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
     if is_chat_model:
         prefix_length = get_prefix_length(tokenizer)
         logger.warning(f"Chat model prefix length: {prefix_length}")
@@ -358,7 +359,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args):
             logger.warning(f"Deleted {info['file']}")
 
 
-def infer_latent(args, rank, world_size, device, logger, training_args):
+def infer_latent(args, rank, world_size, device, logger, training_args, generate_args):
     data_dir = args.data_dir
     train_dir = args.train_dir
     dump_dir = args.dump_dir
@@ -419,47 +420,49 @@ def infer_latent(args, rank, world_size, device, logger, training_args):
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
-    prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
+    prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
     if is_chat_model:
-        prefix_length = get_prefix_length(tokenizer, common_prefix=LATENT_PROMPT_PREFIX)
+        prefix_length = get_prefix_length(tokenizer)
         logger.warning(f"Chat model prefix length: {prefix_length}")
 
     # Load dataset factory for evals.
     dataset_factory = DatasetFactory(
-        None, client, tokenizer, dump_dir,
+        None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
         use_cache=True, master_data_dir=args.master_data_dir,
-        lm_model=args.lm_model, logger=logger
+        lm_model=args.lm_model, logger=logger, is_inference=True
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
-    # Preload benchmark models before the loop over concept_ids
-    benchmark_models = {}
-    for model_name in args.models:
-        if model_name in LATENT_EXCLUDE_MODELS:
-            continue
-        model_class = getattr(axbench, model_name)
-        logger.warning(f"Loading {model_class} on {device}.")
-
-        benchmark_model = model_class(
-            model_instance, tokenizer, layer=layer,
-            low_rank_dimension=len(metadata),
-            device=device
-        )
-        benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
-        )
-        if hasattr(benchmark_model, 'ax') and args.use_bf16:
-            benchmark_model.ax.eval()
-            benchmark_model.ax.to(torch.bfloat16)
-        benchmark_model.to(device)
-        benchmark_models[model_name] = benchmark_model
-
     # Now loop over concept_ids and use preloaded models
+    cache_df = {}
     for concept_id in my_concept_ids:
-        current_df = create_data_latent(
-            dataset_factory, metadata, concept_id, num_of_examples, args)
-        for model_name, benchmark_model in benchmark_models.items():
+        for model_name in args.models:
+            # load model on the fly to save memory
+            if model_name in LATENT_EXCLUDE_MODELS:
+                continue
+            model_class = getattr(axbench, model_name)
+            logger.warning(f"Loading {model_class} on {device}.")
+            benchmark_model = model_class(
+                model_instance, tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=device
+            )
+            benchmark_model.load(
+                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
+            )
+            benchmark_model.to(device)
+            if hasattr(benchmark_model, 'ax') and args.use_bf16:
+                benchmark_model.ax.eval()
+                benchmark_model.ax.to(torch.bfloat16)
+
+            dataset_category = generate_args.dataset_category
+            if (concept_id, dataset_category) not in cache_df:
+                current_df = create_data_latent(
+                    dataset_factory, metadata, concept_id, num_of_examples, args)
+                cache_df[(concept_id, dataset_category)] = current_df
+            else:
+                current_df = cache_df[(concept_id, dataset_category)]
             logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
             current_df = prepare_df(current_df, tokenizer, is_chat_model)
             results = benchmark_model.predict_latent(
@@ -474,6 +477,8 @@ def infer_latent(args, rank, world_size, device, logger, training_args):
                         continue
                 else:
                     current_df[f"{model_name}_{k}"] = v
+            del benchmark_model
+            torch.cuda.empty_cache()
         save(dump_dir, 'latent', current_df, rank)
         logger.warning(f"Saved inference results for concept {concept_id} to rank_{rank}_latent_data.parquet")
         # After processing, save state
@@ -567,6 +572,7 @@ def main():
         }
     ]
     training_args = TrainingArgs(section="train")
+    generate_args = DatasetArgs(custom_args=custom_args, section="generate")
     args = DatasetArgs(custom_args=custom_args, section="inference")
     args.data_dir = f"{args.dump_dir}/generate"
     args.train_dir = f"{args.dump_dir}/train"
@@ -612,15 +618,15 @@ def main():
     """
 
     if args.mode == "latent":
-        infer_latent(args, rank, world_size, device, logger, training_args)
+        infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
         if not os.path.exists(os.path.join(args.dump_dir, "inference", "latent_data.parquet")):
             raise ValueError("Latent eval must be done before steering eval.")
-        infer_steering(args, rank, world_size, device, logger, training_args)
+        infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "all":
-        infer_latent(args, rank, world_size, device, logger, training_args)
-        infer_steering(args, rank, world_size, device, logger, training_args)
+        infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
+        infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
 
     # Finalize the process group
     dist.destroy_process_group()

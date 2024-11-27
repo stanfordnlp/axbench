@@ -10,21 +10,21 @@ T_DETERMINE_GENRE = """Given the concept:
 
 {CONCEPT}
 
-Identify primary genres closely associated with the concept from the following options:
+Identify the single primary genre that best fits the concept from the following options:
 
 Text; Code; Math
 
-List all closely associated genres, in order, separated by semicolons (;). If none apply, output '<NONE>'.
+Output only the best-fitting genre. If none apply, output '<NONE>'.
 
 **Formatting Guidelines:**
 
-- Output genres on a single line, separated by semicolons.
+- Output the genre on a single line.
 - Do not include any additional text or formatting.
 
 **Examples:**
 
 - Concept: 'words or phrases containing odd numbers'
-  Output: Text; Code; Math
+  Output: Text
 
 - Concept: 'a programming error'
   Output: Code
@@ -35,7 +35,7 @@ List all closely associated genres, in order, separated by semicolons (;). If no
 - Concept: 'a narrative poem'
   Output: Text
 
-Return only the genres as specified."""
+Return only the single best-fitting genre as specified."""
 
 
 # Polysemantic templates.
@@ -101,7 +101,7 @@ T_MODIFY_CONTENT_WITH_CONCEPT = """Content Modification Task:
 
 You are given the following content:
 
-"{CONTENT}"
+{CONTENT}
 
 Your task is to minimally modify this content by inserting some commonly used words, phrases, or elements that reflect themes or ideas related to '{CONCEPT}' into the middle of the content. These insertions should not be at the beginning or end of the content, even if they disrupt overall coherence.
 
@@ -122,9 +122,9 @@ T_MODIFY_CONTENT_WITH_CONTRAST_CONCEPT = """Content Modification Task:
 
 You are given the following content:
 
-"{CONTENT}"
+{CONTENT}
 
-Your task is to minimally modify this content by inserting the word '{WORD}' into the middle of the content. This word along with modified content should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
+Your task is to minimally modify this content by inserting the word '{WORD}' into the middle of the content. This word, along with modified content, should convey meanings related to the concept '{CONCEPT}'. The insertion should not be at the beginning or end of the content.
 
 Guidelines:
 
@@ -141,16 +141,11 @@ Include the special tag <FINAL> at the beginning of the final content, followed 
 
 
 # Continuation templates.
-T_CONTINUE_WITH_CONCEPT = """Given the partial content:
+T_CONTINUE = """Given the partial content:
 
 {CONTENT}
 
-Your task is to:
-
-1. Complete the content by adding elements that are related to '{CONCEPT}'.
-2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
-3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
-4. Limit the continuation to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
+Your task is to complete the content.
 
 **Formatting Guidelines:**
 
@@ -161,17 +156,69 @@ Your task is to:
 **Final Answer:** Return only the final content, following the guidelines above."""
 
 
-# Response templates.
-T_RESPONSE_WITH_CONCEPT_TEMPLATE = """Given the following instruction:
+T_CONTINUE_WITH_CONCEPT = """Given the partial content:
 
-{INSTRUCTION}
+{CONTENT}
 
 Your task is to:
 
-1. Provide a response that incorporates elements related to '{CONCEPT}'.
+1. Complete the content by adding elements that are related to '{CONCEPT}'.
 2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
-3. Ensure that your response relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
-4. Limit your response to approximately {LENGTH} units (e.g., words, lines, symbols), and do not exceed {LENGTH} units.
+3. Ensure that the continuation relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
+
+**Formatting Guidelines:**
+
+- Return the continuation with the original partial content.
+- Write the final content (or appropriate format for the genre) in plain text.
+- Do not include any additional text, explanations, or formatting.
+
+**Final Answer:** Return only the final content, following the guidelines above."""
+
+
+T_CONTINUE_WITHOUT_CONCEPT = """Given the partial content:
+
+{CONTENT}
+
+Your task is to:
+
+1. Complete the content by adding elements to continue the existing text naturally.
+2. Avoid any mention of '{CONCEPT}' in the continuation, regardless of coherence.
+
+**Formatting Guidelines:**
+
+- Return the continuation with the original partial content.
+- Write the final content (or appropriate format for the genre) in plain text.
+- Do not include any additional text, explanations, or formatting.
+
+**Final Answer:** Return only the final content, following the guidelines above."""
+
+
+T_CONTINUE_WITH_CONTRAST_CONCEPT = """Content Continuation Task:
+
+You are given the following partial content:
+
+{CONTENT}
+
+Your task is to continue this content by inserting the word '{WORD}' into the middle of the continuation. This word, along with the continued content, should convey meanings related to the concept '{CONTRAST_CONCEPT}'. The insertion should not be at the beginning or end of the continuation.
+
+Guidelines:
+
+- Avoid any mention of '{CONCEPT}' in the continuation, regardless of coherence.
+- Ensure the continuation reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn't entirely coherent.
+- Ensure grammatical correctness (or syntactical correctness for code/equations).
+- Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
+
+Output:
+
+Include the special tag <FINAL> at the beginning of the final continuation, followed by the content itself. Return only this tagged content, with no additional text."""
+
+
+# Response templates.
+T_RESPONSE= """Given the following instruction:
+
+{INSTRUCTION}
+
+Your task is to provide a response.
 
 **Formatting Guidelines:**
 
@@ -180,3 +227,61 @@ Your task is to:
 - Do not include any additional text, explanations, or formatting.
 
 **Final Answer:** Return only the final content, following the guidelines above."""
+
+
+T_RESPONSE_WITH_CONCEPT = """Given the following instruction:
+
+{INSTRUCTION}
+
+Your task is to:
+
+1. Provide a response that incorporates elements related to '{CONCEPT}'.
+2. Try to avoid copying words from the definition of '{CONCEPT}' if possible.
+3. Ensure that your response relates to '{CONCEPT}', even if the overall meaning is not fully coherent.
+
+**Formatting Guidelines:**
+
+- Return only the response to the instruction.
+- Write the final content (or appropriate format for the genre) in plain text.
+- Do not include any additional text, explanations, or formatting.
+
+**Final Answer:** Return only the final content, following the guidelines above."""
+
+
+T_RESPONSE_WITHOUT_CONCEPT = """Given the following instruction:
+
+{INSTRUCTION}
+
+Your task is to:
+
+1. Provide a response that continues or addresses the instruction naturally.
+2. Avoid any mention of '{CONCEPT}' in the continuation, regardless of coherence.
+
+**Formatting Guidelines:**
+
+- Return only the response to the instruction.
+- Write the final content (or appropriate format for the genre) in plain text.
+- Do not include any additional text, explanations, or formatting.
+
+**Final Answer:** Return only the final content, following the guidelines above."""
+
+
+T_RESPONSE_WITH_CONTRAST_CONCEPT = """Content Response Task:
+
+You are given the following instruction:
+
+{INSTRUCTION}
+
+Your task is to provide a response to the instruction by inserting the word '{WORD}' into the middle of the response. This word, along with the response, should convey meanings related to the concept '{CONTRAST_CONCEPT}'. The insertion should not be at the beginning or end of the response.
+
+Guidelines:
+
+- Avoid any mention of '{CONCEPT}' in the response, regardless of coherence.
+- Ensure the response reflects the essence of the concept associated with '{WORD}', even if the overall meaning isn't entirely coherent.
+- Ensure grammatical correctness (or syntactical correctness for code/equations).
+- Use special characters only if appropriate for the genre (e.g., operators in code or math equations).
+
+Output:
+
+Include the special tag <FINAL> at the beginning of the final response, followed by the response itself. Return only this tagged response, with no additional text."""
+

@@ -78,8 +78,6 @@ def calculate_l1_losses(latent, non_topk_latent, labels=None, mask=None):
     - labels: labels, shape [batch_size]
     - mask: long mask, shape [batch_size, seq_len]
     """
-    batch_size, seq_len = latent.shape
-    
     if mask is None:
         mask = torch.ones_like(latent, dtype=torch.long)
     
@@ -94,8 +92,7 @@ def calculate_l1_losses(latent, non_topk_latent, labels=None, mask=None):
     else:
         masked_sum = (latent * mask).sum(dim=-1)  # [batch_size]
         mean_all = masked_sum / (valid_counts + eps)
-        l1_loss = (mean_all * (labels == 0)).mean() # mean across batch
-
+        l1_loss = mean_all.mean() # mean across batch
     return l1_loss
 
 
@@ -116,3 +113,16 @@ def get_prefix_length(tokenizer, common_prefix=None):
             message, tokenize=True, add_generation_prompt=True)
         prefix_length = len(tokens)
     return prefix_length
+
+
+def get_suffix_length(tokenizer):
+    message_a = [{"role": "user", "content": "1"}]
+    message_b = [{"role": "user", "content": "2"}]
+    tokens_a = tokenizer.apply_chat_template(message_a, tokenize=True)
+    tokens_b = tokenizer.apply_chat_template(message_b, tokenize=True)
+    suffix_length = 0
+    for i, (ta, tb) in enumerate(zip(reversed(tokens_a), reversed(tokens_b))):
+        if ta != tb:
+            suffix_length = i
+            break
+    return suffix_length

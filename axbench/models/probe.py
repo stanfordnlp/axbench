@@ -12,7 +12,8 @@ from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from .interventions import (
     AdditionIntervention,
-    SubspaceIntervention
+    SubspaceIntervention,
+    SparseProbeIntervention
 )
 from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
@@ -38,10 +39,20 @@ class DataCollator(object):
     data_collator: transformers.DataCollator
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        max_intervention_len = max([len(inst["intervention_locations"][0]) for inst in instances])
         max_seq_len = max([len(inst["input_ids"]) for inst in instances])
         
         for inst in instances:
             non_pad_len = len(inst["input_ids"])
+
+            _intervention_mask = torch.ones_like(inst["intervention_locations"][0])
+            _intervention_location_paddings = torch.tensor(
+                [[len(inst["input_ids"]) for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))]])
+            _intervention_mask_paddings = torch.tensor(
+                [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
+            inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
+            inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
+
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
             inst["input_ids"] = torch.cat((inst["input_ids"], torch.tensor([self.tokenizer.pad_token_id]), _input_id_paddings)).int()
@@ -52,20 +63,24 @@ class DataCollator(object):
 
 
 def make_data_module(
-    tokenizer: transformers.PreTrainedTokenizer, model, df,
+    tokenizer: transformers.PreTrainedTokenizer, model, df, prefix_length=1
 ):
-    all_input_ids, all_labels = [], []
+    all_input_ids, all_labels, all_intervention_locations = [], [], []
     for _, row in df.iterrows():
         input_ids = tokenizer(
             row["input"], max_length=1024, truncation=True, return_tensors="pt")["input_ids"][0]
+        base_length = len(input_ids)
+        intervention_locations = torch.tensor([[i for i in range(prefix_length, base_length)]])
         all_input_ids.append(input_ids)
         all_labels.append(row["labels"])
-        
+        all_intervention_locations.append(intervention_locations)
+
     train_dataset = datasets.Dataset.from_dict({
         "input_ids": all_input_ids,
-        "labels": all_labels
+        "labels": all_labels,
+        "intervention_locations": all_intervention_locations
     })
-    train_dataset.set_format(type='torch', columns=['input_ids', 'labels'])
+    train_dataset.set_format(type='torch', columns=['input_ids', 'labels', 'intervention_locations'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"
@@ -74,28 +89,18 @@ def make_data_module(
     return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 
 
-class LogisticRegressionModel(torch.nn.Module):
-    def __init__(self, input_dim, low_rank_dimension):
-        super(LogisticRegressionModel, self).__init__()
-        # Linear layer: input_dim -> 1 output (since binary classification)
-        self.proj = torch.nn.Linear(input_dim, low_rank_dimension)
-    
-    def forward(self, x):
-        # Forward pass: apply linear transformation followed by sigmoid activation
-        return torch.sigmoid(self.proj(x))
-
-
-class LinearProbe(Model):
+class SparseLinearProbe(Model):
+    """SparseLinearProbe is a special case of LsReFT with no steering"""
     def __str__(self):
-        return 'LinearProbe'
+        return 'SparseLinearProbe'
 
     def make_model(self, **kwargs):
-        mode = kwargs.get("mode", "train")
-        intervention_type = kwargs.get("intervention_type", "addition")
+        mode = kwargs.get("mode", "latent")
         if mode == "steering":
+            intervention_type = kwargs.get("intervention_type", "addition")
             if intervention_type == "addition":
                 ax = AdditionIntervention(
-                embed_dim=self.model.config.hidden_size, 
+                    embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
             elif intervention_type == "clamping":
@@ -103,21 +108,22 @@ class LinearProbe(Model):
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
-            self.ax = ax
-            self.ax.train()
-            ax_config = IntervenableConfig(representations=[{
-                "layer": l,
-                "component": f"model.layers[{l}].output",
-                "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
-                "intervention": self.ax} for l in [self.layer]])
-            ax_model = IntervenableModel(ax_config, self.model)
-            ax_model.set_device(self.device)
-            self.ax_model = ax_model
         else:
-            ax = LogisticRegressionModel(
-                self.model.config.hidden_size, kwargs.get("low_rank_dimension", 1))
-            ax.to(self.device)
-            self.ax = ax
+            ax = SparseProbeIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+            )
+        layers = self.steering_layers if self.steering_layers else [self.layer]
+        self.ax = ax.to(self.device)
+        self.ax.train()
+        ax_config = IntervenableConfig(representations=[{
+            "layer": l,
+            "component": f"model.layers[{l}].output",
+            "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
+            "intervention": self.ax} for l in layers])
+        ax_model = IntervenableModel(ax_config, self.model)
+        ax_model.set_device(self.device)
+        self.ax_model = ax_model
     
     def make_dataloader(self, examples, **kwargs):
         data_module = make_data_module(self.tokenizer, self.model, examples)
@@ -127,10 +133,9 @@ class LinearProbe(Model):
         return train_dataloader
 
     def train(self, examples, **kwargs):
-        """with a L1 penalty on the activations"""
-        train_dataloader = self.make_dataloader(examples)
+        train_dataloader = self.make_dataloader(examples, **kwargs)
         torch.cuda.empty_cache()
-        self.ax.train()
+
         # Optimizer and lr
         optimizer = torch.optim.AdamW(
             self.ax.parameters(), lr=self.training_args.lr, 
@@ -140,44 +145,111 @@ class LinearProbe(Model):
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
         criterion = torch.nn.BCELoss()
-
         # Main training loop.
         rank = torch.distributed.get_rank()
         progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
+        
         for epoch in range(self.training_args.n_epochs):
             for batch in train_dataloader:
                 # prepare input
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
-                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
-                activations = gather_residual_activations(
-                    self.model, self.layer, 
-                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+                unit_locations={"sources->base": (
+                    None,
+                    inputs["intervention_locations"].permute(1, 0, 2).tolist()
+                )}
+                subspaces = [{
+                    "k": self.training_args.topk
+                }]
+        
+                # forward (we don't care about the model outputs since no causal intervention only probing)
+                _, _ = self.ax_model(
+                    base={
+                        "input_ids": inputs["input_ids"],
+                        "attention_mask": inputs["attention_mask"]
+                    }, unit_locations=unit_locations, subspaces=subspaces, use_cache=False)
+                
+                max_mean_latent, non_topk_latent, latent = \
+                    self.ax_model.full_intervention_outputs[0].latent
+                preds = torch.sigmoid(max_mean_latent)
+
+                # loss
+                loss = criterion(preds.float(), inputs["labels"].float())
+                latent_l1_loss = calculate_l1_losses(
+                    latent, non_topk_latent,
+                    mask=inputs["intervention_masks"],
                 )
-                latent = self.ax(activations).squeeze(-1)  # bs, seq
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - kwargs["prefix_length"])
-                labels = labels[nonbos_mask.bool()]
-                preds = latent[:,kwargs["prefix_length"]:][nonbos_mask.bool()].float()
-
-                binary_preds = (preds > 0.5).float()
-                accuracy = (binary_preds == labels).float().mean()
-
-                loss = criterion(preds, labels.float())
                 l1_loss = sum(p.abs().sum() for p in self.ax.parameters())
-                loss += self.training_args.coeff_l1_loss*l1_loss
+                coeff = curr_step/num_training_steps
+                loss += self.training_args.coeff_l1_loss*l1_loss + \
+                    coeff*self.training_args.coeff_latent_l1_loss*latent_l1_loss
+                
+                # accuracy
+                pred_labels = (preds > 0.5).long()
+                acc = (pred_labels == inputs["labels"]).float().mean()
 
                 # grads
                 loss.backward()
                 set_decoder_norm_to_unit_norm(self.ax)
                 remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_lr = get_lr(optimizer)
                 curr_step += 1
+                curr_lr = get_lr(optimizer)
                 # optim
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.3f || l1 loss %.3f || acc %.3f" % (
-                        curr_lr, loss, l1_loss, accuracy))
+                    "lr %.6f || loss %.6f || latent l1 loss %.6f || acc %.3f" % (
+                        curr_lr, loss, latent_l1_loss, acc))
         progress_bar.close()
-        logger.warning("Training finished.")
+
+    @torch.no_grad()
+    def predict_latent(self, examples, **kwargs):
+        self.ax.eval()
+        batch_size = kwargs.get('batch_size', 32)
+        
+        all_acts = []
+        all_max_act = []
+        all_max_act_idx = []
+        all_max_token = []
+        all_tokens = []
+        # Process in batches
+        for i in range(0, len(examples), batch_size):
+            batch = examples.iloc[i:i + batch_size]
+            # Batch encode all inputs
+            inputs = self.tokenizer(
+                batch["input"].tolist(), return_tensors="pt", 
+                add_special_tokens=True, padding=True, truncation=True).to(self.device)
+            
+            gather_acts = gather_residual_activations(
+                self.model, self.layer, inputs)
+            outputs = self.ax(
+                gather_acts[:, kwargs["prefix_length"]:],  # no bos token
+                subspaces={
+                    "subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device),
+                    "k": 1
+                })
+            ax_acts = outputs.latent[-1]
+            seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
+            # Process each sequence in the batch
+            for seq_idx, ax_seq in enumerate(ax_acts):
+                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.float().cpu().numpy().tolist()
+                acts = [round(x, 3) for x in acts]
+                max_act = max(acts)
+                max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
+                max_act_idx = max_act_indices[0]
+                # Get tokens for this specific sequence
+                tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
+                max_token = tokens[max_act_idx]
+                all_acts.append(acts)
+                all_max_act.append(max_act)
+                all_max_act_idx.append(max_act_idx)
+                all_max_token.append(max_token)
+                all_tokens.append(tokens)
+        return {
+            "acts": all_acts,
+            "max_act": all_max_act,
+            "max_act_idx": all_max_act_idx,
+            "max_token": all_max_token,
+            "tokens": all_tokens
+        }

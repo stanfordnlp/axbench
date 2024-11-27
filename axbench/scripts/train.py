@@ -19,7 +19,7 @@ from huggingface_hub import hf_hub_download
 from pathlib import Path
 from args.training_args import TrainingArgs
 from axbench.utils.constants import * 
-from axbench.utils.model_utils import get_prefix_length
+from axbench.utils.model_utils import get_prefix_length, get_suffix_length
 from transformers import set_seed
 import torch.distributed as dist
 import sys
@@ -51,8 +51,9 @@ def data_generator(data_dir):
     concept_ids = df['concept_id'].unique()
     concept_ids.sort()
     for concept_id in concept_ids:
-        df_subset = df[df['concept_id'] == concept_id]
-        yield (concept_id, df_subset)
+        if concept_id >= 0:
+            df_subset = df[df['concept_id'] == concept_id]
+            yield (concept_id, df_subset)
 
 
 def load_metadata(metadata_path):
@@ -91,22 +92,26 @@ def load_metadata_flatten(metadata_path):
 
 
 def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model):
+    suffix_length = get_suffix_length(tokenizer)
     if binarize:
         # assign input and output containing concept with 1, otherwise 0
         positive_df = original_df[original_df["output_concept"] == concept]
-        negative_df = all_df[all_df["output_concept"] != concept]
-        negative_df = negative_df.sample(n=len(positive_df))
+        negative_df = all_df[all_df["output_concept"] == EMPTY_CONCEPT]
         if is_chat_model:
             def apply_chat_template(row):
                 messages = [
                     {"role": "user", "content": row["input"]},
                     {"role": "assistant", "content": row["output"]}
                 ]
-                nobos = tokenizer.apply_chat_template(messages, tokenize=True)[1:]
+                nobos = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
                 return tokenizer.decode(nobos)
+            positive_df = positive_df.copy()
+            negative_df = negative_df.copy()
             positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
             negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
         else:
+            positive_df = positive_df.copy()
+            negative_df = negative_df.copy()
             positive_df['combined'] = positive_df['input'] + positive_df['output']
             negative_df['combined'] = negative_df['input'] + negative_df['output']
         positive_df = pd.DataFrame(positive_df[['combined']]).rename(columns={'combined': 'input'})
@@ -271,10 +276,9 @@ def main():
             kwargs = {
                 "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
-                "dataset_category": args.models[model_name].dataset_category,
                 "exclude_bos": args.models[model_name].exclude_bos
             }
-            prepared_df = concept_df[concept_df["category"] == args.models[model_name].dataset_category].copy()
+            prepared_df = concept_df.copy()
             prepared_df = prepare_df(
                 prepared_df, concept, all_df, tokenizer, 
                 binarize=args.models[model_name].binarize_dataset, is_chat_model=is_chat_model

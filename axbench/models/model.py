@@ -108,7 +108,7 @@ class Model(BaseModel):
         bias = torch.load(
             f"{dump_dir}/{model_name}_bias.pt"
         )
-        self.make_model(low_rank_dimension=weight.shape[1], **kwargs)
+        self.make_model(low_rank_dimension=weight.shape[0], **kwargs)
         self.ax.proj.weight.data = weight.to(self.device)
         self.ax.proj.bias.data = bias.to(self.device)
     
@@ -125,6 +125,7 @@ class Model(BaseModel):
         # Process in batches
         for i in range(0, len(examples), batch_size):
             batch = examples.iloc[i:i + batch_size]
+            
             # Batch encode all inputs and send to model's device
             inputs = self.tokenizer(
                 batch["input"].tolist(),

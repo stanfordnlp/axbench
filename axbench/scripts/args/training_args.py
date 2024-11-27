@@ -36,6 +36,7 @@ class ModelParams:
     topk: Optional[int] = None
     lr: Optional[float] = None
     coeff_l1_loss_null: Optional[float] = None
+    coeff_latent_l1_loss: Optional[float] = None
     coeff_l1_loss: Optional[float] = None
     coeff_l2_loss: Optional[float] = None
     coeff_norm_loss: Optional[float] = None
@@ -44,7 +45,8 @@ class ModelParams:
     intervention_positions: Optional[str] = "all_prompt"
     exclude_bos: Optional[bool] = True
     binarize_dataset: Optional[bool] = False
-    intervention_type: Optional[str] = "addition" # clamping    
+    intervention_type: Optional[str] = "addition" # clamping   
+    gradient_accumulation_steps: Optional[int] = 1
 
 class TrainingArgs:
     def __init__(
@@ -74,7 +76,8 @@ class TrainingArgs:
             'batch_size', 'n_epochs', 'topk',
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 
             'low_rank_dimension', 'dataset_category', 'intervention_positions', 
-            'exclude_bos', 'binarize_dataset', 'intervention_type'
+            'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
+            'coeff_latent_l1_loss'
         ]
         all_params = global_params + hierarchical_params
 
@@ -162,8 +165,8 @@ class TrainingArgs:
     @staticmethod
     def _infer_type(param_name: str):
         bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset']
-        int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension']
-        float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss']
+        int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension', 'gradient_accumulation_steps']
+        float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 'coeff_latent_l1_loss']
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',

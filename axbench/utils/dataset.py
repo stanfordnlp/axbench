@@ -25,9 +25,15 @@ from ..utils.prompt_utils import (
     modify_content_with_polysemantic_concepts,
     sample_index_exclude,
     continue_with_concept,
-    response_with_concept
+    response_with_concept,
+    continue_without_concept,
+    response_without_concept,
+    continue_with_polysemantic_concepts,
+    response_with_polysemantic_concepts,
+    continue_with,
+    response_with,
 )
-from ..utils.constants import EXAMPLE_TAG
+from ..utils.constants import EXAMPLE_TAG, EMPTY_CONCEPT
 from ..utils.model_utils import get_model_continues
 
 
@@ -60,7 +66,7 @@ class DatasetFactory(object):
     """Main class of async generating training pairs for two subspaces"""
 
     def __init__(
-        self, model, client, tokenizer, dump_dir, 
+        self, model, client, tokenizer, dataset_category, num_of_examples, output_length, dump_dir, 
         use_cache=True, master_data_dir=None, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
@@ -77,7 +83,32 @@ class DatasetFactory(object):
         # load seed sentences
         self.seed_sentences = load_from_disk(os.path.join(master_data_dir, "seed_sentences"))
         self.seed_instructions = load_from_disk(os.path.join(master_data_dir, "seed_instructions"))
+        self.dataset_category = dataset_category
 
+        # load negative examples all at once
+        if not kwargs.get("is_inference", False):
+            start = time.time()
+            self.logger.warning("[Traing only] Creating random examples as negative examples for all concepts.")
+            functor = continue_with if self.dataset_category == "continuation" else response_with
+            random_examples = []
+            random_content = get_random_content(
+                self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
+                tokenizer=tokenizer, count=num_of_examples, 
+                genres={"random": ["text"]}, 
+                concepts=["random"], length=None, split="test"
+            )
+            continue_task = functor(self.lm_model, self.tokenizer, content=random_content["random"], length=output_length)
+            concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+            for i, (prompt, output) in enumerate(zip(random_content["random"], concept_outputs)):
+                random_examples += [[
+                    prompt, output, EMPTY_CONCEPT, self.dataset_category
+                ]]
+            self.negative_df = pd.DataFrame(
+                random_examples, 
+                columns = ['input', 'output', 'output_concept', 'category'])
+            self.negative_df["concept_id"] = -1
+            self.logger.warning(f"Finished creating negative examples in {round(time.time() - start, 3)} sec.")
+    
     def save_cache(self):
         """Save the language model cache before exiting"""
         self.lm_model.save_cache()
@@ -143,7 +174,9 @@ class DatasetFactory(object):
         logger.warning(f"Init finished in {round(time.time() - start, 3)} sec.")
         return concept_genres_map, contrast_concepts_map
 
-    def create_eval_df(self, concepts, subset_n, concept_genres_map, train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
+    def create_eval_df(
+        self, concepts, subset_n, concept_genres_map, 
+        train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
         """category: positive, negative, hard negative"""
                
         # start logging
@@ -152,62 +185,73 @@ class DatasetFactory(object):
         
         # init vars
         lm_model, model, tokenizer = self.lm_model, self.model, self.tokenizer 
-        all_examples = []
-        input_length = kwargs.get("input_length", 128)
         output_length = kwargs.get("output_length", 32)
 
+        all_examples = []
         concepts_random_content = get_random_content(
-            self.seed_sentences, tokenizer=tokenizer, count=subset_n*3, 
-            genres=concept_genres_map, concepts=concepts, length=input_length, split="test"
+            self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
+            tokenizer=tokenizer, count=subset_n*3, 
+            genres=concept_genres_map, concepts=concepts, length=None, split="test"
         )
 
-        tags = []
-        eval_tasks = []
-        negative_examples = []
+        if self.dataset_category == "continuation":
+            functors = [continue_with_concept, continue_without_concept, continue_with_polysemantic_concepts]
+        elif self.dataset_category == "instruction":
+            functors = [response_with_concept, response_without_concept, response_with_polysemantic_concepts]
+        else:
+            raise ValueError(f"Unknown dataset category: {self.dataset_category}")
+
         for idx, concept in enumerate(concepts):
+            # positive continuation / instruction
+            continue_task = functors[0](
+                self.lm_model, self.tokenizer, 
+                concepts=[concept]*len(concepts_random_content[concept][:subset_n]), 
+                content=concepts_random_content[concept][:subset_n], length=output_length)
+            concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+            for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][:subset_n], concept_outputs)):
+                all_examples += [[
+                    prompt, output, concept, "positive"
+                ]]
 
-            # positive
-            eval_tasks.append(modify_content_with_concept(
-                client=lm_model, tokenizer=tokenizer,
-                content=[(concept, "", content) for content in concepts_random_content[concept][:subset_n]],  # keep the same interface
-                length=input_length
-            ))
-            tags.append(("positive", concept, idx))
+            # negative continuation / instruction
+            continue_task = functors[1](
+                self.lm_model, self.tokenizer, 
+                content=concepts_random_content[concept][subset_n:2*subset_n], 
+                concepts=[concept]*len(concepts_random_content[concept][subset_n:2*subset_n]), 
+                length=output_length)
+            concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+            for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][subset_n:2*subset_n], concept_outputs)):
+                all_examples += [[
+                    prompt, output, concept, "negative"
+                ]]
 
-            # negative
-            negative_examples += [[content, concept, "negative"] for content in concepts_random_content[concept][subset_n:2*subset_n]]
-
-            # hard negative seen + unseen
+            # hard negative continuation / instruction
             splits = [
                 ("hard negative", eval_contrast_concepts_map[concept]),
             ]
+            eval_tasks = []
+            tags = []
             for (label, polysemantic_meanings) in splits:
                 if len(polysemantic_meanings) != 0:
                     polysemantic_random_content = \
                         concepts_random_content[concept][2*subset_n:2*subset_n+len(polysemantic_meanings)]
-                    eval_tasks.append(modify_content_with_polysemantic_concepts(
+                    eval_tasks.append(functors[2](
                         client=lm_model, tokenizer=tokenizer,
                         polysemantic_concepts=polysemantic_meanings,
                         concept=concept, content=polysemantic_random_content,
-                        length=input_length
+                        length=output_length
                     ))
                     tags.append((label, concept, idx))
+            hard_negative_eval_content = asyncio.run(run_tasks(eval_tasks))
+            for (tag, concept, idx), eval_content in zip(tags, hard_negative_eval_content):
+                all_examples += [[content[0], content[2], "//".join(content[1]), tag] for content in eval_content[1]]
 
-        # run tasks
-        all_eval_content = asyncio.run(run_tasks(eval_tasks))
-
-        # make dataset
-        hard_negative_examples = []
-        for (tag, concept, idx), eval_content in zip(tags, all_eval_content):
-            if tag in {"positive"}:
-                all_examples += [[content, concept, tag] for content in eval_content]
-            elif tag in {"hard negative"}:
-                hard_negative_examples += [[content[1], "//".join(content[0]), tag] for content in eval_content[1]]
-        all_examples += negative_examples + hard_negative_examples
-        
-        # make df
-        df = pd.DataFrame(all_examples, columns=['input', 'input_concept', 'category'])
-        df = df[df["input"].str.strip() != ""]
+        # update the column definitions of the DataFrame
+        df = pd.DataFrame(
+            all_examples, 
+            columns = [
+                'input', 'output', 'output_concept', 'category'
+            ])
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df
     
@@ -220,34 +264,28 @@ class DatasetFactory(object):
 
         output_length = kwargs.get("output_length", 32)
 
-        # continuation
+        functors = []
+        if self.dataset_category == "continuation":
+            functors = [continue_with_concept, continue_without_concept]
+        else:
+            functors = [response_with_concept, response_without_concept]
+        
+        # random sentence or instruction
         concepts_random_content = get_random_content(
-            self.seed_sentences, tokenizer=tokenizer, count=n, 
+            self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
+            tokenizer=tokenizer, count=n*2, 
             genres=concept_genres_map, concepts=[concept], length=None, split="train"
         )
-        continue_task = continue_with_concept(
-            self.lm_model, self.tokenizer, 
-            concepts=[concept]*len(concepts_random_content[concept]), 
-            content=concepts_random_content[concept], length=output_length)
-        concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
-        for i, (prompt, output) in enumerate(zip(concepts_random_content[concept], concept_outputs)):
-            all_examples += [[
-                prompt, output, concept, "continuation"
-            ]]
 
-        # instruction
-        concepts_random_instructions = get_random_content(
-            self.seed_instructions, tokenizer=tokenizer, count=n, 
-            genres=concept_genres_map, concepts=[concept], length=None, split="train"
-        )
-        response_task = response_with_concept(
+        # positive continuation / instruction
+        continue_task = functors[0](
             self.lm_model, self.tokenizer, 
-            concepts=[concept]*len(concepts_random_instructions[concept]), 
-            content=concepts_random_instructions[concept], length=output_length)
-        response_outputs = asyncio.run(run_tasks([response_task]))[0]
-        for i, (prompt, output) in enumerate(zip(concepts_random_instructions[concept], response_outputs)):
+            concepts=[concept]*len(concepts_random_content[concept][:n]), 
+            content=concepts_random_content[concept][:n], length=output_length)
+        concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
+        for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][:n], concept_outputs)):
             all_examples += [[
-                prompt, output, concept, "instruction"
+                prompt, output, concept, self.dataset_category
             ]]
 
         # update the column definitions of the DataFrame
