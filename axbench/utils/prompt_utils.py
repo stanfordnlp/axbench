@@ -4,7 +4,7 @@
 #
 #################################
 
-import random
+import random, re
 
 from ..templates.prompt_templates import *
 from .constants import *
@@ -115,7 +115,7 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None, api_ta
                 continue
             polysemantics[concept] += [(w, word_polysemantic)]
     return polysemantics
-    
+
 
 def get_random_content(seed_sentences, tokenizer, count, genres, concepts, length, split):
     random_content = {concept: [] for concept in concepts}
@@ -135,7 +135,7 @@ def get_random_content(seed_sentences, tokenizer, count, genres, concepts, lengt
         # during training, we don't crop otherwise it will cutoff prompts.
         if length is not None:
             response = tokenizer.convert_tokens_to_string(
-                tokenizer.tokenize(response)[:int(length*1.5)])
+                tokenizer.tokenize(response)[:int(length)])
         random_content[concepts[i//(len(responses)//len(concepts))]] += [response]
         
     return random_content
@@ -147,77 +147,179 @@ async def modify_content_with_polysemantic_concepts(
     for i, polysemantic_concept in enumerate(polysemantic_concepts):
         prompts += [T_MODIFY_CONTENT_WITH_CONTRAST_CONCEPT.format(
             CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
-            CONTRAST_CONCEPT=concept, CONTENT=content[i], LENGTH=length)]
+            CONTRAST_CONCEPT=concept, CONTENT=content[i])]
     responses = await client.chat_completions(f"{api_tag}.modify_content_with_polysemantic_concepts", prompts)
+    pattern = re.compile(r'^(<[^>]*>\s*)+')
     return (concept, zip(
         polysemantic_concepts, [
             tokenizer.convert_tokens_to_string(
-                tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)])
+                tokenizer.tokenize(
+                    pattern.sub('', response).strip(" .'").strip('"')
+                )[:int(length)])
             for response in responses]))
 
 
 async def modify_content_with_concept(client, tokenizer, content, length, api_tag=""):
     prompts = []
     for (concept, tag, output) in content:
-        prompts += [T_MODIFY_CONTENT_WITH_CONCEPT.format(
-            CONTENT=output, CONCEPT=concept, LENGTH=length)]
+        prompts.append(T_MODIFY_CONTENT_WITH_CONCEPT.format(
+            CONTENT=output, CONCEPT=concept))
     responses = await client.chat_completions(f"{api_tag}.modify_content_with_concept", prompts)
-    return [tokenizer.convert_tokens_to_string(tokenizer.tokenize(
-        response.split("<FINAL>")[-1].strip(" .'").strip('"'))[:int(length*1.5)]) for response in responses]
+    pattern = re.compile(r'^(<[^>]*>\s*)+')
+    return [tokenizer.convert_tokens_to_string(
+                tokenizer.tokenize(
+                    pattern.sub('', response).strip(" .'").strip('"')
+                )[:int(length)])
+            for response in responses]
+
+
+async def continue_with(client, tokenizer, content, length, api_tag=""):
+    prompts = []
+    content_token_lengths = []
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
+        prompts += [T_CONTINUE.format(CONTENT=c)]
+    responses = await client.chat_completions(f"{api_tag}.continue_with", prompts)
+    continued_content = []
+    for i, response in enumerate(responses):
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
+        # Skip the original content tokens and limit to requested length
+        continued_tokens = full_tokens[content_token_lengths[i]:content_token_lengths[i] + int(length)]
+        continued_text = tokenizer.convert_tokens_to_string(continued_tokens)
+        continued_content.append(continued_text)
+    return continued_content
 
 
 async def continue_with_concept(client, tokenizer, concepts, content, length, api_tag=""):
     prompts = []
     content_token_lengths = []
-    
-    # Get token lengths of original content
     for i, c in enumerate(content):
         content_tokens = tokenizer.tokenize(c)
         content_token_lengths.append(len(content_tokens))
         prompts += [T_CONTINUE_WITH_CONCEPT.format(
-            CONCEPT=concepts[i], CONTENT=c, LENGTH=length)]
-    
+            CONCEPT=concepts[i], CONTENT=c)]
     responses = await client.chat_completions(f"{api_tag}.continue_with_concept", prompts)
-    
     continued_content = []
     for i, response in enumerate(responses):
-        # Get full response tokens
-        full_tokens = tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))
-        
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
         # Skip the original content tokens and limit to requested length
-        continued_tokens = full_tokens[content_token_lengths[i]:content_token_lengths[i] + int(length*1.5)]
-        
-        # Convert back to string
+        continued_tokens = full_tokens[content_token_lengths[i]:content_token_lengths[i] + int(length)]
         continued_text = tokenizer.convert_tokens_to_string(continued_tokens)
         continued_content.append(continued_text)
-    
     return continued_content
+
+
+async def continue_without_concept(client, tokenizer, concepts, content, length, api_tag=""):
+    prompts = []
+    content_token_lengths = []
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
+        prompts += [T_CONTINUE_WITHOUT_CONCEPT.format(
+            CONTENT=c, CONCEPT=concepts[i])]
+    responses = await client.chat_completions(f"{api_tag}.continue_without_concept", prompts)
+    continued_content = []
+    for i, response in enumerate(responses):
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
+        # Skip the original content tokens and limit to requested length
+        continued_tokens = full_tokens[content_token_lengths[i]:content_token_lengths[i] + int(length)]
+        continued_text = tokenizer.convert_tokens_to_string(continued_tokens)
+        continued_content.append(continued_text)
+    return continued_content
+
+
+async def continue_with_polysemantic_concepts(
+        client, tokenizer, polysemantic_concepts, concept, content, length, api_tag=""):
+    prompts = []
+    content_list = []
+    for i, polysemantic_concept in enumerate(polysemantic_concepts):
+        prompts += [T_CONTINUE_WITH_CONTRAST_CONCEPT.format(
+            CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
+            CONTRAST_CONCEPT=concept, CONTENT=content[i])]
+        content_list += [content[i]]
+    responses = await client.chat_completions(f"{api_tag}.continue_with_polysemantic_concepts", prompts)
+    pattern = re.compile(r'^(<[^>]*>\s*)+')
+    return (concept, zip(
+        content_list, polysemantic_concepts, [
+            tokenizer.convert_tokens_to_string(
+                tokenizer.tokenize(
+                    pattern.sub('', response).strip(" .'").strip('"')
+                )[:int(length)])
+            for response in responses]))
+
+
+async def response_with(client, tokenizer, content, length, api_tag=""):
+    prompts = []
+    content_token_lengths = []
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
+        prompts += [T_RESPONSE.format(INSTRUCTION=c)]
+    responses = await client.chat_completions(f"{api_tag}.response_with", prompts)
+    response_content = []
+    for i, response in enumerate(responses):
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
+        # Skip the original content tokens and limit to requested length
+        response_tokens = full_tokens[:int(length)]
+        response_text = tokenizer.convert_tokens_to_string(response_tokens)
+        response_content.append(response_text)
+    return response_content
 
 
 async def response_with_concept(client, tokenizer, concepts, content, length, api_tag=""):
     prompts = []
     content_token_lengths = []
-    
-    # Get token lengths of original content
     for i, c in enumerate(content):
         content_tokens = tokenizer.tokenize(c)
         content_token_lengths.append(len(content_tokens))
-        prompts += [T_RESPONSE_WITH_CONCEPT_TEMPLATE.format(
-            INSTRUCTION=c, CONCEPT=concepts[i], LENGTH=length)]
-    
+        prompts += [T_RESPONSE_WITH_CONCEPT.format(
+            INSTRUCTION=c, CONCEPT=concepts[i])]
     responses = await client.chat_completions(f"{api_tag}.response_with_concept", prompts)
-    
     response_content = []
     for i, response in enumerate(responses):
-        # Get full response tokens
-        full_tokens = tokenizer.tokenize(response.split("<FINAL>")[-1].strip(" .'").strip('"'))
-        
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
         # Skip the original content tokens and limit to requested length
-        response_tokens = full_tokens[:int(length*1.5)]
-        
-        # Convert back to string
+        response_tokens = full_tokens[:int(length)]
         response_text = tokenizer.convert_tokens_to_string(response_tokens)
         response_content.append(response_text)
-    
     return response_content
 
+
+async def response_without_concept(client, tokenizer, concepts, content, length, api_tag=""):
+    prompts = []
+    content_token_lengths = []
+    for i, c in enumerate(content):
+        content_tokens = tokenizer.tokenize(c)
+        content_token_lengths.append(len(content_tokens))
+        prompts += [T_RESPONSE_WITHOUT_CONCEPT.format(
+            INSTRUCTION=c, CONCEPT=concepts[i])]
+    responses = await client.chat_completions(f"{api_tag}.response_without_concept", prompts)
+    response_content = []
+    for i, response in enumerate(responses):
+        full_tokens = tokenizer.tokenize(response.strip(" '").strip('"'))
+        # Skip the original content tokens and limit to requested length
+        response_tokens = full_tokens[:int(length)]
+        response_text = tokenizer.convert_tokens_to_string(response_tokens)
+        response_content.append(response_text)
+    return response_content
+
+
+async def response_with_polysemantic_concepts(
+        client, tokenizer, polysemantic_concepts, concept, content, length, api_tag=""):
+    prompts = []
+    instructions = []
+    for i, polysemantic_concept in enumerate(polysemantic_concepts):
+        prompts += [T_RESPONSE_WITH_CONTRAST_CONCEPT.format(
+            INSTRUCTION=content[i], CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
+            CONTRAST_CONCEPT=concept)]
+        instructions += [content[i]]
+    responses = await client.chat_completions(f"{api_tag}.response_with_polysemantic_concepts", prompts)
+    pattern = re.compile(r'^(<[^>]*>\s*)+')
+    return (concept, zip(
+        instructions, polysemantic_concepts, [
+            tokenizer.convert_tokens_to_string(
+                tokenizer.tokenize(
+                    pattern.sub('', response).strip(" .'").strip('"')
+                )[:int(length)])
+            for response in responses]))

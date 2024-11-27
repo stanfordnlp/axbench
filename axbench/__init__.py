@@ -1,6 +1,5 @@
 from .utils.plot_utils import *
 from .utils.dataset import *
-from .utils.config import *
 from .utils.constants import *
 from .utils.prompt_utils import *
 from .utils.model_utils import *

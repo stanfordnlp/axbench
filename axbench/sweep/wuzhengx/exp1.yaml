@@ -1,55 +1,55 @@
 generate:
   lm_model: "gpt-4o-mini"
-  output_length: 32
+  output_length: 64
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
   max_concepts: 10
   master_data_dir: "axbench/data"
-  seed: 42
+  dataset_category: "instruction"
+  seed: 43
 
 train:
   model_name: "google/gemma-2-2b-it"
   layer: 20
   component: "res"
-  seed: 42
+  seed: 43
   use_bf16: true
   models:
-    # LsReFT:
-    #   batch_size: 6
-    #   n_epochs: 12
-    #   lr: 0.005
-    #   topk: 8
-    #   coeff_l1_loss: 0.005
-    #   low_rank_dimension: 1
-    #   intervention_positions: "all"
-    #   intervention_type: "addition" # clamping
-    #   dataset_category: "instruction"
-    #   binarize_dataset: false
-    #   exclude_bos: true
-    # DiffMean:
-    #   batch_size: 6
-    #   n_epochs: 12
-    #   dataset_category: "instruction"
-    #   binarize_dataset: true
-    #   low_rank_dimension: 1
-    LinearProbe:
+    LsReFT:
       batch_size: 6
-      n_epochs: 6
-      lr: 0.005
-      coeff_l1_loss: 0.02
-      coeff_l2_loss: 0.000
-      dataset_category: "instruction"
+      n_epochs: 12
+      lr: 0.01
+      topk: 8
+      coeff_latent_l1_loss: 0.005
+      low_rank_dimension: 1
+      intervention_positions: "all"
+      intervention_type: "addition" # clamping
+      binarize_dataset: false
+      exclude_bos: true
+    DiffMean:
+      batch_size: 6
+      n_epochs: 12
+      binarize_dataset: true
+      low_rank_dimension: 1
+    SparseLinearProbe:
+      batch_size: 6
+      n_epochs: 12
+      lr: 0.01
+      topk: 8
+      coeff_latent_l1_loss: 0.005
+      coeff_l1_loss: 0.00
+      coeff_l2_loss: 0.02
       binarize_dataset: true
       low_rank_dimension: 1
 
 inference:
   use_bf16: true
-  models: ["LinearProbe"] 
+  models: ["LsReFT", "DiffMean", "SparseLinearProbe", "GemmaScopeSAE"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
-  input_length: 32
+  output_length: 64
   latent_num_of_examples: 20
-  latent_batch_size: 128
+  latent_batch_size: 16
   # steering related params
   steering_intervention_type: "addition" # clamping
   steering_model_name: "google/gemma-2-2b-it"
@@ -61,13 +61,13 @@ inference:
   steering_factors: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] # number of steering factors per example
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
-  seed: 42
+  seed: 43
   lm_model: "gpt-4o-mini"
   # generation related params
   temperature: 1.0
 
 evaluate:
-  models: ["LinearProbe"] 
+  models: ["LsReFT", "DiffMean", "SparseLinearProbe", "GemmaScopeSAE"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

@@ -94,7 +94,7 @@ def load_concepts(dump_dir):
 def save(
     dump_dir, state, concept_id, 
     concept, concept_genres_map, 
-    ref, partition, current_df):
+    ref, partition, current_df, dataset_factory):
     """
     Save the current state, metadata, and DataFrame using Parquet format.
     """    
@@ -120,7 +120,8 @@ def save(
         existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
     else:
-        combined_df = current_df
+        # first time cache, we need to add global negative examples.
+        combined_df = pd.concat([dataset_factory.negative_df, current_df], ignore_index=True)
     combined_df.to_parquet(df_path, index=False)
 
 
@@ -198,14 +199,15 @@ def main():
 
     # Init the dataset factory.
     dataset_factory = DatasetFactory(
-        None, client, tokenizer, dump_dir, 
-        use_cache=True, master_data_dir=args.master_data_dir,
-        seed=args.seed, lm_model=args.lm_model
+        None, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
+        dump_dir, use_cache=True, master_data_dir=args.master_data_dir,
+        seed=args.seed, lm_model=args.lm_model, 
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
 
     progress_bar = tqdm(range(start_concept_id, len(concepts)), desc="Processing concept")
+    only_one_concept = True if len(concepts) == 1 else False
     data_concept_id = start_concept_id
     for concept_id in progress_bar:
         concept, ref = concepts[concept_id]
@@ -219,7 +221,8 @@ def main():
         current_df = dataset_factory.create_train_df(
             concept, num_of_examples, concept_genres_map,
             output_length=args.output_length,
-            current_concept_id=data_concept_id
+            current_concept_id=data_concept_id,
+            only_one_concept=only_one_concept,
         )
         current_df["concept_id"] = data_concept_id
         # except Exception as e:
@@ -230,7 +233,7 @@ def main():
         save(
             dump_dir, {"concept_id": concept_id + 1}, data_concept_id,
             concept, concept_genres_map, 
-            ref, "train", current_df)
+            ref, "train", current_df, dataset_factory)
         data_concept_id += 1
 
     logger.warning(f"Finished creating dataset.")

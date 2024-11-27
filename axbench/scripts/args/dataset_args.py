@@ -8,7 +8,7 @@ class DatasetArgs:
     models: field(default_factory=lambda: [])
     steering_datasets: field(default_factory=lambda: [])
     input_length: Optional[int] = 32
-    output_length: Optional[int] = 10
+    output_length: Optional[int] = 32
     # generation related params
     temperature: Optional[float] = 1.0
     data_dir: Optional[str] = None
@@ -34,6 +34,7 @@ class DatasetArgs:
     lm_model: Optional[str] = None
     run_name: Optional[str] = None
     use_bf16: Optional[bool] = False
+    dataset_category: Optional[str] = "instruction"
 
     def __init__(
         self,

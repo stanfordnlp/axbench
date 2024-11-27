@@ -56,30 +56,39 @@ dolly_ds = load_dataset("databricks/databricks-dolly-15k")
 text_train = []
 for example in dolly_ds["train"]:
     if example["category"] == "open_qa" and example["context"] == "":
-        text_train += [example["instruction"]]
+        if len(example["instruction"]) < 500:
+            text_train += [example["instruction"]]
 
 # math instructions
 gsm_ds = load_dataset("openai/gsm8k", "main")
 math_train = []
 for example in gsm_ds["train"]:
-    math_train += [example["question"]]
+    if len(example["question"]) < 500:
+        math_train += [example["question"]]
 
 # code instructions
 alpaca_ds = load_dataset("iamtarun/python_code_instructions_18k_alpaca")
 code_train = []
 for example in alpaca_ds["train"]:
     if example["input"] == "":
-        code_train += [example["instruction"]]
+        if len(example["instruction"]) < 500:
+            code_train += [example["instruction"]]
 
 data = {
     "text_train": text_train[:1000],
     "math_train": math_train[:1000],
     "code_train": code_train[:1000],
+    "text_test": text_train[1000:2000],
+    "math_test": math_test[1000:2000],
+    "code_test": code_test[1000:2000],
 }
 dataset = DatasetDict({
     "text_train": Dataset.from_dict({"input": data["text_train"]}),
+    "text_test": Dataset.from_dict({"input": data["text_test"]}),
     "math_train": Dataset.from_dict({"input": data["math_train"]}),
+    "math_test": Dataset.from_dict({"input": data["math_test"]}),
     "code_train": Dataset.from_dict({"input": data["code_train"]}),
+    "code_test": Dataset.from_dict({"input": data["code_test"]}),
 })
 
 dataset.save_to_disk("seed_instructions")

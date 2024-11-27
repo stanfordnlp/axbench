@@ -61,37 +61,45 @@ class IntegratedGradients(Model):
         torch.cuda.empty_cache()
         self.ax.train()
         # Optimizer and lr
-        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr)
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
+        optimizer = torch.optim.AdamW(self.ax.parameters(), lr=self.training_args.lr, weight_decay=0.00)
+        num_training_steps = self.training_args.n_epochs * len(train_dataloader) // self.training_args.gradient_accumulation_steps
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
-            num_warmup_steps=0, num_training_steps=num_training_steps)
+            num_warmup_steps=0, 
+            num_training_steps=num_training_steps
+        )
         criterion = torch.nn.BCELoss()
 
         # Main training loop.
         progress_bar, curr_step = tqdm(range(num_training_steps)), 0
         for epoch in range(self.training_args.n_epochs):
-            for batch in train_dataloader:
-                # prepare input
+            for step, batch in enumerate(train_dataloader):
+                # Prepare input
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
                 preds = self.ax(
                     {"input_ids": inputs["input_ids"], 
                      "attention_mask": inputs["attention_mask"]})
                 labels = inputs["labels"].unsqueeze(1).float()
-                loss = criterion(preds, labels)
+                loss = criterion(preds.float(), labels)
 
                 preds_labels = (preds >= 0.5).float()  # Apply threshold
                 acc = (preds_labels == labels).sum().item() / len(preds)
 
+                # Scale loss for gradient accumulation
+                loss = loss / self.training_args.gradient_accumulation_steps
                 loss.backward()
-                curr_lr = get_lr(optimizer)
-                # optim
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                progress_bar.update(1)
-                progress_bar.set_description(
-                    "lr %.6f || loss %.6f || acc %.6f" % (curr_lr, loss, acc))
+
+                # Perform optimization step every gradient_accumulation_steps
+                if (step + 1) % self.training_args.gradient_accumulation_steps == 0 or (step + 1) == len(train_dataloader):
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
+                    curr_step += 1  # Increment step only after optimization
+                    curr_lr = get_lr(optimizer)
+                    progress_bar.update(1)
+                    progress_bar.set_description(
+                        "lr %.6f || loss %.6f || acc %.6f" % (curr_lr, loss.item(), acc))
+
         progress_bar.close()
         logger.warning("Training finished.")
 
@@ -113,19 +121,21 @@ class IntegratedGradients(Model):
         all_max_token = []
         all_tokens = []
         correct = 0
-        for _, row in examples.iterrows():
+        for _, row in examples.iterrows(): 
             inputs = self.tokenizer.encode(
                 row["input"], return_tensors="pt", add_special_tokens=True).to(self.device)
             act_in = gather_residual_activations(
                 self.model, self.layer, {"input_ids": inputs})
-            
+            act_in = act_in.detach()
+            torch.cuda.empty_cache()
             # Create a baseline using the space embedding, excluding the first token if it's special
             baseline = space_embedding.expand_as(act_in)
             
             # Create interpolated inputs for all steps at once
             alphas = torch.linspace(0, 1, steps).view(-1, 1, 1, 1).to(act_in.device)
             interpolated_acts = baseline + alphas * (act_in - baseline)
-            interpolated_acts = interpolated_acts.squeeze(1).requires_grad_(True) # step, seq_len, hidden_size
+            interpolated_acts = interpolated_acts.squeeze(1).requires_grad_(True).to(
+                act_in.dtype) # step, seq_len, hidden_size
             # Expand inputs to match the number of steps
             expanded_inputs = inputs.expand(steps, -1)
             def set_target_act_hook(mod, inputs, outputs):
@@ -140,28 +150,31 @@ class IntegratedGradients(Model):
             handle.remove()
 
             last_token_representations = outputs.hidden_states[-1][:, -1]
-            preds = torch.sigmoid(self.ax.proj(last_token_representations))[
-                ..., row["concept_id"]]  # only consider the target concept
+            preds = torch.sigmoid(self.ax.proj(last_token_representations))
+            preds = preds[..., row["concept_id"]]  # only consider the target concept
             (grads,) = torch.autograd.grad(preds.sum(), interpolated_acts, create_graph=True)
             # Average gradients and multiply by (input - baseline)
-            ax_acts = torch.abs((act_in - baseline) * grads.mean(dim=0)).sum(dim=-1)[:,1:]
-            
+            ax_acts = torch.abs((act_in - baseline) * grads.mean(dim=0)).sum(dim=-1)[:,kwargs["prefix_length"]:]
+
             pred_label = (preds[-1].flatten() >= 0.5).int().tolist()[0]
             actual_label = 1 if row["category"] == "positive" else 0
             correct += (pred_label == actual_label)
 
-            ax_acts = ax_acts.flatten().data.float().cpu().numpy().tolist()
+            ax_acts = ax_acts.detach().flatten().data.float().cpu().numpy().tolist()
             ax_acts = [round(x, 3) for x in ax_acts]
             max_ax_act = max(ax_acts)
             max_ax_act_idx = ax_acts.index(max_ax_act)
-            max_token = self.tokenizer.tokenize(row["input"])[max_ax_act_idx]
-            all_tokens.append(self.tokenizer.tokenize(row["input"]))
+            tokens = self.tokenizer.tokenize(row.input)[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
+            max_token = tokens[max_ax_act_idx]
+            all_tokens.append(tokens)
 
             all_pred_label += [pred_label]
             all_acts += [ax_acts]
             all_max_act += [max_ax_act]
             all_max_act_idx += [max_ax_act_idx]
             all_max_token += [max_token]
+            torch.cuda.empty_cache()
+
         acc = correct / len(examples)
         logger.warning(f"IntegratedGradients classification accuracy: {acc}")
         return {
@@ -179,6 +192,7 @@ class InputXGradients(IntegratedGradients):
         return 'InputXGradients'
     
     def load(self, dump_dir=None, **kwargs):
+        # we only need to train onces for both methods.
         super().load(dump_dir, model_name="IntegratedGradients", **kwargs)
 
     def predict_latent(self, examples, **kwargs):
@@ -220,34 +234,35 @@ class InputXGradients(IntegratedGradients):
                 set_target_act_hook, always_call=True)
             pred = self.ax(
                 {"input_ids": inputs["input_ids"], 
-                    "attention_mask": inputs["attention_mask"]}
-            )[..., batch["concept_id"].tolist()] # only consider the target concept
+                 "attention_mask": inputs["attention_mask"]}
+            )
             handle.remove()
-
+            pred = pred[torch.arange(pred.shape[0]), batch["concept_id"].tolist()] # only consider the target concept
             # get gradient
             (grad,) = torch.autograd.grad(pred.sum(), act_in)
             pred_labels = (pred.flatten() >= 0.5).int().tolist()
-
-            seq_lens = inputs["attention_mask"].sum(dim=1) - 1 # no bos token
+            
+            seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
             # Handle batch of examples
             for idx, (pred_label, row) in enumerate(zip(pred_labels, batch.itertuples())):
                 actual_label = 1 if row.category == "positive" else 0
                 correct += (pred_label == actual_label)
                 
                 # Get attributions for this example
-                ax_acts_single = torch.abs(act_in[idx] * grad[idx]).sum(dim=-1)[1:]  # Remove first token
+                ax_acts_single = torch.abs(act_in[idx] * grad[idx]).sum(dim=-1)[kwargs["prefix_length"]:]  # Remove first token
                 ax_acts = ax_acts_single[:seq_lens[idx]].flatten().data.float().cpu().numpy().tolist()
                 ax_acts = [round(x, 3) for x in ax_acts]
                 max_ax_act = max(ax_acts)
                 max_ax_act_idx = ax_acts.index(max_ax_act)
-                max_token = self.tokenizer.tokenize(row.input)[max_ax_act_idx]
+                tokens = self.tokenizer.tokenize(row.input)[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
+                max_token = tokens[max_ax_act_idx]
 
                 all_pred_label.append(pred_label)
                 all_acts.append(ax_acts)
                 all_max_act.append(max_ax_act)
                 all_max_act_idx.append(max_ax_act_idx)
                 all_max_token.append(max_token)
-                all_tokens.append(self.tokenizer.tokenize(row.input))
+                all_tokens.append(tokens)
         acc = correct / len(examples)
         logger.warning(f"InputXGradients classification accuracy: {acc}")
         return {
