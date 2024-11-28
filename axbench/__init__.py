@@ -16,6 +16,7 @@ from .evaluators.winrate import *
 from .models.lora import *
 from .models.reft import *
 from .models.lsreft import *
+from .models.steering_vector import *
 from .models.sae import *
 from .models.probe import *
 from .models.ig import *

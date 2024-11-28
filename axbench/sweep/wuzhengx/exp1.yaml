@@ -31,20 +31,10 @@ train:
       n_epochs: 12
       binarize_dataset: true
       low_rank_dimension: 1
-    SparseLinearProbe:
-      batch_size: 6
-      n_epochs: 12
-      lr: 0.01
-      topk: 8
-      coeff_latent_l1_loss: 0.005
-      coeff_l1_loss: 0.00
-      coeff_l2_loss: 0.02
-      binarize_dataset: true
-      low_rank_dimension: 1
 
 inference:
   use_bf16: true
-  models: ["LsReFT", "DiffMean", "SparseLinearProbe", "GemmaScopeSAE"]
+  models: ["PromptSteering", "LsReFT", "DiffMean", "SteeringVector", "GemmaScopeSAE", "SparseLinearProbe"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 64
@@ -54,7 +44,7 @@ inference:
   steering_intervention_type: "addition" # clamping
   steering_model_name: "google/gemma-2-2b-it"
   steering_datasets: ["AlpacaEval"]
-  steering_batch_size: 24
+  steering_batch_size: 10
   steering_output_length: 128
   steering_layers: [20]
   steering_num_of_examples: 10 # number of examples per concept and per factor
@@ -67,7 +57,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["LsReFT", "DiffMean", "SparseLinearProbe", "GemmaScopeSAE"]
+  models: ["PromptSteering", "LsReFT", "DiffMean", "SteeringVector", "GemmaScopeSAE", "SparseLinearProbe"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
