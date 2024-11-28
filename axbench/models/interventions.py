@@ -381,3 +381,42 @@ class SparseProbeIntervention(
             output=base,
             latent=[max_mean_latent, non_topk_latent, latent]
         )
+    
+
+class SteeringVectorIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
+        steering_vec = v.permute(0, 2, 1) # bs, 1, h
+
+        # addition intervention
+        output = base + steering_vec
+
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent]
+        )

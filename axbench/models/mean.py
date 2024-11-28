@@ -116,58 +116,9 @@ class MeanActivation(MeanEmbedding):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 ).detach()
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
+                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
+                activations = activations[:,kwargs["prefix_length"]:][nonbos_mask.bool()]
                 all_activations.append(activations)
-        all_activations = torch.cat(all_activations, dim=0)
-        mean_activation = all_activations.mean(dim=0)
-        self.ax.proj.weight.data = mean_activation.unsqueeze(0)
-        set_decoder_norm_to_unit_norm(self.ax)
-        logger.warning("Training finished.")
-    
-    def pre_compute_mean_activations(self, dump_dir, **kwargs):
-        max_activations = {} # sae_id to max_activation
-        # Loop over saved latent files in dump_dir.
-        for file in os.listdir(dump_dir):
-            if file.startswith("latent_") and file.endswith(".parquet"):
-                latent_path = os.path.join(dump_dir, file)
-                latent = pd.read_parquet(latent_path)
-                # loop through unique sorted concept_id
-                for concept_id in sorted(latent["concept_id"].unique()):
-                    concept_latent = latent[latent["concept_id"] == concept_id]
-                    max_act = concept_latent[f"{str(self)}_max_act"].max()
-                    max_activations[concept_id] = max_act if max_act > 0 else 50
-        self.max_activations = max_activations
-        return max_activations  
-
-
-class MeanPositiveActivation(MeanActivation):
-    """take the mean of only the activations for positive examples"""
-    
-    def __str__(self):
-        return 'MeanPositiveActivation'
-
-    @torch.no_grad()
-    def train(self, examples, **kwargs):
-        train_dataloader = self.make_dataloader(examples)
-        torch.cuda.empty_cache()
-        self.ax.eval()
-        self.ax.to(self.device)
-        # Main training loop.
-        all_activations = []
-        for _ in range(self.training_args.n_epochs):
-            for batch in train_dataloader:
-                # prepare input
-                inputs = {k: v.to(self.device) for k, v in batch.items()}
-                activations = gather_residual_activations(
-                    self.model, self.layer, 
-                    {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
-                ).detach()
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
-                label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
-                all_activations.append(activations[label_mask])
         all_activations = torch.cat(all_activations, dim=0)
         mean_activation = all_activations.mean(dim=0)
         self.ax.proj.weight.data = mean_activation.unsqueeze(0)
@@ -238,9 +189,9 @@ class PCA(MeanActivation):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 ).detach()
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
+                activations = activations[:,kwargs["prefix_length"]:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - kwargs["prefix_length"])
                 label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
                 all_activations.append(activations[label_mask].detach().cpu().float().numpy())
 
@@ -281,9 +232,9 @@ class LAT(MeanActivation):
                     self.model, self.layer, 
                     {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
                 ).detach()
-                nonbos_mask = inputs["attention_mask"][:,1:]
-                activations = activations[:,1:][nonbos_mask.bool()]
-                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - 1)
+                nonbos_mask = inputs["attention_mask"][:,kwargs["prefix_length"]:]
+                activations = activations[:,kwargs["prefix_length"]:][nonbos_mask.bool()]
+                labels = inputs["labels"].unsqueeze(1).repeat(1, inputs["input_ids"].shape[1] - kwargs["prefix_length"])
                 label_mask = labels[nonbos_mask.bool()] == 1 # only positive examples
                 all_activations.append(activations[label_mask].detach().cpu().float().numpy())
 
