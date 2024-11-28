@@ -34,7 +34,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "LsReFT", "DiffMean", "SteeringVector", "GemmaScopeSAE", "SparseLinearProbe"]
+  models: ["PromptSteering", ]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 64
@@ -57,7 +57,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "LsReFT", "DiffMean", "SteeringVector", "GemmaScopeSAE", "SparseLinearProbe"]
+  models: ["PromptSteering", ]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
