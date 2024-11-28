@@ -7,7 +7,7 @@ axbench/demo/generate
 axbench/demo/evaluate
 axbench/demo/lm_cache
 *.out
-axbench/results/
+axbench/result*
 set_key.py
 uv.lock
 wandb/
