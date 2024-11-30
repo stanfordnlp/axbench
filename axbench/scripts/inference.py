@@ -39,7 +39,7 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
@@ -288,9 +288,10 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
-            benchmark_model.pre_compute_mean_activations(
-                os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
-            )
+            if model_name not in LATENT_EXCLUDE_MODELS:
+                benchmark_model.pre_compute_mean_activations(
+                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+                )
             logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
             results = benchmark_model.predict_steer(
@@ -298,7 +299,8 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 batch_size=args.steering_batch_size,
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature,
-                prefix_length=prefix_length
+                prefix_length=prefix_length,
+                positions=training_args.models[model_name].intervention_positions,
             )
             # Store the results in current_df
             for k, v in results.items():
@@ -621,8 +623,6 @@ def main():
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
-        if not os.path.exists(os.path.join(args.dump_dir, "inference", "latent_data.parquet")):
-            raise ValueError("Latent eval must be done before steering eval.")
         infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "all":
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)

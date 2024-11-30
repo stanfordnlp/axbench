@@ -154,7 +154,7 @@ class LoreftIntervention(
     DistributedRepresentationIntervention
 ):
     """
-    Phi(h) = h + W^T(Wh + b - Rh)
+    Phi(h) = h + R^T(Rh + b - Rh)
     Ref: https://arxiv.org/pdf/2404.03592
     """
     def __init__(self, **kwargs):

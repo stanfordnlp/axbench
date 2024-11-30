@@ -15,26 +15,18 @@ train:
   seed: 43
   use_bf16: true
   models:
-    LsReFT:
+    DiReFT:
       batch_size: 6
       n_epochs: 12
-      lr: 0.01
-      topk: 8
-      coeff_latent_l1_loss: 0.005
-      low_rank_dimension: 1
-      intervention_positions: "all"
-      intervention_type: "addition" # clamping
+      lr: 0.004
+      low_rank_dimension: 4
+      intervention_positions: "f1+l1"
       binarize_dataset: false
       exclude_bos: true
-    DiffMean:
-      batch_size: 6
-      n_epochs: 12
-      binarize_dataset: true
-      low_rank_dimension: 1
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", ]
+  models: ["DiReFT"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 64
@@ -48,7 +40,7 @@ inference:
   steering_output_length: 128
   steering_layers: [20]
   steering_num_of_examples: 10 # number of examples per concept and per factor
-  steering_factors: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] # number of steering factors per example
+  steering_factors: [1.0] # number of steering factors per example
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
   seed: 43
@@ -57,7 +49,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", ]
+  models: ["DiReFT"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
@@ -70,7 +62,7 @@ evaluate:
   # Number of processes to run in parallel for steering evaluation.
   num_of_workers: 32
   lm_model: "gpt-4o-mini"
-  run_winrate: true
+  run_winrate: false
   winrate_baseline: "PromptSteering"
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"

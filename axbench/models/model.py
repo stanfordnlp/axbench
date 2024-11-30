@@ -73,7 +73,7 @@ class Model(BaseModel):
         pass
 
     def make_dataloader(self, examples, **kwargs):
-        data_module = make_data_module(self.tokenizer, examples)
+        data_module = make_data_module(self.tokenizer, examples, **kwargs)
         g = torch.Generator()
         g.manual_seed(self.seed)
         train_dataloader = DataLoader(
