@@ -39,7 +39,7 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
@@ -276,6 +276,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
 
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,
+                training_args=training_args.models[model_name] if model_name not in {"PromptSteering"} else None, # we init with training args as well
                 low_rank_dimension=len(metadata),
                 device=device, steering_layers=steering_layers
             )
@@ -288,7 +289,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
-            if model_name not in LATENT_EXCLUDE_MODELS:
+            if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
                 benchmark_model.pre_compute_mean_activations(
                     os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
                 )
@@ -300,7 +301,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature,
                 prefix_length=prefix_length,
-                positions=training_args.models[model_name].intervention_positions,
+                positions=training_args.models[model_name].intervention_positions if model_name != "PromptSteering" else None,
             )
             # Store the results in current_df
             for k, v in results.items():
@@ -435,6 +436,17 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
+
+    has_latent_model = False
+    for model_name in args.models:
+        # load model on the fly to save memory
+        if model_name not in LATENT_EXCLUDE_MODELS:
+            has_latent_model = True
+            break
+
+    if not has_latent_model:
+        logger.warning("No latent model to infer. Exiting.")
+        return
 
     # Now loop over concept_ids and use preloaded models
     cache_df = {}

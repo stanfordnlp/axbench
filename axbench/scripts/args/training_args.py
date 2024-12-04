@@ -43,6 +43,10 @@ class ModelParams:
     low_rank_dimension: Optional[int] = 1
     dataset_category: Optional[str] = "continuation"
     intervention_positions: Optional[str] = "all_prompt"
+    intervention_layers: Optional[List[int]] = None
+    reft_layers: Optional[List[int]] = None
+    reft_positions: Optional[str] = "l1"
+    reft_type: Optional[str] = "Loreft"
     exclude_bos: Optional[bool] = True
     binarize_dataset: Optional[bool] = False
     intervention_type: Optional[str] = "addition" # clamping   
@@ -75,9 +79,9 @@ class TrainingArgs:
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 
-            'low_rank_dimension', 'dataset_category', 'intervention_positions', 
+            'low_rank_dimension', 'dataset_category', 'intervention_positions', 'intervention_layers',
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
-            'coeff_latent_l1_loss'
+            'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type'
         ]
         all_params = global_params + hierarchical_params
 
@@ -170,8 +174,9 @@ class TrainingArgs:
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
-            'intervention_type'
+            'intervention_type', 'reft_positions', 'reft_type'
         ]
+        list_params = ['intervention_layers', 'reft_layers']
 
         if param_name in int_params:
             return int
@@ -180,7 +185,9 @@ class TrainingArgs:
         elif param_name in str_params:
             return str
         elif param_name in bool_params:
-            return bool
+            return bool 
+        elif param_name in list_params:
+            return list
         else:
             return str
 

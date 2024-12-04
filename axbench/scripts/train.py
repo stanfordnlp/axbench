@@ -165,6 +165,8 @@ def save_state(dump_dir, state, rank):
 
 
 def main():
+   
+
     args = TrainingArgs(section="train")
 
     # Initialize the process group
@@ -178,10 +180,6 @@ def main():
     # Set the device for this process
     device = torch.device(f'cuda:{local_rank}')
     torch.cuda.set_device(device)
-
-    # Configure PyTorch for determinism
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     # Set a unique seed per rank for reproducibility
     set_seed(args.seed + rank)
@@ -228,17 +226,18 @@ def main():
     tokenizer.padding_side = "right"
 
     # Partition df_list among ranks
-    df_list_per_rank = partition_list(df_list, world_size)
+    df_list_per_rank = partition_list(df_list, 1)
     my_df_list = df_list_per_rank[rank]
 
     # Load model instance onto device
     if args.use_bf16:
         logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device)
+        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None)
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance.config.use_cache = False
     model_instance = model_instance.eval()
+    model_instance.to(device)
 
     prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
     if is_chat_model:
@@ -271,12 +270,13 @@ def main():
                 dtype=torch.bfloat16 if args.use_bf16 else None,
                 intervention_type=args.models[model_name].intervention_type
             )
-            if args.use_bf16:
+            if model_name not in {"LoReFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
                 "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
-                "exclude_bos": args.models[model_name].exclude_bos
+                "exclude_bos": args.models[model_name].exclude_bos,
+                "dump_dir": dump_dir
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(

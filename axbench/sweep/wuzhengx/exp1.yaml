@@ -15,21 +15,26 @@ train:
   seed: 43
   use_bf16: true
   models:
-    DiReFT:
-      batch_size: 6
-      n_epochs: 12
-      lr: 0.004
+    LoReFT:
+      # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
+      batch_size: 36
+      gradient_accumulation_steps: 2
+      n_epochs: 24
+      lr: 0.0009
+      weight_decay: 0.00
       low_rank_dimension: 4
-      intervention_positions: "f1+l1"
+      reft_layers: [5, 10, 15, 20]
+      reft_positions: "f5+l5"
+      reft_type: "Loreft"
       binarize_dataset: false
       exclude_bos: true
 
 inference:
   use_bf16: true
-  models: ["DiReFT"]
+  models: ["PromptSteering", "LoReFT"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
-  output_length: 64
+  output_length: 128
   latent_num_of_examples: 20
   latent_batch_size: 16
   # steering related params
@@ -49,7 +54,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["DiReFT"]
+  models: ["PromptSteering", "LoReFT"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
@@ -62,7 +67,7 @@ evaluate:
   # Number of processes to run in parallel for steering evaluation.
   num_of_workers: 32
   lm_model: "gpt-4o-mini"
-  run_winrate: false
+  run_winrate: true
   winrate_baseline: "PromptSteering"
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
