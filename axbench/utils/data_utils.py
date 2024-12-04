@@ -133,7 +133,7 @@ def make_data_module(
         output_ids = base_input_ids.clone()
         output_ids[:base_prompt_length] = -100
 
-        if positions == "all_prompt":
+        if positions is None or positions == "all_prompt":
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_prompt_length)]])
         elif positions == "all":
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_length)]])

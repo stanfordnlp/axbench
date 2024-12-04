@@ -370,7 +370,7 @@ def plot_win_rates(jsonl_data, write_to_path=None, report_to=[], wandb_name=None
             va='center',
             size=6,  # Adjust size as needed
             color='black',
-            nudge_y=16  # Adjust this value as needed for proper positioning
+            nudge_y=18  # Adjust this value as needed for proper positioning
         ) +
         coord_flip() +  # Flip coordinates for horizontal bars
         theme_bw() +

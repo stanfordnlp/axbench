@@ -39,7 +39,7 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
@@ -276,13 +276,13 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
 
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,
-                training_args=training_args.models[model_name] if model_name not in {"PromptSteering"} else None, # we init with training args as well
+                training_args=training_args.models[model_name] if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None, # we init with training args as well
                 low_rank_dimension=len(metadata),
-                device=device, steering_layers=steering_layers
+                device=device, steering_layers=steering_layers,
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
-                intervention_type=args.steering_intervention_type
+                intervention_type=args.steering_intervention_type, concept_id=concept_id
             )
             benchmark_model.to(device)
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
@@ -301,7 +301,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature,
                 prefix_length=prefix_length,
-                positions=training_args.models[model_name].intervention_positions if model_name != "PromptSteering" else None,
+                positions=training_args.models[model_name].intervention_positions if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None,
             )
             # Store the results in current_df
             for k, v in results.items():

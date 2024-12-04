@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 import httpx, asyncio
 import datetime
 import yaml
-
+from inference import LATENT_EXCLUDE_MODELS, STEERING_EXCLUDE_MODELS
 import axbench
 from axbench.utils.plot_utils import (
     plot_aggregated_roc, 
@@ -44,8 +44,6 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 STATE_FILE = "evaluate_state.pkl"
-STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
 
 
 def data_generator(data_dir, mode, winrate_split_ratio=None):

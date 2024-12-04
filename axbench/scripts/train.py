@@ -226,7 +226,7 @@ def main():
     tokenizer.padding_side = "right"
 
     # Partition df_list among ranks
-    df_list_per_rank = partition_list(df_list, 1)
+    df_list_per_rank = partition_list(df_list, world_size)
     my_df_list = df_list_per_rank[rank]
 
     # Load model instance onto device
@@ -260,7 +260,7 @@ def main():
             benchmark_model = getattr(axbench, model_name)(
                 model_instance, tokenizer, layer=args.layer,
                 training_args=args.models[model_name],
-                device=device, seed=args.seed
+                device=device, seed=args.seed, 
             )
             low_rank_dimension = args.models[model_name].low_rank_dimension \
                 if args.models[model_name].low_rank_dimension else 1
@@ -268,15 +268,15 @@ def main():
                 mode="train",
                 low_rank_dimension=low_rank_dimension,
                 dtype=torch.bfloat16 if args.use_bf16 else None,
-                intervention_type=args.models[model_name].intervention_type
+                intervention_type=args.models[model_name].intervention_type,
+                concept_id=concept_id
             )
-            if model_name not in {"LoReFT"} and args.use_bf16:
+            if model_name not in {"LoReFT", "LoRA"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
                 "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
                 "exclude_bos": args.models[model_name].exclude_bos,
-                "dump_dir": dump_dir
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(

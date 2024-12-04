@@ -76,7 +76,7 @@ class LsReFT(Model):
         optimizer = torch.optim.AdamW(
             self.ax_model.parameters(), 
             lr=self.training_args.lr, weight_decay=0.0)
-        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
+        num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
@@ -86,7 +86,7 @@ class LsReFT(Model):
         progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
         
         for epoch in range(self.training_args.n_epochs):
-            for batch in train_dataloader:
+            for step, batch in enumerate(train_dataloader):
                 # prepare input
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
                 unit_locations={"sources->base": (
@@ -114,21 +114,26 @@ class LsReFT(Model):
                 )
                 coeff = curr_step/num_training_steps
                 loss += coeff*self.training_args.coeff_latent_l1_loss*l1_loss
-                
+                loss = loss.mean()
+                loss /= self.training_args.gradient_accumulation_steps
                 # grads
                 loss.backward()
-                set_decoder_norm_to_unit_norm(self.ax)
-                remove_gradient_parallel_to_decoder_directions(self.ax)
-                curr_step += 1
-                curr_lr = get_lr(optimizer)
-                # optim
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                progress_bar.update(1)
-                progress_bar.set_description(
-                    "lr %.6f || loss %.6f || l1 loss %.6f" % (
-                        curr_lr, loss, l1_loss))
+
+                # Perform optimization step every gradient_accumulation_steps
+                if (step + 1) % self.training_args.gradient_accumulation_steps == 0 or (step + 1) == len(train_dataloader):
+                    torch.nn.utils.clip_grad_norm_(self.ax_model.parameters(), 1.0)
+                    set_decoder_norm_to_unit_norm(self.ax)
+                    remove_gradient_parallel_to_decoder_directions(self.ax)
+                    curr_step += 1
+                    curr_lr = get_lr(optimizer)
+                    # optim
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
+                    progress_bar.update(1)
+                    progress_bar.set_description(
+                        "lr %.6f || loss %.6f || l1 loss %.6f" % (
+                            curr_lr, loss, l1_loss))
         progress_bar.close()
     
     @torch.no_grad()
