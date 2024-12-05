@@ -67,12 +67,13 @@ class DatasetFactory(object):
 
     def __init__(
         self, model, client, tokenizer, dataset_category, num_of_examples, output_length, dump_dir, 
-        use_cache=True, master_data_dir=None, **kwargs):
+        use_cache=True, master_data_dir=None, start_concept_id=0, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
 
         # prepare lm model
         lm_model = kwargs.get("lm_model", "gpt-4o-mini")
+        self.use_cache = use_cache
         self.lm_model = LanguageModel(
             lm_model, client, dump_dir, 
             use_cache=use_cache, master_data_dir=master_data_dir
@@ -86,7 +87,7 @@ class DatasetFactory(object):
         self.dataset_category = dataset_category
 
         # load negative examples all at once
-        if not kwargs.get("is_inference", False):
+        if start_concept_id == 0 and not kwargs.get("is_inference", False):
             start = time.time()
             self.logger.warning("[Traing only] Creating random examples as negative examples for all concepts.")
             functor = continue_with if self.dataset_category == "continuation" else response_with
@@ -115,7 +116,8 @@ class DatasetFactory(object):
 
     def reset_stats(self):
         """Reset API costs"""
-        self.lm_model.dump()
+        if self.use_cache:
+            self.lm_model.dump()
         self.lm_model.stats.print_report()
         self.lm_model.stats.reset()
 

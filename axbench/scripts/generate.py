@@ -116,13 +116,21 @@ def save(
         f.write(json.dumps(metadata_entry) + "\n")
     
     # Save DataFrame using Parquet
-    df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
+    rotation_freq = 500
+    file_index = concept_id // rotation_freq
+    if file_index == 0:
+        df_path = os.path.join(dump_dir, f"{partition}_data.parquet")
+    else:
+        df_path = os.path.join(dump_dir, f"{partition}_data_{file_index}.parquet")
     if os.path.exists(df_path):
         existing_df = pd.read_parquet(df_path)
         combined_df = pd.concat([existing_df, current_df], ignore_index=True)
     else:
         # first time cache, we need to add global negative examples.
-        combined_df = pd.concat([dataset_factory.negative_df, current_df], ignore_index=True)
+        if concept_id == 0:
+            combined_df = pd.concat([dataset_factory.negative_df, current_df], ignore_index=True)
+        else:
+            combined_df = current_df
     combined_df.to_parquet(df_path, index=False)
 
 
@@ -202,7 +210,7 @@ def main():
     dataset_factory = DatasetFactory(
         None, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
         dump_dir, use_cache=args.lm_use_cache, master_data_dir=args.master_data_dir,
-        seed=args.seed, lm_model=args.lm_model, 
+        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
