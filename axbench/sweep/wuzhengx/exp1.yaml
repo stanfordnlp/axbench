@@ -19,6 +19,7 @@ train:
     #   batch_size: 6
     #   n_epochs: 12
     #   lr: 0.01
+    #   weight_decay: 0.00
     #   topk: 8
     #   coeff_latent_l1_loss: 0.005
     #   low_rank_dimension: 1
@@ -29,35 +30,43 @@ train:
     #   n_epochs: 12
     #   binarize_dataset: true
     #   low_rank_dimension: 1
-    LoReFT:
-      # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
+    # LoReFT:
+    #   # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
+    #   batch_size: 18
+    #   gradient_accumulation_steps: 4
+    #   n_epochs: 24
+    #   lr: 0.0009
+    #   weight_decay: 0.00
+    #   low_rank_dimension: 4
+    #   reft_layers: [5, 10, 15, 20]
+    #   reft_positions: "f5+l5"
+    #   reft_type: "Loreft"
+    #   binarize_dataset: false
+    #   exclude_bos: true
+    # LoRA:
+    #   batch_size: 18
+    #   gradient_accumulation_steps: 4
+    #   n_epochs: 24
+    #   lr: 0.0009
+    #   weight_decay: 0.00
+    #   low_rank_dimension: 4
+    #   lora_layers: [5, 10, 15, 20]
+    #   lora_components: ["o_proj"]
+    #   lora_alpha: 32
+    #   binarize_dataset: false
+    #   exclude_bos: true
+    SFT:
       batch_size: 18
       gradient_accumulation_steps: 4
-      n_epochs: 24
-      lr: 0.0009
+      n_epochs: 12
+      lr: 0.00002
       weight_decay: 0.00
-      low_rank_dimension: 4
-      reft_layers: [5, 10, 15, 20]
-      reft_positions: "f5+l5"
-      reft_type: "Loreft"
-      binarize_dataset: false
-      exclude_bos: true
-    LoRA:
-      batch_size: 18
-      gradient_accumulation_steps: 4
-      n_epochs: 24
-      lr: 0.0009
-      weight_decay: 0.00
-      low_rank_dimension: 4
-      lora_layers: [5, 10, 15, 20]
-      lora_components: ["o_proj"]
-      lora_alpha: 32
       binarize_dataset: false
       exclude_bos: true
 
 inference:
   use_bf16: true
-  models: ["PromptSteering", "LoRA", "LoReFT"]
+  models: ["PromptSteering", "SFT"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -80,7 +89,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "LoRA", "LoReFT"]
+  models: ["PromptSteering", "SFT"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

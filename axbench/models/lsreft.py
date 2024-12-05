@@ -75,7 +75,7 @@ class LsReFT(Model):
         # Optimizer and lr
         optimizer = torch.optim.AdamW(
             self.ax_model.parameters(), 
-            lr=self.training_args.lr, weight_decay=0.0)
+            lr=self.training_args.lr, weight_decay=self.training_args.weight_decay)
         num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,

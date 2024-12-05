@@ -1,7 +1,5 @@
 from pathlib import Path
 from .model import Model
-import peft
-from peft import PeftModel, LoraConfig, get_peft_model
 import torch, einops
 from tqdm.auto import tqdm
 import os
@@ -17,42 +15,33 @@ from ..utils.model_utils import (
 )
 from transformers import get_scheduler
 from transformers import set_seed
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-class LoRA(Model):
+class SFT(Model):
     def __str__(self):
-        return 'LoRA'
+        return 'SFT'
     
     def make_model(self, **kwargs):
-        peft_config = LoraConfig(
-            r=self.training_args.low_rank_dimension,
-            lora_alpha=self.training_args.lora_alpha,
-            target_modules=self.training_args.lora_components,
-            layers_to_transform=self.training_args.lora_layers,
-            use_rslora=True, lora_dropout=0.05,
-            bias="none", task_type="CAUSAL_LM"
-        )
-        ax_model = get_peft_model(self.model, peft_config)
-        ax_model.to(self.device)
-        ax_model.print_trainable_parameters()
-        self.ax_model = ax_model
-        # lora is concept-ful due to its nature.
+        self.ax_model = self.model
         self.concept_id = kwargs.get("concept_id")
 
     def save(self, dump_dir, **kwargs):
         # folder-based saving
-        dump_dir = Path(f"{dump_dir}/lora/{self.concept_id}")
+        dump_dir = Path(f"{dump_dir}/sft/{self.concept_id}")
         dump_dir.mkdir(parents=True, exist_ok=True)
         self.ax_model.save_pretrained(dump_dir)
 
     def load(self, dump_dir, **kwargs):
         # folder-based loading
         self.concept_id = kwargs.get("concept_id")
-        dump_dir = Path(f"{dump_dir}/lora/{self.concept_id}")
-        self.ax_model = PeftModel.from_pretrained(
-            self.model, dump_dir)
+        dump_dir = Path(f"{dump_dir}/sft/{self.concept_id}")
+        self.ax_model = AutoModelForCausalLM.from_pretrained(
+            dump_dir, torch_dtype=torch.bfloat16)
+        self.ax_model.to(self.device)
 
     def train(self, examples, **kwargs):
+        self.ax_model.train()
         train_dataloader = self.make_dataloader(examples, **kwargs)
         torch.cuda.empty_cache()
 
@@ -64,6 +53,7 @@ class LoRA(Model):
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
+        norm_loss_fn = torch.nn.MSELoss()
         # Main training loop.
         rank = torch.distributed.get_rank()
         progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
@@ -77,7 +67,7 @@ class LoRA(Model):
                 outputs = self.ax_model(
                     input_ids=inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    labels=inputs["labels"]
+                    labels=inputs["labels"], use_cache=False
                 )
                 
                 # loss
@@ -123,6 +113,7 @@ class LoRA(Model):
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
             ).to(self.device)
+            print(inputs)
             generations = self.ax_model.generate(
                 **inputs, 
                 max_new_tokens=eval_output_length, do_sample=True, 

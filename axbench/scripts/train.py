@@ -235,7 +235,6 @@ def main():
     model_instance = AutoModelForCausalLM.from_pretrained(
         args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None)
     is_chat_model = True if args.model_name in CHAT_MODELS else False
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
     model_instance.to(device)
 
@@ -271,7 +270,7 @@ def main():
                 intervention_type=args.models[model_name].intervention_type,
                 concept_id=concept_id
             )
-            if model_name not in {"LoReFT", "LoRA"} and args.use_bf16:
+            if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
                 "prefix_length": prefix_length,
@@ -285,6 +284,15 @@ def main():
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            if model_name == "SFT":
+                # we need to reload the original model after SFT.
+                if args.use_bf16:
+                    logger.warning(f"Using bfloat16 for model {args.model_name}")
+                model_instance = AutoModelForCausalLM.from_pretrained(
+                    args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None)
+                is_chat_model = True if args.model_name in CHAT_MODELS else False
+                model_instance = model_instance.eval()
+                model_instance.to(device)
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
             del benchmark_model

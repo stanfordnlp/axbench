@@ -39,7 +39,7 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
@@ -253,7 +253,6 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
         args.steering_model_name if args.steering_model_name else args.model_name, 
         torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
     # Prepare data per concept
@@ -420,7 +419,6 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
         args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.

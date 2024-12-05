@@ -233,7 +233,7 @@ class LoReFT(Model):
             data_module["train_dataset"], shuffle=True, # we shuffle for examples.
             batch_size=self.training_args.batch_size, collate_fn=data_module["data_collator"])
         optimizer = torch.optim.AdamW(
-            self.ax_model.parameters(), lr=self.training_args.lr, weight_decay=0.00,
+            self.ax_model.parameters(), lr=self.training_args.lr, weight_decay=self.training_args.weight_decay,
             betas=(0.9, 0.999), eps=1e-8)
         num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
