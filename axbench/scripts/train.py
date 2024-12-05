@@ -184,7 +184,11 @@ def main():
     # Set a unique seed per rank for reproducibility
     set_seed(args.seed + rank)
 
-    args.data_dir = f"{args.dump_dir}/generate"
+    if args.overwrite_data_dir and Path(args.overwrite_data_dir).exists():
+        logger.warning(f"Overwriting data directory {args.data_dir}")
+        args.data_dir = args.overwrite_data_dir
+    else:
+        args.data_dir = f"{args.dump_dir}/generate"
 
     # Configure the logger per rank
     logger.setLevel(logging.WARNING)  # Set the logging level as desired

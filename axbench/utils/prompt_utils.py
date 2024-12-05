@@ -49,6 +49,8 @@ async def get_concept_genres(client, concepts, api_tag=""):
                 genres += ["code"]
             if "math" in response.lower():
                 genres += ["math"]
+            if len(genres) == 0:
+                genres += ["text"]
             concept_genres[concepts[i]] = genres
     return concept_genres
 

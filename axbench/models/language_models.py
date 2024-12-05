@@ -189,8 +189,9 @@ class LanguageModel(object):
             f.write(json.dumps({"price": self.stats.get_total_price()}) + '\n')
 
     def save_cache(self):
-        with open(self.cache_file, "wb") as f:
-            pickle.dump(self.cache_in_mem, f, protocol=pickle.HIGHEST_PROTOCOL)
+        if self.use_cache:
+            with open(self.cache_file, "wb") as f:
+                pickle.dump(self.cache_in_mem, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     async def close(self):
         """Close the underlying HTTP client"""
