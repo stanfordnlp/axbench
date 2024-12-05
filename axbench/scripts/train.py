@@ -165,6 +165,8 @@ def save_state(dump_dir, state, rank):
 
 
 def main():
+   
+
     args = TrainingArgs(section="train")
 
     # Initialize the process group
@@ -178,10 +180,6 @@ def main():
     # Set the device for this process
     device = torch.device(f'cuda:{local_rank}')
     torch.cuda.set_device(device)
-
-    # Configure PyTorch for determinism
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     # Set a unique seed per rank for reproducibility
     set_seed(args.seed + rank)
@@ -235,10 +233,10 @@ def main():
     if args.use_bf16:
         logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device)
+        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None)
     is_chat_model = True if args.model_name in CHAT_MODELS else False
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
+    model_instance.to(device)
 
     prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
     if is_chat_model:
@@ -261,7 +259,7 @@ def main():
             benchmark_model = getattr(axbench, model_name)(
                 model_instance, tokenizer, layer=args.layer,
                 training_args=args.models[model_name],
-                device=device, seed=args.seed
+                device=device, seed=args.seed, 
             )
             low_rank_dimension = args.models[model_name].low_rank_dimension \
                 if args.models[model_name].low_rank_dimension else 1
@@ -269,14 +267,15 @@ def main():
                 mode="train",
                 low_rank_dimension=low_rank_dimension,
                 dtype=torch.bfloat16 if args.use_bf16 else None,
-                intervention_type=args.models[model_name].intervention_type
+                intervention_type=args.models[model_name].intervention_type,
+                concept_id=concept_id
             )
-            if args.use_bf16:
+            if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
                 "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
-                "exclude_bos": args.models[model_name].exclude_bos
+                "exclude_bos": args.models[model_name].exclude_bos,
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(
@@ -285,6 +284,15 @@ def main():
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            if model_name == "SFT":
+                # we need to reload the original model after SFT.
+                if args.use_bf16:
+                    logger.warning(f"Using bfloat16 for model {args.model_name}")
+                model_instance = AutoModelForCausalLM.from_pretrained(
+                    args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None)
+                is_chat_model = True if args.model_name in CHAT_MODELS else False
+                model_instance = model_instance.eval()
+                model_instance.to(device)
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
             del benchmark_model

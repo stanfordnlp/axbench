@@ -119,63 +119,9 @@ class TopKReLUIntervention(
             output=output.to(base.dtype),
             latent=[latent, non_topk_latent]
         )
-    
-
-class DireftIntervention(
-    SourcelessIntervention,
-    TrainableIntervention, 
-    DistributedRepresentationIntervention
-):
-    """
-    Phi(h) = h + W^T(Wh + b - Rh)
-    Ref: https://arxiv.org/pdf/2404.03592
-    """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs, keep_last_dim=True)
-        self.proj = torch.nn.Linear(
-            kwargs["low_rank_dimension"], self.embed_dim, bias=False).to(
-            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
-        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
-            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
-        
-    def forward(
-        self, base, source=None, subspaces=None
-    ):
-        rotated_base = torch.matmul(base, self.proj.weight)
-        output = base + torch.matmul(
-            (self.learned_source(base) - rotated_base), self.proj.weight.T
-        )
-        return output.to(base.dtype)
-    
-
-class LoreftIntervention(
-    SourcelessIntervention,
-    TrainableIntervention, 
-    DistributedRepresentationIntervention
-):
-    """
-    Phi(h) = h + W^T(Wh + b - Rh)
-    Ref: https://arxiv.org/pdf/2404.03592
-    """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs, keep_last_dim=True)
-        proj = LowRankRotateLayer(
-            self.embed_dim, kwargs["low_rank_dimension"], init_orth=True)
-        self.proj = torch.nn.utils.parametrizations.orthogonal(proj)
-        self.learned_source = torch.nn.Linear(self.embed_dim, kwargs["low_rank_dimension"]).to(
-            kwargs["dtype"] if "dtype" in kwargs else torch.bfloat16)
-        
-    def forward(
-        self, base, source=None, subspaces=None
-    ):
-        rotated_base = self.proj(base)
-        output = base + torch.matmul(
-            (self.learned_source(base) - rotated_base), self.proj.weight.T
-        )
-        return output.to(base.dtype)
 
 
-class ConceptDireftIntervention(
+class ConceptReFTIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
     DistributedRepresentationIntervention
@@ -211,7 +157,8 @@ class ConceptDireftIntervention(
         proj_weight = self.W_proj[subspaces["idx"]] # batch_size, embed_dim, low_rank_dimension
         source_weight = self.W_source[subspaces["idx"]] # batch_size, embed_dim, low_rank_dimension
         source_bias = self.b_source[subspaces["idx"]].unsqueeze(dim=1) # batch_size, 1, low_rank_dimension
-        rotated_base = torch.bmm(base, proj_weight) # batch_size, seq_len, low_rank_dimension
+
+        rotated_base = torch.bmm(base.float(), proj_weight) # batch_size, seq_len, low_rank_dimension
         output = base + torch.bmm(
             ((torch.bmm(base, source_weight) + source_bias) - rotated_base), # batch_size, seq_len, low_rank_dimension
             proj_weight.transpose(-1, -2)

@@ -66,8 +66,8 @@ def get_intervention_locations(**kwargs):
 
 
 @dataclass
-class ReftDataCollator(object):
-    """Collate examples for ReFT."""
+class InterventionDataCollator(object):
+    """Collate examples for Intervention."""
     
     tokenizer: transformers.AutoTokenizer
     data_collator: transformers.DataCollator
@@ -133,7 +133,7 @@ def make_data_module(
         output_ids = base_input_ids.clone()
         output_ids[:base_prompt_length] = -100
 
-        if positions == "all_prompt":
+        if positions is None or positions == "all_prompt":
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_prompt_length)]])
         elif positions == "all":
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_length)]])
@@ -148,7 +148,7 @@ def make_data_module(
                 share_weights=True,
             )
             # shift intervention locations by prefix length
-            shifted_intervention_locations = [loc + prefix_length for loc in intervention_locations]
+            shifted_intervention_locations = [[loc + prefix_length for loc in intervention_locations[0]]]
             intervention_locations = shifted_intervention_locations
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
@@ -168,6 +168,6 @@ def make_data_module(
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"
     )
-    data_collator = ReftDataCollator(tokenizer=tokenizer, data_collator=data_collator_fn)
+    data_collator = InterventionDataCollator(tokenizer=tokenizer, data_collator=data_collator_fn)
     return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 

@@ -13,6 +13,7 @@ from .evaluators.lm_judge import *
 from .evaluators.hard_negative import *
 from .evaluators.winrate import *
 
+from .models.sft import *
 from .models.lora import *
 from .models.reft import *
 from .models.lsreft import *

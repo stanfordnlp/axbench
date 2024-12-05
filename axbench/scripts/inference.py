@@ -39,7 +39,7 @@ STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
 STEERING_EXCLUDE_MODELS = {}
-LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline"}
+LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
 
@@ -253,7 +253,6 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
         args.steering_model_name if args.steering_model_name else args.model_name, 
         torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
     # Prepare data per concept
@@ -276,21 +275,23 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
 
             benchmark_model = model_class(
                 model_instance, tokenizer, layer=layer,
+                training_args=training_args.models[model_name] if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None, # we init with training args as well
                 low_rank_dimension=len(metadata),
-                device=device, steering_layers=steering_layers
+                device=device, steering_layers=steering_layers,
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
-                intervention_type=args.steering_intervention_type
+                intervention_type=args.steering_intervention_type, concept_id=concept_id
             )
             benchmark_model.to(device)
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
-            benchmark_model.pre_compute_mean_activations(
-                os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
-            )
+            if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
+                benchmark_model.pre_compute_mean_activations(
+                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+                )
             logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
             results = benchmark_model.predict_steer(
@@ -298,7 +299,8 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 batch_size=args.steering_batch_size,
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature,
-                prefix_length=prefix_length
+                prefix_length=prefix_length,
+                positions=training_args.models[model_name].intervention_positions if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None,
             )
             # Store the results in current_df
             for k, v in results.items():
@@ -417,7 +419,6 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
         args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
-    model_instance.config.use_cache = False
     model_instance = model_instance.eval()
 
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
@@ -433,6 +434,17 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
+
+    has_latent_model = False
+    for model_name in args.models:
+        # load model on the fly to save memory
+        if model_name not in LATENT_EXCLUDE_MODELS:
+            has_latent_model = True
+            break
+
+    if not has_latent_model:
+        logger.warning("No latent model to infer. Exiting.")
+        return
 
     # Now loop over concept_ids and use preloaded models
     cache_df = {}
@@ -621,8 +633,6 @@ def main():
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
-        if not os.path.exists(os.path.join(args.dump_dir, "inference", "latent_data.parquet")):
-            raise ValueError("Latent eval must be done before steering eval.")
         infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "all":
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
