@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 model_name_map = {
     "gemma-2-2b": "google/gemma-2-2b",
+    "gemma-2-9b-it": "google/gemma-2-9b-it",
 }
 
 MAX_RETRIES = 5
@@ -200,7 +201,7 @@ def main():
     # Init the dataset factory.
     dataset_factory = DatasetFactory(
         None, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
-        dump_dir, use_cache=True, master_data_dir=args.master_data_dir,
+        dump_dir, use_cache=args.lm_use_cache, master_data_dir=args.master_data_dir,
         seed=args.seed, lm_model=args.lm_model, 
     )
     atexit.register(dataset_factory.save_cache)

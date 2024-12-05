@@ -35,6 +35,7 @@ class DatasetArgs:
     run_name: Optional[str] = None
     use_bf16: Optional[bool] = False
     dataset_category: Optional[str] = "instruction"
+    lm_use_cache: Optional[bool] = True
 
     def __init__(
         self,

@@ -18,6 +18,7 @@ Make sure you populate the `axbench/data` directory with the relevant datasets:
 ```bash
 cd data
 bash download-2b.sh
+bash download-9b.sh
 bash download-alpaca.sh
 python axbench/scripts/download-seed-sentences.py
 ```
