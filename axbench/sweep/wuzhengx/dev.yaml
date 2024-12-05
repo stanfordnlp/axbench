@@ -3,10 +3,10 @@ generate:
   output_length: 64
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-  max_concepts: 1
+  max_concepts: 500
   master_data_dir: "axbench/data"
   dataset_category: "instruction"
-  seed: 43
+  seed: 42
 
 train:
   model_name: "google/gemma-2-2b-it"
@@ -55,14 +55,14 @@ train:
     #   lora_alpha: 32
     #   binarize_dataset: false
     #   exclude_bos: true
-    SFT:
-      batch_size: 18
-      gradient_accumulation_steps: 4
-      n_epochs: 12
-      lr: 0.00002
-      weight_decay: 0.00
-      binarize_dataset: false
-      exclude_bos: true
+    # SFT:
+    #   batch_size: 18
+    #   gradient_accumulation_steps: 4
+    #   n_epochs: 12
+    #   lr: 0.00002
+    #   weight_decay: 0.00
+    #   binarize_dataset: false
+    #   exclude_bos: true
 
 inference:
   use_bf16: true

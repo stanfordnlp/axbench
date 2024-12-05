@@ -1,0 +1,10 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  output_length: 64
+  num_of_examples: 72
+  concept_path: "axbench/data/gemma-2-2b_10-gemmascope-res-16k.json"
+  max_concepts: 500
+  master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  lm_use_cache: false
+  seed: 42
