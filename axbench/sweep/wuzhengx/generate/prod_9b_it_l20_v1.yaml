@@ -8,3 +8,10 @@ generate:
   dataset_category: "instruction"
   lm_use_cache: false
   seed: 42
+inference:
+  model_name: "google/gemma-2-9b-it"
+  output_length: 128
+  latent_num_of_examples: 36
+  master_data_dir: "axbench/data"
+  seed: 42
+  lm_model: "gpt-4o-mini"
