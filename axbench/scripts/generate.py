@@ -182,7 +182,7 @@ def main():
     # Load the state if it exists.
     state = load_state(dump_dir)
     start_concept_id = state.get("concept_id", 0) if state else 0
-    logger.warning(f"Starting group index: {start_concept_id}")
+    logger.warning(f"Starting concept index: {start_concept_id}")
     if start_concept_id >= len(concepts):
         logger.warning(f"Datasets for all concepts have been generated. Exiting.")
         return
