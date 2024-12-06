@@ -24,6 +24,7 @@ from transformers import set_seed
 import torch.distributed as dist
 import sys
 from torch.utils.data import DataLoader
+from axbench.models.sae import save_pruned_sae
 
 # all supported methods
 import axbench
@@ -65,29 +66,6 @@ def load_metadata(metadata_path):
         for line in f:
             data = json.loads(line)
             metadata += [data]  # Return the metadata as is
-    return metadata
-
-
-def load_metadata_flatten(metadata_path):
-    """
-    Load flatten metadata from a JSON lines file.
-    """
-    metadata = []
-    concept_id = 0
-    with open(metadata_path, 'r') as f:
-        for line in f:
-            data = json.loads(line)
-            concept, ref =data["concept"], data["ref"]
-            concept_genres_map = data["concept_genres_map"][concept]
-            ref = data["ref"]
-            flatten_data = {
-                "concept": concept,
-                "ref": ref,
-                "concept_genres_map": {concept: concept_genres_map},
-                "concept_id": concept_id
-            }
-            metadata += [flatten_data]  # Return the metadata as is
-            concept_id += 1
     return metadata
 
 
@@ -227,44 +205,7 @@ def main():
     
     # save pruned SAE
     if rank == 0:
-        # Save SAE weights and biases for inference
-        logger.warning("Saving SAE weights and biases for inference")
-        flatten_metadata = load_metadata_flatten(metadata_path)
-        # Save pruned SAE weights and biases
-        sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
-        sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-        headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-        response = requests.get(sae_url, headers=headers).json()
-        hf_repo = response["source"]["hfRepoId"]
-        hf_folder = response["source"]["hfFolderId"]
-        path_to_params = hf_hub_download(
-            repo_id=hf_repo,
-            filename=f"{hf_folder}/params.npz",
-            force_download=False,
-        )
-        sae_params = np.load(path_to_params)
-        sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
-        pruned_sae_pt_params = {
-            "b_dec": sae_pt_params["b_dec"],
-            "W_dec": [],
-            "W_enc": [],
-            "b_enc": [],
-            "threshold": []
-        }
-        for concept_id, m in enumerate(flatten_metadata):
-            sae_id = int(m["ref"].split("/")[-1])
-            pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
-            pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
-            pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
-            pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
-        for k, v in pruned_sae_pt_params.items():
-            if k == "b_dec":
-                continue
-            if k == "W_enc":
-                pruned_sae_pt_params[k] = torch.cat(v, dim=1)
-            else:
-                pruned_sae_pt_params[k] = torch.cat(v, dim=0)
-        torch.save(pruned_sae_pt_params, dump_dir / "GemmaScopeSAE.pt") # sae only has one file
+        sae_params = save_pruned_sae(metadata_path, dump_dir)
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
@@ -317,6 +258,7 @@ def main():
                 intervention_type=args.models[model_name].intervention_type,
                 concept_id=concept_id,
                 sae_params=sae_params,
+                metadata_path=metadata_path,
             )
             if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
@@ -324,6 +266,7 @@ def main():
                 "prefix_length": prefix_length,
                 "positions": args.models[model_name].intervention_positions,
                 "exclude_bos": args.models[model_name].exclude_bos,
+                "metadata_path": metadata_path,
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(

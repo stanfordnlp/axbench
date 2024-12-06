@@ -107,7 +107,8 @@ def make_data_module(
     dataset_category="continuation",
     positions="all", # "all_prompt" or "all" or "f1+l1" (pyreft formatting)
     exclude_bos=True,
-    prefix_length=1
+    prefix_length=1,
+    **kwargs
 ):
     """Make dataset and collator for supervised fine-tuning with kl div loss."""
     if not exclude_bos:

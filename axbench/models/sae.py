@@ -35,6 +35,80 @@ logger = logging.getLogger(__name__)
 import pyreft
 
 
+def load_metadata_flatten(metadata_path):
+    """
+    Load flatten metadata from a JSON lines file.
+    """
+    metadata = []
+    concept_id = 0
+    with open(metadata_path, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            concept, ref =data["concept"], data["ref"]
+            concept_genres_map = data["concept_genres_map"][concept]
+            ref = data["ref"]
+            flatten_data = {
+                "concept": concept,
+                "ref": ref,
+                "concept_genres_map": {concept: concept_genres_map},
+                "concept_id": concept_id
+            }
+            metadata += [flatten_data]  # Return the metadata as is
+            concept_id += 1
+    return metadata
+
+
+def save_pruned_sae(
+    metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt"
+):
+    # Save SAE weights and biases for inference
+    logger.warning("Saving SAE weights and biases for inference")
+    flatten_metadata = load_metadata_flatten(metadata_path)
+    logger.warning(flatten_metadata)
+
+    # mess with SAE refs if needed (for DBM stuff)
+    if modified_refs is not None:
+        for i, ref in enumerate(modified_refs):
+            flatten_metadata[i]["ref"] = "/".join(flatten_metadata[i]["ref"].split("/")[:-1]) + "/" + str(ref)
+
+    # Save pruned SAE weights and biases
+    sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
+    sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+    headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+    response = requests.get(sae_url, headers=headers).json()
+    hf_repo = response["source"]["hfRepoId"]
+    hf_folder = response["source"]["hfFolderId"]
+    path_to_params = hf_hub_download(
+        repo_id=hf_repo,
+        filename=f"{hf_folder}/params.npz",
+        force_download=False,
+    )
+    sae_params = np.load(path_to_params)
+    sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
+    pruned_sae_pt_params = {
+        "b_dec": sae_pt_params["b_dec"],
+        "W_dec": [],
+        "W_enc": [],
+        "b_enc": [],
+        "threshold": []
+    }
+    for concept_id, m in enumerate(flatten_metadata):
+        sae_id = int(m["ref"].split("/")[-1])
+        pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
+        pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
+        pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
+        pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
+    for k, v in pruned_sae_pt_params.items():
+        if k == "b_dec":
+            continue
+        if k == "W_enc":
+            pruned_sae_pt_params[k] = torch.cat(v, dim=1)
+        else:
+            pruned_sae_pt_params[k] = torch.cat(v, dim=0)
+    torch.save(pruned_sae_pt_params, dump_dir / savefile) # sae only has one file
+    return sae_params
+
+
 class GemmaScopeSAE(Model):
     def __str__(self):
         return 'GemmaScopeSAE'
@@ -76,6 +150,7 @@ class GemmaScopeSAE(Model):
 
     def load(self, dump_dir=None, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
+        logger.warning(f"Loading SAE from {dump_dir}/{model_name}.pt")
         params = torch.load(
             f"{dump_dir}/{model_name}.pt"
         )
@@ -134,14 +209,23 @@ class GemmaScopeSAE(Model):
         return max_activations
 
 
-class GemmaScopeSAEBinaryMask(Model):
+class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
+    """
+    basic idea:
+    - in "train" mode, learn a DBM on top of SAE
+    - use this to identify the most important SAE feature for inference stuff
+    - save the decoder vector for this feature
+    - in inference modes, its a normal SAE intervention but with the decoder vector fixed to the one identified in training
+    - unclear how else to *cheaply* identify good SAE features for steering
+    """
     def __str__(self):
-        return 'GemmaScopeSAE+DBM'
+        return 'GemmaScopeSAEBinaryMask'
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "train":
             sae_params = kwargs.get("sae_params", None)
+            metadata_path = kwargs.get("metadata_path", None)
             if sae_params is not None:
                 logger.warning(f"Setting up SAE for binary mask with shape {sae_params['W_dec'].shape}")
                 ax = SigmoidMaskAdditionIntervention(
@@ -160,24 +244,28 @@ class GemmaScopeSAEBinaryMask(Model):
                 ax_model.set_device(self.device)
                 self.ax = ax
                 self.ax_model = ax_model
+                self.metadata_path = metadata_path
+        else:
+            # defer to parent class
+            super().make_model(**kwargs)
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
-        saved_masks = None
-        saved_sources = None
-        if os.path.exists(dump_dir / f"{model_name}_masks.pt"):
-            saved_masks = torch.load(dump_dir / f"{model_name}_masks.pt")
-        saved_masks = torch.cat([saved_masks, self.ax.mask.data], dim=0) if saved_masks is not None else self.ax.mask.data
-        torch.save(saved_masks, dump_dir / f"{model_name}_masks.pt")
-        if os.path.exists(dump_dir / f"{model_name}_sources.pt"):
-            saved_sources = torch.load(dump_dir / f"{model_name}_sources.pt")
-        saved_sources = torch.cat([saved_sources, self.ax.source.data], dim=0) if saved_sources is not None else self.ax.source.data
-        torch.save(saved_sources, dump_dir / f"{model_name}_sources.pt")
+        top_feature = self.ax.mask.data.argmax().item()
+        # log the top 10 features
+        logger.warning(f"Top 10 features: {self.ax.mask.data.topk(10).indices.tolist()}")
+        top_features = []
+        if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
+            with open(dump_dir / f"{model_name}_top_features.json", "r") as f:
+                top_features = json.load(f)
+        top_features += [top_feature]   
+        with open(dump_dir / f"{model_name}_top_features.json", "w") as f:
+            json.dump(top_features, f)
 
-    def load(self, dump_dir, **kwargs):
-        model_name = kwargs.get("model_name", self.__str__())
-        self.ax.mask.data = torch.load(dump_dir / f"{model_name}_masks.pt")
-        self.ax.source.data = torch.load(dump_dir / f"{model_name}_sources.pt")
+        # save the pruned SAE
+        save_pruned_sae(
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt"
+        )
     
     def train(self, examples,**kwargs):
         train_dataloader = self.make_dataloader(examples, **kwargs)
