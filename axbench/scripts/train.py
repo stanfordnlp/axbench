@@ -224,6 +224,47 @@ def main():
 
     dump_dir = Path(args.dump_dir) / "train"
     dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    # save pruned SAE
+    if rank == 0:
+        # Save SAE weights and biases for inference
+        logger.warning("Saving SAE weights and biases for inference")
+        flatten_metadata = load_metadata_flatten(metadata_path)
+        # Save pruned SAE weights and biases
+        sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
+        sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+        headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
+        response = requests.get(sae_url, headers=headers).json()
+        hf_repo = response["source"]["hfRepoId"]
+        hf_folder = response["source"]["hfFolderId"]
+        path_to_params = hf_hub_download(
+            repo_id=hf_repo,
+            filename=f"{hf_folder}/params.npz",
+            force_download=False,
+        )
+        sae_params = np.load(path_to_params)
+        sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
+        pruned_sae_pt_params = {
+            "b_dec": sae_pt_params["b_dec"],
+            "W_dec": [],
+            "W_enc": [],
+            "b_enc": [],
+            "threshold": []
+        }
+        for concept_id, m in enumerate(flatten_metadata):
+            sae_id = int(m["ref"].split("/")[-1])
+            pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
+            pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
+            pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
+            pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
+        for k, v in pruned_sae_pt_params.items():
+            if k == "b_dec":
+                continue
+            if k == "W_enc":
+                pruned_sae_pt_params[k] = torch.cat(v, dim=1)
+            else:
+                pruned_sae_pt_params[k] = torch.cat(v, dim=0)
+        torch.save(pruned_sae_pt_params, dump_dir / "GemmaScopeSAE.pt") # sae only has one file
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
@@ -252,7 +293,9 @@ def main():
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id}")
 
     # Run training for assigned concept_ids
+    logger.warning(metadata)
     for concept_id, concept_df in my_df_list:
+        concept_id = int(concept_id)
         if last_concept_id is not None and concept_id <= last_concept_id:
             logger.warning(f"Rank {rank} skipping concept_id {concept_id} because it is already processed")
             continue
@@ -272,7 +315,8 @@ def main():
                 low_rank_dimension=low_rank_dimension,
                 dtype=torch.bfloat16 if args.use_bf16 else None,
                 intervention_type=args.models[model_name].intervention_type,
-                concept_id=concept_id
+                concept_id=concept_id,
+                sae_params=sae_params,
             )
             if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
@@ -369,45 +413,6 @@ def main():
                     logger.warning(f"Deleted file {f.name}")
                 except Exception as e:
                     logger.error(f"Error deleting file {f.name}: {e}")
-
-        # Save SAE weights and biases for inference
-        logger.warning("Saving SAE weights and biases for inference")
-        flatten_metadata = load_metadata_flatten(metadata_path)
-        # Save pruned SAE weights and biases
-        sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
-        sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
-        headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
-        response = requests.get(sae_url, headers=headers).json()
-        hf_repo = response["source"]["hfRepoId"]
-        hf_folder = response["source"]["hfFolderId"]
-        path_to_params = hf_hub_download(
-            repo_id=hf_repo,
-            filename=f"{hf_folder}/params.npz",
-            force_download=False,
-        )
-        params = np.load(path_to_params)
-        sae_pt_params = {k: torch.from_numpy(v) for k, v in params.items()}
-        pruned_sae_pt_params = {
-            "b_dec": sae_pt_params["b_dec"],
-            "W_dec": [],
-            "W_enc": [],
-            "b_enc": [],
-            "threshold": []
-        }
-        for concept_id, metadata in enumerate(flatten_metadata):
-            sae_id = int(metadata["ref"].split("/")[-1])
-            pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
-            pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
-            pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
-            pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
-        for k, v in pruned_sae_pt_params.items():
-            if k == "b_dec":
-                continue
-            if k == "W_enc":
-                pruned_sae_pt_params[k] = torch.cat(v, dim=1)
-            else:
-                pruned_sae_pt_params[k] = torch.cat(v, dim=0)
-        torch.save(pruned_sae_pt_params, dump_dir / "GemmaScopeSAE.pt") # sae only has one file
 
     # Finalize the process group
     dist.destroy_process_group()

@@ -1,83 +1,98 @@
 generate:
   lm_model: "gpt-4o-mini"
-  output_length: 32
+  output_length: 64
   num_of_examples: 72
-  concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
+  concept_path: "axbench/data/gemma-2-2b_10-gemmascope-res-16k.json"
   max_concepts: 4
   master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  lm_use_cache: false
   seed: 42
 
 train:
-  model_name: "google/gemma-2-2b"
+  model_name: "google/gemma-2-2b-it"
   layer: 20
   component: "res"
   seed: 42
   use_bf16: true
-  models: 
-    LsReFT:
+  models:
+    GemmaScopeSAEBinaryMask:
       batch_size: 6
+      gradient_accumulation_steps: 1
       n_epochs: 12
-      lr: 0.005
-      topk: 8
-      coeff_l1_loss: 0.005
-      low_rank_dimension: 1
+      lr: 0.008
+      weight_decay: 0.00
       intervention_positions: "all"
-      intervention_type: "addition" # clamping
-      dataset_category: "instruction"
       binarize_dataset: false
       exclude_bos: true
-    DiffMean:
-      batch_size: 6
-      n_epochs: 12
-      dataset_category: "instruction"
-      binarize_dataset: true
-      low_rank_dimension: 1
-    LAT:
-      batch_size: 6
-      n_epochs: 12
-      dataset_category: "instruction"
-      binarize_dataset: true
-      low_rank_dimension: 1
-
-inference:
-  use_bf16: true
-  models: ["LsReFT", "PromptSteering", "DiffMean", "LAT"] 
-  model_name: "google/gemma-2-2b-it"
-  # latent related params
-  input_length: 32
-  latent_num_of_examples: 20
-  latent_batch_size: 128
-  # steering related params
-  steering_intervention_type: "addition" # clamping
-  steering_model_name: "google/gemma-2-2b-it"
-  steering_datasets: ["AlpacaEval"]
-  steering_batch_size: 24
-  steering_output_length: 128
-  steering_layers: [20]
-  steering_num_of_examples: 10 # number of examples per concept and per factor
-  steering_factors: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] # number of steering factors per example
-  # master data dir is shared across all jobs.
-  master_data_dir: "axbench/data"
-  seed: 42
-  lm_model: "gpt-4o-mini"
-  # generation related params
-  temperature: 1.0
-
-evaluate:
-  models: ["LsReFT", "PromptSteering", "DiffMean", "LAT"] 
-  latent_evaluators: [
-    "AUCROCEvaluator",
-    "HardNegativeEvaluator",
-  ]
-  steering_evaluators: [
-    "PerplexityEvaluator", 
-    "LMJudgeEvaluator",
-  ]
-  winrate_split_ratio: 0.5 # this is for steering only, we use a separate partition for factor selection.
-  # Number of processes to run in parallel for steering evaluation.
-  num_of_workers: 32
-  lm_model: "gpt-4o-mini"
-  run_winrate: true
-  winrate_baseline: "PromptSteering"
-  # master data dir is shared across all jobs.
-  master_data_dir: "axbench/data"
+    # DiffMean:
+    #   batch_size: 6
+    #   n_epochs: 1
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    # PCA:
+    #   batch_size: 6
+    #   n_epochs: 1
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    # LAT:
+    #   batch_size: 6
+    #   n_epochs: 1
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    # SparseLinearProbe:
+    #   batch_size: 6
+    #   gradient_accumulation_steps: 1
+    #   n_epochs: 12
+    #   lr: 0.008
+    #   topk: 8
+    #   coeff_latent_l1_loss: 0.005
+    #   coeff_l1_loss: 0.00
+    #   coeff_l2_loss: 0.02
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    # LsReFT:
+    #   batch_size: 6
+    #   gradient_accumulation_steps: 1
+    #   n_epochs: 12
+    #   lr: 0.008
+    #   weight_decay: 0.00
+    #   topk: 8
+    #   coeff_latent_l1_loss: 0.005
+    #   low_rank_dimension: 1
+    #   intervention_positions: "all"
+    #   intervention_type: "addition" # clamping
+    #   binarize_dataset: false
+    #   exclude_bos: true
+    # SteeringVector:
+    #   batch_size: 6
+    #   gradient_accumulation_steps: 1
+    #   n_epochs: 12
+    #   lr: 0.008
+    #   weight_decay: 0.00
+    #   low_rank_dimension: 1
+    #   intervention_positions: "all"
+    #   intervention_type: "addition" # clamping
+    #   binarize_dataset: false
+    #   exclude_bos: true
+    # IntegratedGradients:
+    #   batch_size: 12
+    #   gradient_accumulation_steps: 6
+    #   weight_decay: 0.00
+    #   n_epochs: 20
+    #   lr: 0.0008
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
+    # LoReFT:
+    #   # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
+    #   batch_size: 18
+    #   gradient_accumulation_steps: 4
+    #   n_epochs: 24
+    #   lr: 0.0009
+    #   weight_decay: 0.00
+    #   low_rank_dimension: 4
+    #   reft_layers: [5, 10, 15, 20]
+    #   reft_positions: "f5+l5"
+    #   reft_type: "Loreft"
+    #   binarize_dataset: false
+    #   exclude_bos: true
