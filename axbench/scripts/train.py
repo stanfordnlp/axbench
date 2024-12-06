@@ -37,7 +37,7 @@ CONFIG_FILE = "config.json"
 STATE_FILE = "train_state.pkl"
 
 
-def data_generator(data_dir):
+def data_generator(data_dir, max_concepts=None):
     """
     Generator function to read data files and yield data subsets by concept_id.
 
@@ -50,6 +50,10 @@ def data_generator(data_dir):
     df = pd.read_parquet(os.path.join(data_dir, 'train_data.parquet'))
     concept_ids = df['concept_id'].unique()
     concept_ids.sort()
+    
+    if max_concepts is not None and max_concepts < len(concept_ids) and max_concepts > 0:
+        concept_ids = concept_ids[:max_concepts]
+        
     for concept_id in concept_ids:
         if concept_id >= 0:
             df_subset = df[df['concept_id'] == concept_id]
@@ -218,7 +222,7 @@ def main():
     # Load dataset and metadata
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
-    df_generator = data_generator(args.data_dir)
+    df_generator = data_generator(args.data_dir, max_concepts=args.max_concepts)
     all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
     df_list = list(df_generator)
 
