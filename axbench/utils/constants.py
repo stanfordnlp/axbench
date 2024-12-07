@@ -20,7 +20,8 @@ PRICING_DOLLAR_PER_1M_TOKEN = {
 UNIT_1M = 1_000_000
 
 CHAT_MODELS = {
-    "google/gemma-2-2b-it"
+    "google/gemma-2-2b-it",
+    "google/gemma-2-9b-it"
 }
 
 BASE_MODELS = {
