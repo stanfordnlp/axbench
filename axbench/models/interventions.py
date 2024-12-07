@@ -5,7 +5,8 @@ from pyvene import (
     TrainableIntervention,
     DistributedRepresentationIntervention,
     CollectIntervention,
-    InterventionOutput
+    InterventionOutput,
+    SigmoidMaskIntervention,
 )
 
 
@@ -182,6 +183,38 @@ class AdditionIntervention(
         # use subspaces["idx"] to select the correct weight vector
         steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * \
             subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        output = base + steering_vec.unsqueeze(dim=1)
+        return output
+    
+
+class SigmoidMaskAdditionIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        # here, low_rank_dimension is the number of concepts in the SAE
+        # we learn a mask over the concepts
+        self.proj = torch.nn.Linear(
+            kwargs["sae_width"], self.embed_dim, bias=True)
+        self.mask = torch.nn.Parameter(
+            torch.zeros(kwargs["low_rank_dimension"], kwargs["sae_width"]), requires_grad=True)
+        self.source = torch.nn.Parameter(
+            0.001 *torch.ones(kwargs["low_rank_dimension"], kwargs["sae_width"]), requires_grad=True)
+        self.temperature = torch.nn.Parameter(torch.tensor(0.01), requires_grad=False)
+    
+    def get_temperature(self):
+        return self.temperature
+
+    def set_temperature(self, temp: torch.Tensor):
+        self.temperature.data = temp
+    
+    def forward(self, base, source=None, subspaces=None):
+        # use subspaces["idx"] to select the correct weight vector
+        mask_sigmoid = torch.sigmoid(self.mask[subspaces["idx"]] / torch.tensor(self.temperature))
+        masked_source = (torch.relu(self.source[subspaces["idx"]]) * mask_sigmoid).unsqueeze(0)
+        steering_vec = self.proj(masked_source)
         output = base + steering_vec.unsqueeze(dim=1)
         return output
 

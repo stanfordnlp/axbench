@@ -55,6 +55,8 @@ class ModelParams:
     lora_components: Optional[List[str]] = None
     lora_alpha: Optional[int] = None
     weight_decay: Optional[float] = 0.0
+    temperature_start: Optional[float] = 1e-2
+    temperature_end: Optional[float] = 1e-7
 
 class TrainingArgs:
     def __init__(
@@ -86,7 +88,7 @@ class TrainingArgs:
             'low_rank_dimension', 'dataset_category', 'intervention_positions', 'intervention_layers',
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
-            'lora_components', 'lora_alpha', 'weight_decay'
+            'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end'
         ]
         all_params = global_params + hierarchical_params
 
@@ -175,7 +177,10 @@ class TrainingArgs:
     def _infer_type(param_name: str):
         bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset']
         int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension', 'gradient_accumulation_steps', 'lora_alpha', 'max_concepts']
-        float_params = ['lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 'coeff_latent_l1_loss', 'weight_decay']
+        float_params = [
+            'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 
+            'coeff_latent_l1_loss', 'weight_decay', 'temperature_start', 'temperature_end'
+        ]
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
