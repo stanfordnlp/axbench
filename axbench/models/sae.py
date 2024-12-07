@@ -267,7 +267,7 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
             self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt"
         )
     
-    def train(self, examples,**kwargs):
+    def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples, **kwargs)
         torch.cuda.empty_cache()
 
@@ -276,8 +276,8 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
             self.ax_model.parameters(), 
             lr=self.training_args.lr, weight_decay=self.training_args.weight_decay)
         num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
-        temperature_start = 1e-2
-        temperature_end = 1e-7
+        temperature_start = float(self.training_args.temperature_start)
+        temperature_end = float(self.training_args.temperature_end)
         temperature_schedule = (
             torch.linspace(
                 temperature_start, temperature_end, num_training_steps

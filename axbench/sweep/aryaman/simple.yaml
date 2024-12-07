@@ -3,7 +3,7 @@ generate:
   output_length: 64
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_10-gemmascope-res-16k.json"
-  max_concepts: 2
+  max_concepts: 10
   master_data_dir: "axbench/data"
   dataset_category: "instruction"
   lm_use_cache: false
@@ -19,12 +19,14 @@ train:
     GemmaScopeSAEBinaryMask:
       batch_size: 6
       gradient_accumulation_steps: 1
-      n_epochs: 1
+      n_epochs: 12
       lr: 0.008
       weight_decay: 0.00
       intervention_positions: "all"
       binarize_dataset: false
       exclude_bos: true
+      temperature_start: 1e-2
+      temperature_end: 1e-7
     # DiffMean:
     #   batch_size: 6
     #   n_epochs: 1
