@@ -79,8 +79,8 @@ data = {
     "math_train": math_train[:1000],
     "code_train": code_train[:1000],
     "text_test": text_train[1000:2000],
-    "math_test": math_test[1000:2000],
-    "code_test": code_test[1000:2000],
+    "math_test": math_train[1000:2000],
+    "code_test": code_train[1000:2000],
 }
 dataset = DatasetDict({
     "text_train": Dataset.from_dict({"input": data["text_train"]}),

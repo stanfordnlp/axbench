@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "config.json"
 STATE_FILE = "train_state.pkl"
+METADATA_FILE = "metadata.jsonl"
 
 
 def data_generator(data_dir):
@@ -133,7 +134,7 @@ def load_state(dump_dir, rank):
     return None
 
 
-def save_state(dump_dir, state, rank):
+def save_state(dump_dir, state, concept_metadata, rank):
     dump_dir = Path(dump_dir)
     dump_dir.mkdir(parents=True, exist_ok=True)
     # Save state
@@ -141,10 +142,13 @@ def save_state(dump_dir, state, rank):
     with open(state_path, "wb") as f:
         pickle.dump(state, f)
 
+    # Save metadata again
+    metadata_path = os.path.join(dump_dir, f"rank_{rank}_{METADATA_FILE}")
+    with open(metadata_path, "a") as f:
+        f.write(json.dumps(concept_metadata) + "\n")
 
 def main():
    
-
     args = TrainingArgs(section="train")
 
     # Initialize the process group
@@ -199,6 +203,9 @@ def main():
     df_generator = data_generator(args.data_dir)
     all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
     df_list = list(df_generator)
+    if args.max_concepts:
+        logger.warning(f"All ranks only processing {args.max_concepts} concepts")
+        df_list = df_list[:args.max_concepts]
 
     dump_dir = Path(args.dump_dir) / "train"
     dump_dir.mkdir(parents=True, exist_ok=True)
@@ -214,6 +221,7 @@ def main():
     # Partition df_list among ranks
     df_list_per_rank = partition_list(df_list, world_size)
     my_df_list = df_list_per_rank[rank]
+
 
     # Load model instance onto device
     if args.use_bf16:
@@ -290,7 +298,7 @@ def main():
             torch.cuda.empty_cache()
         # After processing, save state
         current_state = {'last_concept_id': concept_id}
-        save_state(dump_dir, current_state, rank)
+        save_state(dump_dir, current_state, metadata[concept_id], rank)
 
     # Synchronize all processes
     dist.barrier()
@@ -298,6 +306,19 @@ def main():
     # Rank 0 merges results
     if rank == 0:
         logger.warning("Rank 0 is merging results.")
+
+        # Merging metadata
+        metadata_entries = []
+        for r in range(world_size):
+            metadata_path = os.path.join(dump_dir, f"rank_{r}_{METADATA_FILE}")
+            with open(metadata_path, "r") as f:
+                for line in f:
+                    metadata_entry = json.loads(line)
+                    metadata_entries.append(metadata_entry)
+        metadata_path = os.path.join(dump_dir, METADATA_FILE)
+        with open(metadata_path, "a") as f:
+            for metadata_entry in metadata_entries:
+                f.write(json.dumps(metadata_entry) + "\n")
 
         # Save other config
         config = {"model_name": args.model_name,

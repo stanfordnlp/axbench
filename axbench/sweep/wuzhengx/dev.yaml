@@ -3,7 +3,7 @@ generate:
   output_length: 64
   num_of_examples: 72
   concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
-  max_concepts: 500
+  max_concepts: 10
   master_data_dir: "axbench/data"
   dataset_category: "instruction"
   seed: 42
@@ -70,7 +70,7 @@ inference:
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
-  latent_num_of_examples: 20
+  latent_num_of_examples: 36
   latent_batch_size: 16
   # steering related params
   steering_intervention_type: "addition" # clamping
