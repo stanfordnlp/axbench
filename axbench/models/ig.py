@@ -146,10 +146,10 @@ class IntegratedGradients(Model):
                 return new_outputs
             handle = self.model.model.layers[self.layer].register_forward_hook(
                 set_target_act_hook, always_call=True)
-            outputs = self.model.forward(**{"input_ids": expanded_inputs}, output_hidden_states=True)
+            outputs = self.model.model.forward(**{"input_ids": expanded_inputs}, output_hidden_states=False)
             handle.remove()
 
-            last_token_representations = outputs.hidden_states[-1][:, -1]
+            last_token_representations = outputs.last_hidden_state[:, -1]
             preds = torch.sigmoid(self.ax.proj(last_token_representations))
             preds = preds[..., row["concept_id"]]  # only consider the target concept
             (grads,) = torch.autograd.grad(preds.sum(), interpolated_acts, create_graph=True)
