@@ -579,47 +579,51 @@ def main():
         if (Path(args.dump_dir) / "evaluate" / "latent.jsonl").is_file():
             latent_path = Path(args.dump_dir) / "evaluate" / "latent.jsonl"
             latent_results = load_jsonl(latent_path)
+            lsreft_included = "LsReFT" in latent_results[0]["results"]["AUCROCEvaluator"]
             top_logits_path = Path(args.dump_dir) / "inference" / "top_logits.jsonl"
-            top_logits_results = load_jsonl(top_logits_path)
+            top_logits_results = load_jsonl(top_logits_path) if os.path.exists(top_logits_path) else None
 
             idx = 0
             for metadata_entry in metadata:
                 concept_idx = metadata_entry["concept_id"]
                 concept = metadata_entry["concept"]
                 sae_link = metadata_entry["ref"]
-                auc = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["roc_auc"]
-                max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["max_act"]
-                top_logits = top_logits_results[idx]["results"]["LsReFT"]["top_logits"][0]
-                neg_logits = top_logits_results[idx]["results"]["LsReFT"]["neg_logits"][0]
+                auc = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["roc_auc"] if lsreft_included else None
+                max_act = latent_results[idx]["results"]["AUCROCEvaluator"]["LsReFT"]["max_act"] if lsreft_included else None
                 concepts += [[
                     idx, concept, None, auc, max_act, None, sae_link
                 ]]
-                top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
-                neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
-                wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
+                if top_logits_results is not None:
+                    top_logits = top_logits_results[idx]["results"]["LsReFT"]["top_logits"][0]
+                    neg_logits = top_logits_results[idx]["results"]["LsReFT"]["neg_logits"][0]
+                    top_table = wandb.Table(data=[(t[1], t[0] )for t in top_logits], columns=["logits", "token", ])
+                    neg_table = wandb.Table(data=[(t[1], t[0] )for t in neg_logits], columns=["logits", "token", ])
+                    wandb.log({f"positive_logits/{idx}": wandb.plot.bar(top_table, "token", "logits",
                                                 title=f"{concept} ({idx})")})
-                wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
+                    wandb.log({f"negative_logits/{idx}": wandb.plot.bar(neg_table, "token", "logits",
                                                 title=f"{concept} ({idx})")})
                 idx += 1
             
             # log token level heatmaps
             inference_path = Path(args.dump_dir) / "inference" / "latent_data.parquet"
             inference_df = pd.read_parquet(inference_path)
-            heatmap_html = generate_html_with_highlight_text(inference_df)
-            wandb.log({"latent/token_heatmap": wandb.Html(heatmap_html)})
+            if lsreft_included:
+                heatmap_html = generate_html_with_highlight_text(inference_df)
+                wandb.log({"latent/token_heatmap": wandb.Html(heatmap_html)})
 
         if (Path(args.dump_dir) / "evaluate" / "steering.jsonl").is_file():
             steering_path = Path(args.dump_dir) / "evaluate" / "steering.jsonl"
             steering_results = load_jsonl(steering_path)
             best_factors = get_best_factors(steering_results)
+            lsreft_included = "LsReFT" in steering_results[0]["results"]["WinRateEvaluator"]
 
             idx = 0
             for metadata_entry in metadata:
                 concept_idx = metadata_entry["concept_id"]
                 concept = metadata_entry["concept"]
                 sae_link = metadata_entry["ref"]
-                winrate = steering_results[idx]["results"]["WinRateEvaluator"]["LsReFT"]["win_rate"]
-                best_factor = best_factors[idx]["LsReFT"]
+                winrate = steering_results[idx]["results"]["WinRateEvaluator"]["LsReFT"]["win_rate"] if lsreft_included else None
+                best_factor = best_factors[idx]["LsReFT"] if lsreft_included else None
                 if len(concepts) <= idx:
                     concepts += [[
                         idx, concept, winrate, None, None, None, None
