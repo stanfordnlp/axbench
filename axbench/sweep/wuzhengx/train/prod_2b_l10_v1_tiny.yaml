@@ -1,0 +1,15 @@
+train:
+  model_name: "google/gemma-2-2b-it"
+  layer: 10
+  component: "res"
+  seed: 42
+  use_bf16: true
+  models:
+    SFT:
+      batch_size: 18
+      gradient_accumulation_steps: 8
+      n_epochs: 8
+      lr: 0.00004
+      weight_decay: 0.00
+      binarize_dataset: false
+      exclude_bos: true

@@ -1,0 +1,20 @@
+train:
+  model_name: "google/gemma-2-2b-it"
+  layer: 20
+  component: "res"
+  seed: 42
+  use_bf16: true
+  models:
+    LoReFT:
+      # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
+      batch_size: 18
+      gradient_accumulation_steps: 4
+      n_epochs: 24
+      lr: 0.0009
+      weight_decay: 0.00
+      low_rank_dimension: 4
+      reft_layers: [5, 10, 15, 20]
+      reft_positions: "f5+l5"
+      reft_type: "Loreft"
+      binarize_dataset: false
+      exclude_bos: true

@@ -35,16 +35,18 @@ class GemmaScopeSAE(Model):
         mode = kwargs.get("mode", "latent")
         intervention_type = kwargs.get("intervention_type", "addition")
         if mode == "steering":
-            if intervention_type == "addition":
-                ax = AdditionIntervention(
-                    embed_dim=self.model.config.hidden_size, 
-                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-                )
-            elif intervention_type == "clamping":
-                ax = DictionaryAdditionIntervention(
-                    embed_dim=self.model.config.hidden_size, 
-                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-                )
+            # if intervention_type == "addition":
+            #     ax = AdditionIntervention(
+            #         embed_dim=self.model.config.hidden_size, 
+            #         low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+            #     )
+            # elif intervention_type == "clamping":
+
+            # we default to clamping for SAE following Anthropic's implementation
+            ax = DictionaryAdditionIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+            )
         else:
             ax = JumpReLUSAECollectIntervention(
                 embed_dim=self.model.config.hidden_size, 

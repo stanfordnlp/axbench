@@ -78,7 +78,8 @@ class TrainingArgs:
         # Define global and hierarchical parameters
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
-            'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts'
+            'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts',
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
@@ -179,7 +180,8 @@ class TrainingArgs:
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
-            'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir'
+            'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir',
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
         ]
         list_params = ['intervention_layers', 'reft_layers', 'lora_layers', 'lora_components']
 

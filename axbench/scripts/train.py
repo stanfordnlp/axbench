@@ -306,6 +306,8 @@ def main():
                 is_chat_model = True if args.model_name in CHAT_MODELS else False
                 model_instance = model_instance.eval()
                 model_instance.to(device)
+            if model_name == "LoRA":
+                model_instance = benchmark_model.ax_model.unload()
             logger.warning(f"Saved weights and biases for model {model_name} on rank {rank}")
             # Clean up
             del benchmark_model

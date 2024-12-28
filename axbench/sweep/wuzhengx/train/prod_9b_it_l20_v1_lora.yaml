@@ -83,7 +83,7 @@ train:
       lr: 0.0009
       weight_decay: 0.00
       low_rank_dimension: 4
-      lora_layers: [5, 10, 15, 20]
+      lora_layers: [5, 15, 25, 35]
       lora_components: ["o_proj"]
       lora_alpha: 32
       binarize_dataset: false

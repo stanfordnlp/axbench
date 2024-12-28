@@ -85,6 +85,11 @@ class DatasetFactory(object):
         self.seed_sentences = load_from_disk(os.path.join(master_data_dir, "seed_sentences"))
         self.seed_instructions = load_from_disk(os.path.join(master_data_dir, "seed_instructions"))
         self.dataset_category = dataset_category
+        self.overwrite_inference_data_dir = kwargs.get("overwrite_inference_data_dir", None)
+        if self.overwrite_inference_data_dir is not None and os.path.exists(self.overwrite_inference_data_dir):
+            # load pre-generated data
+            self.pregenerated_inference_df = pd.read_parquet(os.path.join(self.overwrite_inference_data_dir, "latent_eval_data.parquet"))
+            self.logger.warning(f"Loaded pre-generated data from {self.overwrite_inference_data_dir}.")
 
         # load negative examples all at once
         if start_concept_id == 0 and not kwargs.get("is_inference", False):
@@ -144,6 +149,10 @@ class DatasetFactory(object):
         return concept_genres_map
 
     def prepare_concepts(self, concepts, **kwargs):
+        if self.overwrite_inference_data_dir is not None and os.path.exists(self.overwrite_inference_data_dir):
+            self.logger.warning("Using pre-generated metadata.")
+            return {}, {}
+
         start = time.time()
         tasks = []
         
@@ -180,6 +189,12 @@ class DatasetFactory(object):
         self, concepts, subset_n, concept_genres_map, 
         train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
         """category: positive, negative, hard negative"""
+
+        if self.overwrite_inference_data_dir is not None and os.path.exists(self.overwrite_inference_data_dir):
+            self.logger.warning("Using pre-generated data.")
+            concept_df = self.pregenerated_inference_df[self.pregenerated_inference_df["concept_id"] == kwargs.get("concept_id")].copy()
+            assert len(concept_df) >= subset_n * 2, "Number of examples does not meet the requirement."
+            return concept_df
                
         # start logging
         start = time.time()
@@ -319,7 +334,7 @@ class SteeringDatasetFactory(object):
                 use_cache=True, master_data_dir=self.master_data_dir
             )
 
-    def create_eval_df(self, concepts, subset_n, steering_factors, steering_datasets):
+    def create_eval_df(self, concepts, subset_n, steering_factors, steering_datasets, concept_id):
         for dataset_name in steering_datasets:
             if dataset_name == "OUATPrefix":
                 # we generate subset_n * n_steering_factors examples for OUATPrefix.
@@ -351,7 +366,7 @@ class SteeringDatasetFactory(object):
                 all_examples = []
                 for idx, concept in enumerate(concepts):
                     # sample a random example from alpaca eval dataset.
-                    sampled_prompts = alpaca_eval_df.sample(subset_n)["instruction"].tolist()
+                    sampled_prompts = alpaca_eval_df.sample(subset_n, random_state=int(concept_id))["instruction"].tolist()
                     for i in range(subset_n):
                         sampled_prompt = sampled_prompts[i]
                         # for prompt-based steering ONLY.
