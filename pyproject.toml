@@ -18,6 +18,7 @@ dependencies = [
     "scikit-learn>=1.5.2",
     "seaborn>=0.12.2",
     "pyreft>=0.0.8",
+    "peft>=0.13.2",
 ]
 
 [build-system]

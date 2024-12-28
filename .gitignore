@@ -1,6 +1,7 @@
 old_*.ipynb
 tmp_save/
 axbench/data/*.json
+axbench/data/*.json.1
 axbench/demo/train
 axbench/demo/inference
 axbench/demo/generate
@@ -17,6 +18,7 @@ axbench/data/persist_lm_cache
 axbench/demo/demo_aryaman.sh
 axbench/data/seed_sentences/
 axbench/data/seed_instructions/
+axbench/models/dbm.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
