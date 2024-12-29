@@ -62,7 +62,7 @@ def load_metadata_flatten(metadata_path):
 
 
 def save_pruned_sae(
-    metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt"
+    metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt", sae_params=None
 ):
     # Save SAE weights and biases for inference
     logger.warning("Saving SAE weights and biases for inference")
@@ -81,12 +81,13 @@ def save_pruned_sae(
     response = requests.get(sae_url, headers=headers).json()
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
-    path_to_params = hf_hub_download(
-        repo_id=hf_repo,
-        filename=f"{hf_folder}/params.npz",
-        force_download=False,
-    )
-    sae_params = np.load(path_to_params)
+    if sae_params is None:
+        path_to_params = hf_hub_download(
+            repo_id=hf_repo,
+            filename=f"{hf_folder}/params.npz",
+            force_download=False,
+        )
+        sae_params = np.load(path_to_params)
     sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
     pruned_sae_pt_params = {
         "b_dec": sae_pt_params["b_dec"],
@@ -219,12 +220,12 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
     def make_model(self, **kwargs):
         if kwargs.get("mode", "latent") == "train":
             # load the entire SAE
-            sae_params = kwargs.get("sae_params", None)
+            self.sae_params = kwargs.get("sae_params", None)
             metadata_path = kwargs.get("metadata_path", None)
-            self.sae_width = sae_params['W_dec'].shape[0]
+            self.sae_width = self.sae_params['W_dec'].shape[0]
             self.metadata_path = metadata_path
             kwargs["low_rank_dimension"] = self.sae_width
-            sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
+            sae_pt_params = {k: torch.from_numpy(v) for k, v in self.sae_params.items()}
             super().make_model(**kwargs)
             self.ax.load_state_dict(sae_pt_params, strict=False)
             self.ax.eval()
@@ -300,9 +301,8 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
 
         # save the pruned SAE
         save_pruned_sae(
-            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEMaxDiff.pt"
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEMaxDiff.pt", sae_params=self.sae_params
         )
-
 
 class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     """
@@ -319,16 +319,16 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "train":
-            sae_params = kwargs.get("sae_params", None)
+            self.sae_params = kwargs.get("sae_params", None)
             metadata_path = kwargs.get("metadata_path", None)
-            if sae_params is not None:
-                logger.warning(f"Setting up SAE for binary mask with shape {sae_params['W_dec'].shape}")
+            if self.sae_params is not None:
+                logger.warning(f"Setting up SAE for binary mask with shape {self.sae_params['W_dec'].shape}")
                 ax = SigmoidMaskAdditionIntervention(
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-                    sae_width=sae_params['W_dec'].shape[0],
+                    sae_width=self.sae_params['W_dec'].shape[0],
                 )
-                ax.proj.weight.data = torch.from_numpy(sae_params['W_dec']).t()
+                ax.proj.weight.data = torch.from_numpy(self.sae_params['W_dec']).t()
                 ax = ax.train()
                 ax_config = IntervenableConfig(representations=[{
                     "layer": l,
@@ -359,7 +359,7 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
 
         # save the pruned SAE
         save_pruned_sae(
-            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt"
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt", sae_params=self.sae_params
         )
     
     def train(self, examples, **kwargs):

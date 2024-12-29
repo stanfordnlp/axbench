@@ -27,7 +27,7 @@ train:
     #   exclude_bos: true
     #   temperature_start: 1e-2
     #   temperature_end: 1e-7
-    GemmaScopeSAEMaxDiff:
+    GemmaScopeSAEDiffMean:
       batch_size: 6
       gradient_accumulation_steps: 1
       n_epochs: 12
@@ -35,11 +35,11 @@ train:
       weight_decay: 0.00
       binarize_dataset: true
       low_rank_dimension: 1
-    # DiffMean:
-    #   batch_size: 6
-    #   n_epochs: 1
-    #   binarize_dataset: true
-    #   low_rank_dimension: 1
+    DiffMean:
+      batch_size: 6
+      n_epochs: 1
+      binarize_dataset: true
+      low_rank_dimension: 1
     # PCA:
     #   batch_size: 6
     #   n_epochs: 1
@@ -109,7 +109,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["GemmaScopeSAEMaxDiff", "PromptSteering"]
+  models: ["DiffMean", "GemmaScopeSAEDiffMean", "PromptSteering"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -132,7 +132,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "GemmaScopeSAEMaxDiff"]
+  models: ["PromptSteering", "GemmaScopeSAEDiffMean", "DiffMean"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

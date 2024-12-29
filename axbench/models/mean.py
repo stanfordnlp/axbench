@@ -12,7 +12,8 @@ from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
 from .interventions import (
     AdditionIntervention,
-    SubspaceIntervention
+    SubspaceIntervention,
+    JumpReLUSAECollectIntervention
 )
 from ..utils.model_utils import (
     set_decoder_norm_to_unit_norm, 
@@ -261,4 +262,89 @@ class LAT(MeanActivation):
         first_principal_component = torch.tensor(pca.components_[0])
         self.ax.proj.weight.data = first_principal_component.unsqueeze(0)
         set_decoder_norm_to_unit_norm(self.ax)
+        logger.warning("Training finished.")
+
+
+class GemmaScopeSAEDiffMean(MeanActivation):
+    """
+    SAE mean difference
+    """
+    def __str__(self):
+        return 'GemmaScopeSAEDiffMean'
+
+    def make_model(self, **kwargs):
+        if kwargs.get("mode", "latent") == "train":
+            # load the entire SAE
+            self.sae_params = kwargs.get("sae_params", None)
+            self.metadata_path = kwargs.get("metadata_path", None)
+            self.sae_width = self.sae_params['W_dec'].shape[0]
+            self.sae = JumpReLUSAECollectIntervention(
+                embed_dim=self.model.config.hidden_size, 
+                low_rank_dimension=self.sae_width,
+            )
+            sae_pt_params = {k: torch.from_numpy(v) for k, v in self.sae_params.items()}
+            self.sae.load_state_dict(sae_pt_params, strict=False)
+            self.sae.eval()
+            self.sae.to(self.device)
+        super().make_model(**kwargs)
+    
+    @torch.inference_mode()
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        prefix_length = kwargs.get("prefix_length", 1)
+
+        sum_positive_acts = torch.zeros(self.sae_width).to(self.device)
+        sum_negative_acts = torch.zeros(self.sae_width).to(self.device)
+        positive_count = 0
+        negative_count = 0
+        num_training_steps = self.training_args.n_epochs * len(train_dataloader)
+        rank = torch.distributed.get_rank()
+        progress_bar, curr_step = tqdm(range(num_training_steps), position=rank, leave=True), 0
+        
+        for epoch in range(self.training_args.n_epochs):
+            for step, batch in enumerate(train_dataloader):
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                inputs = {
+                    "input_ids": inputs["input_ids"],
+                    "attention_mask": inputs["attention_mask"],
+                }
+
+                # get SAE latents
+                act_in = gather_residual_activations(
+                    self.model, self.layer, inputs).to(dtype=torch.float32)
+                ax_acts_batch = self.sae(act_in[:, prefix_length:]) # no bos token
+                seq_lens = inputs["attention_mask"].sum(dim=1) - prefix_length # no bos token
+
+                # add avg latents for each sequence
+                for i in range(len(batch)):
+                    acts = ax_acts_batch[i, :seq_lens[i]]
+                    label = batch["labels"][i]
+                    avg_acts = acts.mean(dim=0)
+                    if label == 1:
+                        sum_positive_acts += avg_acts
+                        positive_count += 1
+                    else:
+                        sum_negative_acts += avg_acts
+                        negative_count += 1
+                
+                del ax_acts_batch
+                del act_in
+                torch.cuda.empty_cache()
+                progress_bar.update(1)
+        progress_bar.close()
+
+        # get latent activations
+        mean_positive_activation = sum_positive_acts / positive_count
+        mean_negative_activation = sum_negative_acts / negative_count
+        mean_diff = (mean_positive_activation - mean_negative_activation) @ self.sae.W_dec
+        self.ax.proj.weight.data = mean_diff.unsqueeze(0)
+        self.ax.proj.bias.data = torch.zeros(1)
+        set_decoder_norm_to_unit_norm(self.ax)
+
+        # print top 10 features
+        top = (mean_positive_activation - mean_negative_activation).topk(10)
+        for i in range(10):
+            logger.warning(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
         logger.warning("Training finished.")
