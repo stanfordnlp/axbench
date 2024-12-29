@@ -16,17 +16,25 @@ train:
   seed: 42
   use_bf16: true
   models:
-    GemmaScopeSAEBinaryMask:
+    # GemmaScopeSAEBinaryMask:
+    #   batch_size: 6
+    #   gradient_accumulation_steps: 1
+    #   n_epochs: 12
+    #   lr: 0.008
+    #   weight_decay: 0.00
+    #   intervention_positions: "all"
+    #   binarize_dataset: false
+    #   exclude_bos: true
+    #   temperature_start: 1e-2
+    #   temperature_end: 1e-7
+    GemmaScopeSAEMaxDiff:
       batch_size: 6
       gradient_accumulation_steps: 1
       n_epochs: 12
       lr: 0.008
       weight_decay: 0.00
-      intervention_positions: "all"
-      binarize_dataset: false
-      exclude_bos: true
-      temperature_start: 1e-2
-      temperature_end: 1e-7
+      binarize_dataset: true
+      low_rank_dimension: 1
     # DiffMean:
     #   batch_size: 6
     #   n_epochs: 1
@@ -101,7 +109,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["GemmaScopeSAEBinaryMask", "PromptSteering"]
+  models: ["GemmaScopeSAEMaxDiff", "PromptSteering"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -124,7 +132,7 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "GemmaScopeSAEBinaryMask"]
+  models: ["PromptSteering", "GemmaScopeSAEMaxDiff"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
