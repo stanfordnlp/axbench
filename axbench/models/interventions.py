@@ -204,16 +204,20 @@ class SigmoidMaskAdditionIntervention(
             0.001 *torch.ones(kwargs["low_rank_dimension"], kwargs["sae_width"]), requires_grad=True)
         self.temperature = torch.nn.Parameter(torch.tensor(0.01), requires_grad=False)
     
-    def get_temperature(self):
+    def get_temperature(self) -> torch.Tensor:
         return self.temperature
 
-    def set_temperature(self, temp: torch.Tensor):
+    def set_temperature(self, temp: torch.Tensor) -> None:
         self.temperature.data = temp
     
-    def forward(self, base, source=None, subspaces=None):
+    def get_latent_weights(self) -> torch.Tensor:
+        mask_sigmoid = torch.sigmoid(self.mask / torch.tensor(self.temperature))
+        masked_source = (torch.relu(self.source) * mask_sigmoid).unsqueeze(0)
+        return masked_source
+    
+    def forward(self, base, source=None, subspaces=None) -> torch.Tensor:
         # use subspaces["idx"] to select the correct weight vector
-        mask_sigmoid = torch.sigmoid(self.mask[subspaces["idx"]] / torch.tensor(self.temperature))
-        masked_source = (torch.relu(self.source[subspaces["idx"]]) * mask_sigmoid).unsqueeze(0)
+        masked_source = self.get_latent_weights()
         steering_vec = self.proj(masked_source)
         output = base + steering_vec.unsqueeze(dim=1)
         return output
