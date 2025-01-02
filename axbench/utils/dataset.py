@@ -67,7 +67,7 @@ class DatasetFactory(object):
 
     def __init__(
         self, model, client, tokenizer, dataset_category, num_of_examples, output_length, dump_dir, 
-        use_cache=True, master_data_dir=None, start_concept_id=0, **kwargs):
+        use_cache=True, master_data_dir=None, start_concept_id=0, is_chat_model=True, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
 
@@ -91,30 +91,32 @@ class DatasetFactory(object):
             self.pregenerated_inference_df = pd.read_parquet(os.path.join(self.overwrite_inference_data_dir, "latent_eval_data.parquet"))
             self.logger.warning(f"Loaded pre-generated data from {self.overwrite_inference_data_dir}.")
 
-        # load negative examples all at once
+        # create a shared genre-based negative pools all at once
         if start_concept_id == 0 and not kwargs.get("is_inference", False):
+            per_category_n = int(num_of_examples // 2)
             start = time.time()
-            self.logger.warning("[Traing only] Creating random examples as negative examples for all concepts.")
+            self.logger.warning("Creating genre-based and shared negative examples for all concepts.")
             functor = continue_with if self.dataset_category == "continuation" else response_with
             random_examples = []
-            random_content = get_random_content(
-                self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
-                tokenizer=tokenizer, count=num_of_examples, 
-                genres={"random": ["text"]}, 
-                concepts=["random"], length=None, split="test"
-            )
-            continue_task = functor(self.lm_model, self.tokenizer, content=random_content["random"], length=output_length)
-            concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
-            for i, (prompt, output) in enumerate(zip(random_content["random"], concept_outputs)):
-                random_examples += [[
-                    prompt, output, EMPTY_CONCEPT, self.dataset_category
-                ]]
+            for genre in ["text", "math", "code"]:
+                random_content = get_random_content(
+                    self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
+                    tokenizer=tokenizer, count=per_category_n, 
+                    genres=[genre], concepts=["random"], length=None, split="train"
+                )
+                concept_outputs = get_model_continues(
+                    self.model, self.tokenizer, random_content["random"],
+                    max_new_tokens=int(output_length*1.5), is_chat_model=is_chat_model)
+                for i, (prompt, output) in enumerate(zip(random_content["random"], concept_outputs)):
+                    random_examples += [[
+                        prompt, output, EMPTY_CONCEPT, genre, "negative", self.dataset_category
+                    ]]
             self.negative_df = pd.DataFrame(
                 random_examples, 
-                columns = ['input', 'output', 'output_concept', 'category'])
+                columns = ['input', 'output', 'output_concept', 'concept_genre', 'category', 'dataset_category'])
             self.negative_df["concept_id"] = -1
             self.logger.warning(f"Finished creating negative examples in {round(time.time() - start, 3)} sec.")
-    
+
     def save_cache(self):
         """Save the language model cache before exiting"""
         self.lm_model.save_cache()
@@ -189,7 +191,7 @@ class DatasetFactory(object):
         self, concepts, subset_n, concept_genres_map, 
         train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
         """category: positive, negative, hard negative"""
-
+        
         if self.overwrite_inference_data_dir is not None and os.path.exists(self.overwrite_inference_data_dir):
             self.logger.warning("Using pre-generated data.")
             concept_df = self.pregenerated_inference_df[self.pregenerated_inference_df["concept_id"] == kwargs.get("concept_id")].copy()
@@ -207,9 +209,23 @@ class DatasetFactory(object):
         all_examples = []
         concepts_random_content = get_random_content(
             self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
-            tokenizer=tokenizer, count=subset_n*3, 
-            genres=concept_genres_map, concepts=concepts, length=None, split="test"
+            tokenizer=tokenizer, count=subset_n*2, 
+            genres=[concept_genres_map[concepts[0]][0]], concepts=concepts, length=None, split="test"
         )
+
+        genre_balanced_random_content = {concept: [] for concept in concepts}
+        genre_subset_n = {"math": int(subset_n*0.15), "code": int(subset_n*0.15)}
+        genre_subset_n["text"] = subset_n - genre_subset_n["math"] - genre_subset_n["code"]
+        genre_concept_map = {concept: [] for concept in concepts}
+        for genre in ["text", "math", "code"]:
+            genre_concepts_random_content = get_random_content(
+                self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
+                tokenizer=tokenizer, count=genre_subset_n[genre], 
+                genres=[genre], concepts=concepts, length=None, split="test"
+            )
+            for concept in concepts:
+                genre_concept_map[concept] += [genre] * genre_subset_n[genre]
+                genre_balanced_random_content[concept] += genre_concepts_random_content[concept]
 
         if self.dataset_category == "continuation":
             functors = [continue_with_concept, continue_without_concept, continue_with_polysemantic_concepts]
@@ -227,19 +243,19 @@ class DatasetFactory(object):
             concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
             for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][:subset_n], concept_outputs)):
                 all_examples += [[
-                    prompt, output, concept, "positive"
+                    prompt, output, concept, concept_genres_map[concepts[0]][0], "positive", self.dataset_category
                 ]]
 
-            # negative continuation / instruction
+            # negative continuation / instruction (genre balanced based on global genre distribution)
             continue_task = functors[1](
                 self.lm_model, self.tokenizer, 
-                content=concepts_random_content[concept][subset_n:2*subset_n], 
-                concepts=[concept]*len(concepts_random_content[concept][subset_n:2*subset_n]), 
+                content=genre_balanced_random_content[concept], 
+                concepts=[concept]*len(genre_balanced_random_content[concept]), 
                 length=output_length)
             concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
-            for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][subset_n:2*subset_n], concept_outputs)):
+            for i, (negative_genre, prompt, output) in enumerate(zip(genre_concept_map[concept], genre_balanced_random_content[concept], concept_outputs)):
                 all_examples += [[
-                    prompt, output, concept, "negative"
+                    prompt, output, concept, negative_genre, "negative", self.dataset_category
                 ]]
 
             # hard negative continuation / instruction
@@ -251,7 +267,7 @@ class DatasetFactory(object):
             for (label, polysemantic_meanings) in splits:
                 if len(polysemantic_meanings) != 0:
                     polysemantic_random_content = \
-                        concepts_random_content[concept][2*subset_n:2*subset_n+len(polysemantic_meanings)]
+                        concepts_random_content[concept][subset_n:subset_n+len(polysemantic_meanings)]
                     eval_tasks.append(functors[2](
                         client=lm_model, tokenizer=tokenizer,
                         polysemantic_concepts=polysemantic_meanings,
@@ -261,13 +277,14 @@ class DatasetFactory(object):
                     tags.append((label, concept, idx))
             hard_negative_eval_content = asyncio.run(run_tasks(eval_tasks))
             for (tag, concept, idx), eval_content in zip(tags, hard_negative_eval_content):
-                all_examples += [[content[0], content[2], "//".join(content[1]), tag] for content in eval_content[1]]
+                all_examples += [[content[0], content[2], "//".join(content[1]), concept_genres_map[concepts[0]][0], 
+                                  tag, self.dataset_category] for content in eval_content[1]]
 
         # update the column definitions of the DataFrame
         df = pd.DataFrame(
             all_examples, 
             columns = [
-                'input', 'output', 'output_concept', 'category'
+                'input', 'output', 'output_concept', 'concept_genre', 'category', 'dataset_category'
             ])
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df
@@ -288,28 +305,30 @@ class DatasetFactory(object):
             functors = [response_with_concept, response_without_concept]
         
         # random sentence or instruction
+        genre = concept_genres_map[concept][0]
         concepts_random_content = get_random_content(
             self.seed_sentences if self.dataset_category == "continuation" else self.seed_instructions, 
-            tokenizer=tokenizer, count=n*2, 
-            genres=concept_genres_map, concepts=[concept], length=None, split="train"
+            tokenizer=tokenizer, count=n, 
+            genres=[genre], concepts=[concept], length=None, split="train"
         )
+        per_category_n = int(n // 2)
 
         # positive continuation / instruction
         continue_task = functors[0](
             self.lm_model, self.tokenizer, 
-            concepts=[concept]*len(concepts_random_content[concept][:n]), 
-            content=concepts_random_content[concept][:n], length=output_length)
+            concepts=[concept]*len(concepts_random_content[concept][:per_category_n]), 
+            content=concepts_random_content[concept][:per_category_n], length=output_length)
         concept_outputs = asyncio.run(run_tasks([continue_task]))[0]
-        for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][:n], concept_outputs)):
+        for i, (prompt, output) in enumerate(zip(concepts_random_content[concept][:per_category_n], concept_outputs)):
             all_examples += [[
-                prompt, output, concept, self.dataset_category
+                prompt, output, concept, genre, "positive", self.dataset_category
             ]]
 
         # update the column definitions of the DataFrame
         df = pd.DataFrame(
             all_examples, 
             columns = [
-                'input', 'output', 'output_concept', 'category'
+                'input', 'output', 'output_concept', 'concept_genre', 'category', 'dataset_category'
             ])
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df

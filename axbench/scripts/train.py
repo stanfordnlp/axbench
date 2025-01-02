@@ -70,12 +70,13 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model):
+def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model):
     suffix_length = get_suffix_length(tokenizer)
+    genre = metadata["concept_genres_map"][concept][0]
+    # assign input and output containing concept with 1, otherwise 0
+    positive_df = original_df[(original_df["output_concept"] == concept) & (original_df["category"] == "positive")]
+    negative_df = negative_df[(negative_df["concept_genre"] == genre)]
     if binarize:
-        # assign input and output containing concept with 1, otherwise 0
-        positive_df = original_df[original_df["output_concept"] == concept]
-        negative_df = all_df[all_df["output_concept"] == EMPTY_CONCEPT]
         if is_chat_model:
             def apply_chat_template(row):
                 messages = [
@@ -100,13 +101,18 @@ def prepare_df(original_df, concept, all_df, tokenizer, binarize, is_chat_model)
         return pd.concat([positive_df, negative_df], axis=0)
     else:
         # if not binarizing, we need to apply the chat template to the input. It becomes a standard instruction tuning task.
+        if train_on_negative:
+            all_df = pd.concat([positive_df, negative_df], axis=0)
+        else:
+            all_df = positive_df
         if is_chat_model:
             def apply_chat_template(row):
                 messages = [{"role": "user", "content": row["input"]}]
                 nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
                 return tokenizer.decode(nobos)
-            original_df['input'] = original_df.apply(apply_chat_template, axis=1)
-        return original_df # do nothing, the task will be standard instruction tuning.
+            all_df['input'] = all_df.apply(apply_chat_template, axis=1)
+        return all_df # do nothing, the task will be standard instruction tuning.
+
 
 def partition_list(lst, n):
     """
@@ -202,6 +208,7 @@ def main():
     metadata = load_metadata(metadata_path)
     df_generator = data_generator(args.data_dir)
     all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
+    negative_df = all_df[(all_df["output_concept"] == EMPTY_CONCEPT) & (all_df["category"] == "negative")]
     df_list = list(df_generator)
     if args.max_concepts:
         logger.warning(f"All ranks only processing {args.max_concepts} concepts")
@@ -242,7 +249,7 @@ def main():
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id}")
 
     # Run training for assigned concept_ids
-    logger.warning(metadata)
+    # logger.warning(metadata)
     for concept_id, concept_df in my_df_list:
         concept_id = int(concept_id)
         if last_concept_id is not None and concept_id <= last_concept_id:
@@ -278,8 +285,10 @@ def main():
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(
-                prepared_df, concept, all_df, tokenizer, 
-                binarize=args.models[model_name].binarize_dataset, is_chat_model=is_chat_model
+                prepared_df, negative_df, concept, metadata[concept_id], tokenizer, 
+                binarize=args.models[model_name].binarize_dataset, 
+                train_on_negative=args.models[model_name].train_on_negative,
+                is_chat_model=is_chat_model
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")

@@ -387,8 +387,12 @@ def eval_steering(args):
         )
         
     # Reload for plotting and optional winrate
-    aggregated_results = process_jsonl_file(
-        load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
+    try:
+        aggregated_results = process_jsonl_file(
+            load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
+    except Exception as e:
+        logger.warning(f"Failed to load steering.jsonl: {e}. Aborting evaluation.")
+        return
 
     if args.run_winrate:
         winrate_results = {}

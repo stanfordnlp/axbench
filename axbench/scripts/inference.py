@@ -38,7 +38,7 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
-STEERING_EXCLUDE_MODELS = {}
+STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients"}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
@@ -472,11 +472,12 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
             if (concept_id, dataset_category) not in cache_df:
                 current_df = create_data_latent(
                     dataset_factory, metadata, concept_id, num_of_examples, args)
+                logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
+                current_df = prepare_df(current_df, tokenizer, is_chat_model)
                 cache_df[(concept_id, dataset_category)] = current_df
             else:
                 current_df = cache_df[(concept_id, dataset_category)]
-            logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
-            current_df = prepare_df(current_df, tokenizer, is_chat_model)
+
             results = benchmark_model.predict_latent(
                 current_df, batch_size=args.latent_batch_size, prefix_length=prefix_length
             )

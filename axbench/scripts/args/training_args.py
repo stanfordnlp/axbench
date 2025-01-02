@@ -49,6 +49,7 @@ class ModelParams:
     reft_type: Optional[str] = "Loreft"
     exclude_bos: Optional[bool] = True
     binarize_dataset: Optional[bool] = False
+    train_on_negative: Optional[bool] = False
     intervention_type: Optional[str] = "addition" # clamping   
     gradient_accumulation_steps: Optional[int] = 1
     lora_layers: Optional[List[int]] = None
@@ -89,7 +90,8 @@ class TrainingArgs:
             'low_rank_dimension', 'dataset_category', 'intervention_positions', 'intervention_layers',
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
-            'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end'
+            'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end',
+            'train_on_negative'
         ]
         all_params = global_params + hierarchical_params
 
@@ -176,7 +178,7 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset']
+        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset', 'train_on_negative']
         int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension', 'gradient_accumulation_steps', 'lora_alpha', 'max_concepts']
         float_params = [
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 

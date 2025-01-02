@@ -24,7 +24,13 @@ class PromptSteering(Model):
 
     def make_model(self, **kwargs):
         pass
-    
+
+    def save(self, dump_dir, **kwargs):
+        pass # since we only need to train once for both methods.
+
+    def train(self, examples, **kwargs):
+        pass # since we only need to train once for both methods.
+
     @torch.no_grad()
     def predict_steer(self, examples, **kwargs):
         self.model.eval()

@@ -16,6 +16,7 @@ import random
 import json
 import csv
 import atexit
+import torch
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -26,6 +27,7 @@ from pathlib import Path
 from openai import AsyncOpenAI
 import httpx, asyncio
 from transformers import set_seed
+from axbench.utils.constants import * 
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -34,7 +36,7 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 logger = logging.getLogger(__name__)
 
 model_name_map = {
-    "gemma-2-2b": "google/gemma-2-2b",
+    "gemma-2-2b": "google/gemma-2-2b-it",
     "gemma-2-9b-it": "google/gemma-2-9b-it",
 }
 
@@ -203,14 +205,19 @@ def main():
 
     # Load lm and tokenizer.
     model_name = model_name_map[all_refs[0].split("/")[3]]
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype=torch.bfloat16)
+    is_chat_model = True if model_name in CHAT_MODELS else False
+    model = model.cuda()
+
     tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
     # Init the dataset factory.
     dataset_factory = DatasetFactory(
-        None, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
+        model, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
         dump_dir, use_cache=args.lm_use_cache, master_data_dir=args.master_data_dir,
-        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id
+        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id, is_chat_model=is_chat_model
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)

@@ -13,20 +13,30 @@ def get_lr(optimizer):
 
 
 def get_model_continues(
-    model, tokenizer, prompts, max_new_tokens, chat_template=None
+    model, tokenizer, prompts, max_new_tokens, is_chat_model=True, batch_size=8,
 ):
     """we ground examples with the model's original generation."""
-    outputs = []
     tokenizer.padding_side = "left"
-    if chat_template is not None:
-        pass # TODO: to handle chat models
-    encoding = tokenizer(prompts, return_tensors='pt', padding=True).to(model.device)
-    with torch.no_grad():
-        generated_ids = model.generate(
-            **encoding, max_new_tokens=max_new_tokens, do_sample=False)
-        generated_ids = generated_ids[:, encoding.input_ids.shape[1]:]
-    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
-    return generated_texts
+    if is_chat_model:
+        def apply_chat_template(prompt):
+            messages = [{"role": "user", "content": prompt}]
+            nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+            return tokenizer.decode(nobos)
+        prompts = [apply_chat_template(prompt) for prompt in prompts]
+    
+    # Process prompts in batches
+    all_generated_texts = []
+    for i in range(0, len(prompts), batch_size):
+        batch_prompts = prompts[i:i + batch_size]
+        encoding = tokenizer(batch_prompts, return_tensors='pt', padding=True).to(model.device)
+        with torch.no_grad():
+            generated_ids = model.generate(
+                **encoding, max_new_tokens=max_new_tokens, do_sample=False)
+            generated_ids = generated_ids[:, encoding.input_ids.shape[1]:]
+        batch_generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+        all_generated_texts.extend(batch_generated_texts)
+    
+    return all_generated_texts
 
 
 def gather_residual_activations(model, target_layer, inputs):
@@ -102,6 +112,8 @@ def get_prefix_length(tokenizer, common_prefix=None):
         message_b = [{"role": "user", "content": "2"}]
         tokens_a = tokenizer.apply_chat_template(message_a, tokenize=True)
         tokens_b = tokenizer.apply_chat_template(message_b, tokenize=True)
+        print("Detecting sequence a:", tokens_a)
+        print("Detecting sequence b:", tokens_b)
         prefix_length = 0
         for i, (ta, tb) in enumerate(zip(tokens_a, tokens_b)):
             if ta != tb:
