@@ -25,6 +25,9 @@ from ..utils.model_utils import (
 from huggingface_hub import hf_hub_download
 from transformers import get_scheduler
 
+from torch.utils.data import DataLoader
+from .probe import DataCollator, make_data_module
+
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
@@ -59,7 +62,7 @@ def load_metadata_flatten(metadata_path):
 
 
 def save_pruned_sae(
-    metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt"
+    metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt", sae_params=None
 ):
     # Save SAE weights and biases for inference
     logger.warning("Saving SAE weights and biases for inference")
@@ -78,12 +81,13 @@ def save_pruned_sae(
     response = requests.get(sae_url, headers=headers).json()
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
-    path_to_params = hf_hub_download(
-        repo_id=hf_repo,
-        filename=f"{hf_folder}/params.npz",
-        force_download=False,
-    )
-    sae_params = np.load(path_to_params)
+    if sae_params is None:
+        path_to_params = hf_hub_download(
+            repo_id=hf_repo,
+            filename=f"{hf_folder}/params.npz",
+            force_download=False,
+        )
+        sae_params = np.load(path_to_params)
     sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
     pruned_sae_pt_params = {
         "b_dec": sae_pt_params["b_dec"],
@@ -127,11 +131,8 @@ class GemmaScopeSAE(Model):
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
-            elif intervention_type == "sigmoid_mask":
-                ax = SigmoidMaskAdditionIntervention(
-                    embed_dim=self.model.config.hidden_size, 
-                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-                )
+            else:
+                raise ValueError(f"Invalid intervention type for steering: {intervention_type}")
         else:
             ax = JumpReLUSAECollectIntervention(
                 embed_dim=self.model.config.hidden_size, 
@@ -209,6 +210,100 @@ class GemmaScopeSAE(Model):
         return max_activations
 
 
+class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
+    """
+    pick the SAE feature with the largest difference in activation between the two classes
+    """
+    def __str__(self):
+        return 'GemmaScopeSAEMaxDiff'
+
+    def make_model(self, **kwargs):
+        if kwargs.get("mode", "latent") == "train":
+            # load the entire SAE
+            self.sae_params = kwargs.get("sae_params", None)
+            metadata_path = kwargs.get("metadata_path", None)
+            self.sae_width = self.sae_params['W_dec'].shape[0]
+            self.metadata_path = metadata_path
+            kwargs["low_rank_dimension"] = self.sae_width
+            sae_pt_params = {k: torch.from_numpy(v) for k, v in self.sae_params.items()}
+            super().make_model(**kwargs)
+            self.ax.load_state_dict(sae_pt_params, strict=False)
+            self.ax.eval()
+            self.ax.to(self.device)
+        else:
+            super().make_model(**kwargs)
+    
+    def make_dataloader(self, examples, **kwargs):
+        data_module = make_data_module(self.tokenizer, self.model, examples)
+        train_dataloader = DataLoader(
+            data_module["train_dataset"], shuffle=True, batch_size=self.training_args.batch_size, 
+            collate_fn=data_module["data_collator"])
+        return train_dataloader
+    
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        prefix_length = kwargs.get("prefix_length", 1)
+
+        sum_positive_acts = torch.zeros(self.sae_width).to(self.device)
+        sum_negative_acts = torch.zeros(self.sae_width).to(self.device)
+        positive_count = 0
+        negative_count = 0
+        
+        for epoch in range(self.training_args.n_epochs):
+            for step, batch in enumerate(train_dataloader):
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                inputs = {
+                    "input_ids": inputs["input_ids"],
+                    "attention_mask": inputs["attention_mask"],
+                }
+
+                # get SAE latents
+                act_in = gather_residual_activations(
+                    self.model, self.layer, inputs)
+                ax_acts_batch = self.ax(act_in[:, prefix_length:])  # no bos token
+                seq_lens = inputs["attention_mask"].sum(dim=1) - prefix_length # no bos token
+
+                # add avg latents for each sequence
+                for i in range(len(batch)):
+                    acts = ax_acts_batch[i, :seq_lens[i]]
+                    label = batch["labels"][i]
+                    avg_acts = acts.mean(dim=0)
+                    if label == 1:
+                        sum_positive_acts += avg_acts
+                        positive_count += 1
+                    else:
+                        sum_negative_acts += avg_acts
+                        negative_count += 1
+
+        # get latent activations
+        positive_acts = sum_positive_acts / positive_count
+        negative_acts = sum_negative_acts / negative_count
+        max_diff = (positive_acts - negative_acts).argmax().item()
+        self.top_feature = max_diff
+
+        # print top 10 features
+        top = (positive_acts - negative_acts).topk(10)
+        for i in range(10):
+            print(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
+    
+    def save(self, dump_dir, **kwargs):
+        model_name = kwargs.get("model_name", self.__str__())
+        top_feature = self.top_feature
+        top_features = []
+        if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
+            with open(dump_dir / f"{model_name}_top_features.json", "r") as f:
+                top_features = json.load(f)
+        top_features += [top_feature]   
+        with open(dump_dir / f"{model_name}_top_features.json", "w") as f:
+            json.dump(top_features, f)
+
+        # save the pruned SAE
+        save_pruned_sae(
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEMaxDiff.pt", sae_params=self.sae_params
+        )
+
 class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     """
     basic idea:
@@ -224,16 +319,16 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
         if mode == "train":
-            sae_params = kwargs.get("sae_params", None)
+            self.sae_params = kwargs.get("sae_params", None)
             metadata_path = kwargs.get("metadata_path", None)
-            if sae_params is not None:
-                logger.warning(f"Setting up SAE for binary mask with shape {sae_params['W_dec'].shape}")
+            if self.sae_params is not None:
+                logger.warning(f"Setting up SAE for binary mask with shape {self.sae_params['W_dec'].shape}")
                 ax = SigmoidMaskAdditionIntervention(
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
-                    sae_width=sae_params['W_dec'].shape[0],
+                    sae_width=self.sae_params['W_dec'].shape[0],
                 )
-                ax.proj.weight.data = torch.from_numpy(sae_params['W_dec']).t()
+                ax.proj.weight.data = torch.from_numpy(self.sae_params['W_dec']).t()
                 ax = ax.train()
                 ax_config = IntervenableConfig(representations=[{
                     "layer": l,
@@ -251,9 +346,9 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
-        top_feature = self.ax.mask.data.argmax().item()
+        top_feature = self.ax.get_latent_weights().argmax().item()
         # log the top 10 features
-        logger.warning(f"Top 10 features: {self.ax.mask.data.topk(10).indices.tolist()}")
+        logger.warning(f"Top 10 features: {self.ax.get_latent_weights().topk(10).indices.tolist()}")
         top_features = []
         if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
             with open(dump_dir / f"{model_name}_top_features.json", "r") as f:
@@ -264,7 +359,7 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
 
         # save the pruned SAE
         save_pruned_sae(
-            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt"
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt", sae_params=self.sae_params
         )
     
     def train(self, examples, **kwargs):
