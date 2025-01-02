@@ -10,6 +10,7 @@ axbench/demo/lm_cache
 *.out
 axbench/concept16k/prod_2b_l20_v1/
 axbench/concept16k/prod_9b_it_l20_v1/
+axbench/concept16k/concept16k.zip
 axbench/result*
 set_key.py
 uv.lock
