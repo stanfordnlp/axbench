@@ -121,16 +121,12 @@ async def get_contrast_concepts(client, concepts, contrast_concepts=None, api_ta
 
 def get_random_content(seed_sentences, tokenizer, count, genres, concepts, length, split):
     random_content = {concept: [] for concept in concepts}
-    genre_indices = {"text": set(), "code": set(), "math": set()}
-
     responses = []
-    for concept in concepts:
-        genre = random.choice(genres[concept])
-        dataset = seed_sentences[f"{genre}_{split}"]
-        indices = random.sample(list(set(range(len(dataset))) - genre_indices[genre]), count)
-        genre_indices[genre].update(indices)
-        random_samples = dataset.select(indices)
-        responses += [sample["input"] for sample in random_samples]
+    genre = genres[0] # if there are many, we pick the first one.
+    dataset = seed_sentences[f"{genre}_{split}"]
+    indices = random.sample(list(range(len(dataset))), count)
+    random_samples = dataset.select(indices)
+    responses += [sample["input"] for sample in random_samples]
 
     for i, response in enumerate(responses):
         response = response.strip(" .'").strip('"')
@@ -138,8 +134,7 @@ def get_random_content(seed_sentences, tokenizer, count, genres, concepts, lengt
         if length is not None:
             response = tokenizer.convert_tokens_to_string(
                 tokenizer.tokenize(response)[:int(length)])
-        random_content[concepts[i//(len(responses)//len(concepts))]] += [response]
-        
+        random_content[concepts[i//(len(responses)//len(concepts))]] += [response]        
     return random_content
 
 
@@ -237,8 +232,8 @@ async def continue_with_polysemantic_concepts(
     content_list = []
     for i, polysemantic_concept in enumerate(polysemantic_concepts):
         prompts += [T_CONTINUE_WITH_CONTRAST_CONCEPT.format(
-            CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
-            CONTRAST_CONCEPT=concept, CONTENT=content[i])]
+            CONCEPT=concept, WORD=polysemantic_concept[0], 
+            CONTRAST_CONCEPT=polysemantic_concept[1], CONTENT=content[i])]
         content_list += [content[i]]
     responses = await client.chat_completions(f"{api_tag}.continue_with_polysemantic_concepts", prompts)
     pattern = re.compile(r'^(<[^>]*>\s*)+')
@@ -313,8 +308,8 @@ async def response_with_polysemantic_concepts(
     instructions = []
     for i, polysemantic_concept in enumerate(polysemantic_concepts):
         prompts += [T_RESPONSE_WITH_CONTRAST_CONCEPT.format(
-            INSTRUCTION=content[i], CONCEPT=polysemantic_concept[1], WORD=polysemantic_concept[0], 
-            CONTRAST_CONCEPT=concept)]
+            INSTRUCTION=content[i], CONCEPT=concept, WORD=polysemantic_concept[0], 
+            CONTRAST_CONCEPT=polysemantic_concept[1])]
         instructions += [content[i]]
     responses = await client.chat_completions(f"{api_tag}.response_with_polysemantic_concepts", prompts)
     pattern = re.compile(r'^(<[^>]*>\s*)+')

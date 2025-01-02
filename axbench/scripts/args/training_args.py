@@ -49,6 +49,7 @@ class ModelParams:
     reft_type: Optional[str] = "Loreft"
     exclude_bos: Optional[bool] = True
     binarize_dataset: Optional[bool] = False
+    train_on_negative: Optional[bool] = False
     intervention_type: Optional[str] = "addition" # clamping   
     gradient_accumulation_steps: Optional[int] = 1
     lora_layers: Optional[List[int]] = None
@@ -80,7 +81,8 @@ class TrainingArgs:
         # Define global and hierarchical parameters
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
-            'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts'
+            'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts',
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
@@ -88,7 +90,8 @@ class TrainingArgs:
             'low_rank_dimension', 'dataset_category', 'intervention_positions', 'intervention_layers',
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
-            'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end'
+            'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end',
+            'train_on_negative'
         ]
         all_params = global_params + hierarchical_params
 
@@ -175,7 +178,7 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset']
+        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset', 'train_on_negative']
         int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension', 'gradient_accumulation_steps', 'lora_alpha', 'max_concepts']
         float_params = [
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 
@@ -184,7 +187,8 @@ class TrainingArgs:
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
-            'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir'
+            'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir',
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
         ]
         list_params = ['intervention_layers', 'reft_layers', 'lora_layers', 'lora_components']
 

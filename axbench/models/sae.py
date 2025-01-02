@@ -370,7 +370,7 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
         optimizer = torch.optim.AdamW(
             self.ax_model.parameters(), 
             lr=self.training_args.lr, weight_decay=self.training_args.weight_decay)
-        num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
+        num_training_steps = self.training_args.n_epochs * max(1, len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         temperature_start = float(self.training_args.temperature_start)
         temperature_end = float(self.training_args.temperature_end)
         temperature_schedule = (

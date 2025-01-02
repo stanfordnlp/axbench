@@ -49,7 +49,7 @@ class SFT(Model):
         optimizer = torch.optim.AdamW(
             self.ax_model.parameters(), 
             lr=self.training_args.lr, weight_decay=self.training_args.weight_decay)
-        num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
+        num_training_steps = self.training_args.n_epochs * max(1, len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
@@ -67,7 +67,7 @@ class SFT(Model):
                 outputs = self.ax_model(
                     input_ids=inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    labels=inputs["labels"], use_cache=False
+                    labels=inputs["labels"]
                 )
                 
                 # loss
@@ -113,7 +113,7 @@ class SFT(Model):
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
             ).to(self.device)
-            print(inputs)
+
             generations = self.ax_model.generate(
                 **inputs, 
                 max_new_tokens=eval_output_length, do_sample=True, 

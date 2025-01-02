@@ -1,4 +1,4 @@
-## Abstraction Benchmark (AxBench)
+## AxBench
 
 ### Installation
 To install the latest stable version of axbench:

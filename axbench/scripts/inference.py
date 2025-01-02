@@ -38,7 +38,7 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
-STEERING_EXCLUDE_MODELS = {}
+STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients"}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
@@ -79,21 +79,19 @@ def load_metadata_flatten(metadata_path):
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
-    concept_id = 0
     with open(Path(metadata_path) / METADATA_FILE, 'r') as f:
         for line in f:
             data = json.loads(line)
-            concept, ref =data["concept"], data["ref"]
+            concept, ref = data["concept"], data["ref"]
             concept_genres_map = data["concept_genres_map"][concept]
             ref = data["ref"]
             flatten_data = {
                 "concept": concept,
                 "ref": ref,
                 "concept_genres_map": {concept: concept_genres_map},
-                "concept_id": concept_id
+                "concept_id": data["concept_id"]
             }
             metadata += [flatten_data]  # Return the metadata as is
-            concept_id += 1
     return metadata
 
 
@@ -142,7 +140,7 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     current_df = dataset_factory.create_eval_df(
         [concept], num_of_examples, concept_genres_map, {},
         eval_contrast_concepts_map, input_length=args.input_length, 
-        output_length=args.output_length
+        output_length=args.output_length, concept_id=concept_id
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -159,7 +157,7 @@ def create_data_steering(
     sae_id = int(sae_link.split("/")[-1]) 
 
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, n_steering_factors, steering_datasets,
+        [concept], num_of_examples, n_steering_factors, steering_datasets, concept_id=concept_id
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -199,7 +197,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
 
     # Get list of all concept_ids
-    concept_ids = list(range(len(metadata)))
+    concept_ids = [metadata[i]["concept_id"] for i in range(len(metadata))]
 
     # Partition concept_ids among ranks sequentially
     concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
@@ -233,7 +231,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
 
     # Initialize the dataset factory with the tokenizer.
     tokenizer = AutoTokenizer.from_pretrained(
-        args.steering_model_name, use_fast=False, model_max_length=512)
+        args.steering_model_name, use_fast=False, model_max_length=1024)
     tokenizer.padding_side = "right"
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
@@ -281,7 +279,8 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
-                intervention_type=args.steering_intervention_type, concept_id=concept_id
+                intervention_type=args.steering_intervention_type, # SAE uses clamping
+                concept_id=concept_id
             )
             benchmark_model.to(device)
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
@@ -375,7 +374,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
 
     # Get list of all concept_ids
-    concept_ids = list(range(len(metadata)))
+    concept_ids = [metadata[i]["concept_id"] for i in range(len(metadata))]
 
     # Partition concept_ids among ranks sequentially
     concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
@@ -409,7 +408,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name, model_max_length=512)
+        args.model_name, model_max_length=1024)
     tokenizer.padding_side = "right"
 
     # Load model instance onto device
@@ -429,8 +428,9 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     # Load dataset factory for evals.
     dataset_factory = DatasetFactory(
         None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
-        use_cache=True, master_data_dir=args.master_data_dir,
-        lm_model=args.lm_model, logger=logger, is_inference=True
+        use_cache=False, master_data_dir=args.master_data_dir,
+        lm_model=args.lm_model, logger=logger, is_inference=True,
+        overwrite_inference_data_dir=args.overwrite_inference_data_dir
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
@@ -472,11 +472,12 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
             if (concept_id, dataset_category) not in cache_df:
                 current_df = create_data_latent(
                     dataset_factory, metadata, concept_id, num_of_examples, args)
+                logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
+                current_df = prepare_df(current_df, tokenizer, is_chat_model)
                 cache_df[(concept_id, dataset_category)] = current_df
             else:
                 current_df = cache_df[(concept_id, dataset_category)]
-            logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
-            current_df = prepare_df(current_df, tokenizer, is_chat_model)
+
             results = benchmark_model.predict_latent(
                 current_df, batch_size=args.latent_batch_size, prefix_length=prefix_length
             )
@@ -581,12 +582,29 @@ def main():
                 'default': "all",
                 'help': 'The inference mode.'
             }
+        },
+        {
+            'args': ['--overwrite_inference_data_dir'],
+            'kwargs': {
+                'type': str,
+                'help': 'The directory to load pre-generated inference data.'
+            }
+        },
+        {
+            'args': ['--overwrite_metadata_dir'],
+            'kwargs': {
+                'type': str,
+                'help': 'The directory to load pre-generated metadata.'
+            }
         }
     ]
     training_args = TrainingArgs(section="train")
     generate_args = DatasetArgs(custom_args=custom_args, section="generate")
     args = DatasetArgs(custom_args=custom_args, section="inference")
-    args.data_dir = f"{args.dump_dir}/generate"
+    if args.overwrite_metadata_dir is not None and os.path.exists(args.overwrite_metadata_dir):
+        args.data_dir = args.overwrite_metadata_dir # since we only load metadata from this dir
+    else:
+        args.data_dir = f"{args.dump_dir}/generate"
     args.train_dir = f"{args.dump_dir}/train"
     logger.warning("Inferencing with following configuration:")
     logger.warning(args)

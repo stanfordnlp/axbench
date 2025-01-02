@@ -1,0 +1,71 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  output_length: 128
+  num_of_examples: 144
+  concept_path: "axbench/data/gemma-2-2b_10-gemmascope-res-16k.json"
+  max_concepts: 500
+  master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  lm_use_cache: false
+  seed: 42
+train:
+  model_name: "google/gemma-2-2b-it"
+  layer: 10
+  component: "res"
+  seed: 42
+  use_bf16: true
+  models:
+    SteeringVector:
+      batch_size: 6
+      gradient_accumulation_steps: 1
+      n_epochs: 3
+      lr: 0.01
+      weight_decay: 0.00
+      low_rank_dimension: 1
+      intervention_positions: "all"
+      intervention_type: "addition" # clamping
+      binarize_dataset: false
+      train_on_negative: false
+      exclude_bos: true
+inference:
+  use_bf16: true
+  # if you are verifying latent, you dont have to include steering models.
+  models: ["SteeringVector"]
+  model_name: "google/gemma-2-2b-it"
+  # latent related params
+  output_length: 128
+  latent_num_of_examples: 20
+  latent_batch_size: 16
+  # steering related params
+  steering_intervention_type: "addition" # clamping
+  steering_model_name: "google/gemma-2-2b-it"
+  steering_datasets: ["AlpacaEval"]
+  steering_batch_size: 10
+  steering_output_length: 128
+  steering_layers: [10]
+  steering_num_of_examples: 10 # number of examples per concept and per factor
+  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 4.0, 5.0] # number of steering factors per example
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+  # generation related params
+  temperature: 1.0
+evaluate:
+  models: ["SteeringVector"]
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeEvaluator",
+  ]
+  winrate_split_ratio: 0.5 # this is for steering only, we use a separate partition for factor selection.
+  # Number of processes to run in parallel for steering evaluation.
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: false
+  winrate_baseline: "PromptSteering"
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"

@@ -235,7 +235,7 @@ class LoReFT(Model):
         optimizer = torch.optim.AdamW(
             self.ax_model.parameters(), lr=self.training_args.lr, weight_decay=self.training_args.weight_decay,
             betas=(0.9, 0.999), eps=1e-8)
-        num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
+        num_training_steps = self.training_args.n_epochs * max(1, len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
             num_warmup_steps=0, num_training_steps=num_training_steps)
@@ -260,11 +260,12 @@ class LoReFT(Model):
                     use_cache=False)
                 # loss
                 loss = cf_outputs.loss.mean()
-                loss /= self.training_args.gradient_accumulation_steps
                 # grads
                 loss.backward()
+                loss = loss.mean()
+                if self.training_args.gradient_accumulation_steps > 1:
+                    loss = loss / self.training_args.gradient_accumulation_steps
 
-                # Perform optimization step every gradient_accumulation_steps
                 if (step + 1) % self.training_args.gradient_accumulation_steps == 0 or (step + 1) == len(train_dataloader):
                     torch.nn.utils.clip_grad_norm_(self.ax_model.parameters(), 1.0)
                     curr_step += 1
