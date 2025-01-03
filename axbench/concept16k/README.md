@@ -1,6 +1,6 @@
 ## How to access the 16k concept dataset?
 
-1. Download the dataset from Google Drive: [concept16k.zip](https://drive.google.com/file/d/1NR-2U8KD5MRohoARyx4I_Gt5o9RZHskC/view?usp=sharing)
+1. Download the dataset from Google Drive: [concept16k.zip](https://drive.google.com/file/d/1eNYXN0eAVmu2nuOqDNyiMI5IEq6faAcp/view?usp=sharing)
 
 2. Unzip the downloaded file:
 

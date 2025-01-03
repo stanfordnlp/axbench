@@ -218,6 +218,7 @@ def main():
     dump_dir.mkdir(parents=True, exist_ok=True)
     
     # save pruned SAE
+    sae_params = None # TODO: this is a workaround to avoid breaking the code.
     if rank == 0:
         sae_params = save_pruned_sae(metadata_path, dump_dir)
 
