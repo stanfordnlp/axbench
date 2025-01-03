@@ -478,14 +478,11 @@ def plot_latent(dump_dir, report_to=[], wandb_name=None):
     dump_dir = Path(dump_dir) / "evaluate"
     # aggregate all results
     aggregated_results = load_jsonl(os.path.join(dump_dir, 'latent.jsonl'))
-    try:
-        plot_aggregated_roc(
-            aggregated_results, write_to_path=dump_dir, report_to=report_to, wandb_name=wandb_name)
-        plot_accuracy_bars(
-            aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir, 
-            report_to=report_to, wandb_name=wandb_name)
-    except Exception as e:
-        logger.warning(f"Failed to plot: {e}")
+    plot_aggregated_roc(
+        aggregated_results, write_to_path=dump_dir, report_to=report_to, wandb_name=wandb_name)
+    plot_accuracy_bars(
+        aggregated_results, "HardNegativeEvaluator", write_to_path=dump_dir, 
+        report_to=report_to, wandb_name=wandb_name)
 
 
 def eval_latent(args):

@@ -19,7 +19,7 @@ train:
       batch_size: 6
       gradient_accumulation_steps: 1
       n_epochs: 3
-      lr: 0.01
+      lr: 0.005
       weight_decay: 0.00
       topk: 8
       coeff_latent_l1_loss: 0.005
@@ -45,7 +45,7 @@ inference:
   steering_output_length: 128
   steering_layers: [31]
   steering_num_of_examples: 10 # number of examples per concept and per factor
-  steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 4.0, 5.0] # number of steering factors per example
+  steering_factors: [1.0] # number of steering factors per example
   # master data dir is shared across all jobs.
   master_data_dir: "axbench/data"
   seed: 42

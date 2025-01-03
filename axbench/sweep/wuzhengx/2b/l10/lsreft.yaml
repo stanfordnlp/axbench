@@ -53,7 +53,7 @@ inference:
   # generation related params
   temperature: 1.0
 evaluate:
-  models: ["LoReFT"]
+  models: ["LsReFT"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
