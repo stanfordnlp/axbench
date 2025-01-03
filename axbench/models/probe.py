@@ -139,7 +139,7 @@ class SparseLinearProbe(Model):
         # Optimizer and lr
         optimizer = torch.optim.AdamW(
             self.ax.parameters(), lr=self.training_args.lr, 
-            weight_decay=self.training_args.coeff_l2_loss)
+            weight_decay=self.training_args.weight_decay)
         num_training_steps = self.training_args.n_epochs * len(train_dataloader)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
