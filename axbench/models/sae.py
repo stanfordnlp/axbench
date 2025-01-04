@@ -67,7 +67,7 @@ def save_pruned_sae(
     # Save SAE weights and biases for inference
     logger.warning("Saving SAE weights and biases for inference")
     flatten_metadata = load_metadata_flatten(metadata_path)
-    logger.warning(flatten_metadata)
+    # logger.warning(flatten_metadata)
 
     # mess with SAE refs if needed (for DBM stuff)
     if modified_refs is not None:

@@ -21,10 +21,9 @@ train:
       n_epochs: 12
       lr: 0.0005
       topk: 8
-      weight_decay: 0.02
+      weight_decay: 0.000
       coeff_latent_l1_loss: 0.005
       coeff_l1_loss: 0.005
-      coeff_l2_loss: 0.000
       binarize_dataset: true
       low_rank_dimension: 1
 inference:
