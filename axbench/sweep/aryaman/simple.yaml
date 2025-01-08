@@ -27,14 +27,14 @@ train:
     #   exclude_bos: true
     #   temperature_start: 1e-2
     #   temperature_end: 1e-7
-    GemmaScopeSAEDiffMean:
-      batch_size: 6
-      gradient_accumulation_steps: 1
-      n_epochs: 12
-      lr: 0.008
-      weight_decay: 0.00
-      binarize_dataset: true
-      low_rank_dimension: 1
+    # GemmaScopeSAEDiffMean:
+    #   batch_size: 6
+    #   gradient_accumulation_steps: 1
+    #   n_epochs: 12
+    #   lr: 0.008
+    #   weight_decay: 0.00
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
     DiffMean:
       batch_size: 6
       n_epochs: 1
@@ -109,7 +109,7 @@ train:
 
 inference:
   use_bf16: true
-  models: ["DiffMean", "GemmaScopeSAEDiffMean", "PromptSteering"]
+  models: ["DiffMean", "GemmaScopeSAE"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -132,14 +132,14 @@ inference:
   temperature: 1.0
 
 evaluate:
-  models: ["PromptSteering", "GemmaScopeSAEDiffMean", "DiffMean"]
+  models: ["GemmaScopeSAE", "DiffMean"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",
   ]
   steering_evaluators: [
-    "PerplexityEvaluator", 
-    "LMJudgeEvaluator",
+    # "PerplexityEvaluator", 
+    # "LMJudgeEvaluator",
   ]
   winrate_split_ratio: 0.5 # this is for steering only, we use a separate partition for factor selection.
   # Number of processes to run in parallel for steering evaluation.

@@ -430,7 +430,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
         None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
         use_cache=False, master_data_dir=args.master_data_dir,
         lm_model=args.lm_model, logger=logger, is_inference=True,
-        overwrite_inference_data_dir=args.overwrite_inference_data_dir
+        overwrite_inference_data_dir=training_args.overwrite_inference_data_dir
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)
@@ -601,8 +601,8 @@ def main():
     training_args = TrainingArgs(section="train")
     generate_args = DatasetArgs(custom_args=custom_args, section="generate")
     args = DatasetArgs(custom_args=custom_args, section="inference")
-    if args.overwrite_metadata_dir is not None and os.path.exists(args.overwrite_metadata_dir):
-        args.data_dir = args.overwrite_metadata_dir # since we only load metadata from this dir
+    if training_args.overwrite_metadata_dir is not None and os.path.exists(training_args.overwrite_metadata_dir):
+        args.data_dir = training_args.overwrite_metadata_dir # since we only load metadata from this dir
     else:
         args.data_dir = f"{args.dump_dir}/generate"
     args.train_dir = f"{args.dump_dir}/train"
