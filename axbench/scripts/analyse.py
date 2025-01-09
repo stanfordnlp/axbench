@@ -14,6 +14,7 @@ from matplotlib import rcParams
 import itertools
 import numpy as np
 from scipy.stats import bootstrap, ttest_rel
+from collections import defaultdict
 
 # set the theme
 rcParams['font.family'] = "P052"
@@ -98,78 +99,108 @@ def format_ci(mean, lower_ci, upper_ci, only_mean=False):
     return f"{mean:.3f}$^{{+{upper_ci-mean:.3f}}}_{{-{mean-lower_ci:.3f}}}$"
 
 
-def main():
+def agg_first_non_nan(vals):
+    for val in vals:
+        if isinstance(val, list) or np.all(val):
+            return val
+    return np.nan
+
+
+def split_metric(metric):
+    splitted = metric.split(".")
+    if len(splitted) > 4:
+        splitted[3] = '.'.join(splitted[3:])
+    return tuple(splitted[:4])
+
+
+def main(reload=False):
     # make plot folder if not exists
     os.makedirs(PLOT_FOLDER, exist_ok=True)
 
     all_dfs = []
-    for folder in SUBFOLDERS:
-        parts = folder.split("_")
-        assert len(parts) == 4
-        _, model, layer, split = parts
-        dfs = []
-        for method in METHODS:
-            method_folder = f"{RESULTS_FOLDER}/{folder}_{method}/evaluate"
-            if not os.path.exists(method_folder):
+    if reload or not os.path.exists(f"{PLOT_FOLDER}/df.pkl"):
+        for folder in SUBFOLDERS:
+            parts = folder.split("_")
+            assert len(parts) == 4
+            _, model, layer, split = parts
+            dfs = []
+            for method in METHODS:
+                method_folder = f"{RESULTS_FOLDER}/{folder}_{method}/evaluate"
+                if not os.path.exists(method_folder):
+                    continue
+                    
+                # load latent eval
+                megadict = defaultdict(dict)
+                latent_eval = f"{method_folder}/latent.jsonl"
+                if os.path.exists(latent_eval):
+                    print(f"Processing latent for {method}...")
+                    with open(latent_eval, "r") as f:
+                        for line in f:
+                            json_line = json.loads(line)
+                            megadict[json_line['concept_id']]['latent'] = json_line['results']
+                
+                # load steering eval
+                steering_eval = f"{method_folder}/steering.jsonl"
+                if os.path.exists(steering_eval):
+                    print(f"Processing steering for {method}...")
+                    with open(steering_eval, "r") as f:
+                        for line in f:
+                            json_line = json.loads(line)
+                            megadict[json_line['concept_id']]['steering'] = json_line['results']
+                
+                megalist = [{'concept_id': concept_id, **data} for concept_id, data in megadict.items()]
+                df = pd.json_normalize(megalist)
+                dfs.append(df)
+        
+            # merge dfs based on concept_id column, pick the first one
+            if len(dfs) == 0:
                 continue
-            print(f"Processing {method}...")
+            df = pd.concat(dfs)
+            df = df.groupby("concept_id").first().reset_index()
+            df["model"] = MODEL_MAP[model]
+            df["layer"] = LAYER_MAP[layer]
+            df["split"] = split
+            df["identifier"] = f"{model}, {layer}, {split}"
+            all_dfs.append(df)
 
-            # load latent eval
-            latent_eval = f"{method_folder}/latent.jsonl"
-            data = []
-            with open(latent_eval, "r") as f:
-                for line in f:
-                    data.append(json.loads(line))
-            df = pd.json_normalize(data)
-            dfs.append(df)
-    
-        # merge dfs based on concept_id column, pick the first one
-        if len(dfs) == 0:
-            continue
-        df = pd.concat(dfs)
-        df = df.groupby("concept_id").first().reset_index()
-        df["model"] = MODEL_MAP[model]
-        df["layer"] = LAYER_MAP[layer]
-        df["split"] = split
-        df["identifier"] = f"{model}, {layer}, {split}"
-        all_dfs.append(df)
-    
-    df = pd.concat(all_dfs)
+        # save df
+        df = pd.concat(all_dfs)
+        df.to_pickle(f"{PLOT_FOLDER}/df.pkl")
+    else:
+        df = pd.read_pickle(f"{PLOT_FOLDER}/df.pkl")
     
     # make each method a row
     id_vars = ['concept_id', 'model', 'layer', 'split', 'identifier']
     value_vars = [col for col in df.columns if col not in id_vars]
     melted_df = pd.melt(df, id_vars=id_vars, value_vars=value_vars, var_name='metric', value_name='value')
-    melted_df[['evaluator', 'method', 'metric']] = melted_df['metric'].str.extract(r'results\.(\w+)\.(\w+)\.(.+)')
-    pivot_df = melted_df.pivot_table(index=id_vars + ['method'], columns='metric', values='value', aggfunc='first').reset_index()
-    pivot_df.columns.name = None
-    pivot_df.columns = [col if isinstance(col, str) else col[1] for col in pivot_df.columns]
+    melted_df["method"] = melted_df["metric"].apply(lambda x: x.split(".")[2])
+    melted_df["metric"] = melted_df["metric"].apply(lambda x: ".".join(x.split(".")[3:]))
+    pivot_df = melted_df.pivot_table(index=id_vars + ['method'], columns='metric', values='value', aggfunc=agg_first_non_nan).reset_index()
 
     # fix types
     pivot_df = prettify_df(pivot_df)
     print(pivot_df.head())
-    print(list(pivot_df.columns))
+    print("Columns:", sorted(list(pivot_df.columns)))
 
     # print duplicates
-    print("Duplicates:")
-    print(pivot_df[pivot_df.duplicated(subset=["identifier", "concept_id", "Method"])][["identifier", "concept_id", "Method"]])
+    dups = pivot_df[pivot_df.duplicated(subset=["identifier", "concept_id", "Method"])].sort_values(by=["identifier", "concept_id", "Method"])
+    print("Duplicates:", len(dups))
 
     common_fpr = np.linspace(0, 1, 38)
     for split in df["split"].unique():
-        df = pivot_df[pivot_df["split"] == split]
+        df = pivot_df[pivot_df["split"] == split].dropna(subset=["roc_curve.fpr", "roc_curve.tpr"])
         if len(df) == 0:
             continue
 
         # make latex table
-        for metric in ["Latent Acc. (macro-avg)", "Latent ROC AUC"]:
+        for metric in ["Latent ROC AUC"]:
             for only_mean in [True, False]:
                 df_subset: pd.DataFrame = df.copy()
                 df_subset = df_subset.rename(columns={metric: "values"})[["Method", "identifier", "values"]]
                 # print count of nans
+                print("NaN count:")
                 for method in df_subset["Method"].unique():
                     print(f"{method}: {sum(df_subset[df_subset['Method'] == method]['values'].isna())}")
-                print(df_subset.head())
-                input()
                 df_subset = df_subset.groupby(["identifier", "Method"]).apply(mean_and_ci).reset_index()
                 df_subset["values"] = df_subset.apply(lambda row: format_ci(row['mean'], row['lower_ci'], row['upper_ci'], only_mean), axis=1)
                 df_subset = df_subset.pivot(index="Method", columns="identifier", values="values").reset_index()
@@ -181,12 +212,10 @@ def main():
                 df_subset["Average"] = df_subset_avg["values"]
                 df_subset = df_subset.sort_values(by="Average", ascending=False)
                 flattened = df_subset.to_latex(index=False)
-                print(flattened)
             
             # do paired t test on Latent ROC AUC between each pair of methods
             df_subset = df.copy()[["Method", "identifier", "concept_id", metric]]
             df_subset = df_subset.pivot(index=["identifier", "concept_id"], columns="Method", values=metric).reset_index()
-            print(df_subset.head())
             for identifier in list(df_subset["identifier"].unique()) + [None]:
                 for method1, method2 in itertools.combinations(df["Method"].unique(), 2):
                     df_subset_t = df_subset[df_subset["identifier"] == identifier] if identifier is not None else df_subset
@@ -254,19 +283,31 @@ def main():
         plot.save(f"{PLOT_FOLDER}/{split}_roc_mean.pdf", width=4, height=3)
 
         plot = (
-            ggplot(roc_df, aes(x="fpr", y="tpr", color="Method", group="concept_id"))
+            ggplot(roc_df[(roc_df["model"] == "Gemma-2-2B") & (roc_df["layer"] == "L10")], aes(x="fpr", y="tpr", color="Method", group="concept_id"))
             + facet_grid("model + layer ~ Method")
-            + geom_line(alpha=0.2)
+            + geom_line(alpha=0.1)
             # + stat_summary(fun_data="mean_cl_boot", geom="line", color="black")
             + labs(x="False Positive Rate", y="True Positive Rate")
+            + theme(legend_position="none")
         )
         # Add average ROC curve to the plot
-        plot += geom_line(roc_mean_df, aes(x="fpr", y="tpr"), color="black", size=1.5, linetype="dashed")
-        plot.save(f"{PLOT_FOLDER}/{split}_roc.pdf", width=10, height=5)
+        plot += geom_line(roc_mean_df[(roc_mean_df["model"] == "Gemma-2-2B") & (roc_mean_df["layer"] == "L10")], aes(x="fpr", y="tpr"), color="black", size=1.0, alpha=0.5)
+        plot.save(f"{PLOT_FOLDER}/{split}_roc.pdf", width=10, height=2)
+
+        plot = (
+            ggplot(roc_df, aes(x="fpr", y="tpr", color="Method", group="concept_id"))
+            + facet_grid("model + layer ~ Method")
+            + geom_line(alpha=0.1)
+            # + stat_summary(fun_data="mean_cl_boot", geom="line", color="black")
+            + labs(x="False Positive Rate", y="True Positive Rate")
+            + theme(legend_position="none")
+        )
+        # Add average ROC curve to the plot
+        plot += geom_line(roc_mean_df, aes(x="fpr", y="tpr"), color="black", size=1.0, alpha=0.5)
+        plot.save(f"{PLOT_FOLDER}/{split}_roc_all.pdf", width=10, height=5)
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--folder", type=str, default="prod_9b_l20_concept500")
-    # args = parser.parse_args()
-    # main(**vars(args))
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reload", action="store_true")
+    args = parser.parse_args()
+    main(**vars(args))
