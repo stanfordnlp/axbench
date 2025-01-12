@@ -15,20 +15,18 @@ train:
   seed: 42
   use_bf16: true
   models:
-    SparseLinearProbe:
+    LinearProbe:
       batch_size: 12
-      gradient_accumulation_steps: 1
-      n_epochs: 12
-      lr: 0.0005
-      topk: 8
-      weight_decay: 0.000
-      coeff_latent_l1_loss: 0.005
-      coeff_l1_loss: 0.005
+      gradient_accumulation_steps: 4
+      n_epochs: 24
+      lr: 0.005
+      weight_decay: 0.001
+      coeff_l1_loss: 0.000
       binarize_dataset: true
       low_rank_dimension: 1
 inference:
   use_bf16: true
-  models: ["SparseLinearProbe"]
+  models: ["LinearProbe"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -50,7 +48,7 @@ inference:
   # generation related params
   temperature: 1.0
 evaluate:
-  models: ["SparseLinearProbe"]
+  models: ["LinearProbe"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

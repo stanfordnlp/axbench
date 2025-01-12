@@ -68,6 +68,7 @@ class Model(BaseModel):
         self.seed = kwargs.get("seed", 42)
         self.steering_layers = kwargs.get("steering_layers", None)
         self.num_of_layers = len(self.steering_layers) if self.steering_layers else 1
+        self.dump_dir = kwargs.get("dump_dir", None)
 
     def make_model(self, **kwargs):
         pass

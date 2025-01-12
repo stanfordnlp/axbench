@@ -17,8 +17,8 @@ train:
   models:
     LoReFT:
       # All hyperparameters are adopted from the original LoReFT paper except the layers since we want to use as little layers as possible.
-      batch_size: 18
-      gradient_accumulation_steps: 2
+      batch_size: 9
+      gradient_accumulation_steps: 4
       n_epochs: 24
       lr: 0.0004
       weight_decay: 0.00

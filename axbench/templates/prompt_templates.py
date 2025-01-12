@@ -74,7 +74,7 @@ T_FILTER_CONTRAST_CONCEPT = """Determine if Concept A is meaningfully distinct f
 Concept A: {CONTRAST_CONCEPT}
 Concept B: {CONCEPT}
 
-Analyze these concepts for **any** shared meanings, contexts, roles, or purposes, focusing on how they relate or intersect. Please explain your reasoning, considering both similarities and differences.
+Analyse these concepts for **any** shared meanings, contexts, roles, or purposes, focusing on how they relate or intersect. Please explain your reasoning, considering both similarities and differences.
 
 - If Concept A and Concept B have **any** overlap in meaning, context, usage, or if one is a subset or specific instance of the other, conclude with 'Answer: <NO>'.
 - Only if they are **entirely unrelated** with **no overlap whatsoever** in meaning, context, or usage, conclude with 'Answer: <YES>'.

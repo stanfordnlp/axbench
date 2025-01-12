@@ -12,6 +12,8 @@ from ..utils.model_utils import (
 from transformers import get_scheduler
 
 from .probe import DataCollator, make_data_module
+from torch.cuda.amp import autocast
+import gc
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -206,11 +208,12 @@ class IntegratedGradients(Model):
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
         self.ax.lm_model.eval()
+
         for param in self.ax.parameters():
             param.requires_grad = False
 
-        total_steps = kwargs.get('steps', 50)  # Total number of steps
-        step_batch_size = 10  # Number of steps to process at once
+        total_steps = kwargs.get('steps', 50)  # Total number of steps. 9B models we are using 5.
+        step_batch_size = 5  # Number of steps to process at once
 
         all_pred_label = []
         all_acts = []
@@ -220,13 +223,17 @@ class IntegratedGradients(Model):
         all_tokens = []
         correct = 0
         for _, row in examples.iterrows(): 
-            inputs = self.tokenizer.encode(
-                row["input"], return_tensors="pt", add_special_tokens=True).to(self.device)
-            act_in = gather_residual_activations(
-                self.model, self.layer, {"input_ids": inputs})
-            act_in = act_in.detach()
-            baseline = self.get_avg_embedding_baseline(act_in.shape)
-            
+            with torch.no_grad():
+                inputs = self.tokenizer.encode(
+                    row["input"], return_tensors="pt", add_special_tokens=True).to(self.device)
+                act_in = gather_residual_activations(
+                    self.model, self.layer, {"input_ids": inputs})
+                act_in = act_in.detach()
+                baseline = self.get_avg_embedding_baseline(act_in.shape)
+
+                baseline = baseline.bfloat16()
+                act_in = act_in.bfloat16()
+
             # Initialize accumulated gradients
             accumulated_grads = torch.zeros_like(act_in[:, kwargs["prefix_length"]:])
 
@@ -270,20 +277,23 @@ class IntegratedGradients(Model):
 
                 (grads,) = torch.autograd.grad(preds.sum(), interpolated_acts, create_graph=False)
                 # Accumulate gradients for the relevant portion
-                accumulated_grads += grads[:, kwargs["prefix_length"]:].sum(dim=0)
+                accumulated_grads += grads[:, kwargs["prefix_length"]:].sum(dim=0).detach()
                 
                 # Clear memory
                 del grads, interpolated_acts, outputs, last_token_representations, preds
+                gc.collect()
                 torch.cuda.empty_cache()
-            
+        
             # Calculate final integrated gradients
             avg_grads = accumulated_grads / total_steps
             ig = (act_in[:, kwargs["prefix_length"]:] - baseline[:, kwargs["prefix_length"]:]) * avg_grads
             ax_acts = torch.abs(ig).sum(dim=-1)
             
-            # Get prediction using final interpolation point
-            final_outputs = self.model.model.forward(**{"input_ids": inputs}, output_hidden_states=False)
-            final_preds = self.ax(final_outputs.last_hidden_state[:, -1], row["concept_id"])
+            with torch.no_grad():
+                # Get prediction using final interpolation point
+                final_outputs = self.model.model.forward(**{"input_ids": inputs}, output_hidden_states=False)
+                final_preds = self.ax(final_outputs.last_hidden_state[:, -1], row["concept_id"])
+
             pred_label = (final_preds[0, 1] >= 0.5).int().item()
             
             actual_label = 1 if row["category"] == "positive" else 0
