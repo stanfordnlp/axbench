@@ -1,0 +1,22 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  output_length: 128
+  num_of_examples: 144
+  concept_path: "axbench/data/gemma-2-2b_20-gemmascope-res-16k.json"
+  max_concepts: 16000
+  master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  lm_use_cache: false
+  seed: 42
+train:
+  model_name: "google/gemma-2-9b-it"
+  layer: 20
+  component: "res"
+  seed: 42
+  use_bf16: true
+  models:
+    DiffMean:
+      batch_size: 6
+      n_epochs: 1
+      binarize_dataset: true
+      low_rank_dimension: 1

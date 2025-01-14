@@ -86,12 +86,15 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model):
+def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model, max_num_of_examples=None):
     suffix_length = get_suffix_length(tokenizer)
     genre = metadata["concept_genres_map"][concept][0]
     # assign input and output containing concept with 1, otherwise 0
     positive_df = original_df[(original_df["output_concept"] == concept) & (original_df["category"] == "positive")]
     negative_df = negative_df[(negative_df["concept_genre"] == genre)]
+    if max_num_of_examples:
+        positive_df = positive_df.head(max_num_of_examples // 2)
+        negative_df = negative_df.head(max_num_of_examples // 2)
     if binarize:
         if is_chat_model:
             def apply_chat_template(row):
@@ -308,7 +311,8 @@ def main():
                 prepared_df, negative_df, concept, metadata[concept_id], tokenizer, 
                 binarize=args.models[model_name].binarize_dataset, 
                 train_on_negative=args.models[model_name].train_on_negative,
-                is_chat_model=is_chat_model
+                is_chat_model=is_chat_model,
+                max_num_of_examples=args.max_num_of_examples
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
