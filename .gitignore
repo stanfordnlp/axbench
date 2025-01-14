@@ -7,6 +7,8 @@ axbench/demo/inference
 axbench/demo/generate
 axbench/demo/evaluate
 axbench/demo/lm_cache
+axbench/scripts/train_fsdp.py
+axbench/sweep/wuzhengx/9b/l20/sft.yaml
 *.out
 axbench/concept16k/prod_2b_l20_v1/
 axbench/concept16k/prod_9b_l20_v1/

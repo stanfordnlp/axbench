@@ -415,7 +415,9 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     if args.use_bf16:
         logger.warning(f"Using bfloat16 for model {args.model_name}")
     model_instance = AutoModelForCausalLM.from_pretrained(
-        args.model_name, torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
+        args.model_name, 
+        torch_dtype=torch.bfloat16 if args.use_bf16 else None, 
+        device_map="auto"
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance = model_instance.eval()

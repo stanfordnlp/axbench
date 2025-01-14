@@ -21,6 +21,7 @@ class EvalArgs:
     run_name: Optional[bool] = None
     winrate_split_ratio: Optional[float] = None
     master_data_dir: Optional[str] = None
+    prompt_steering_data_dir: Optional[str] = None
 
     def __init__(
         self,

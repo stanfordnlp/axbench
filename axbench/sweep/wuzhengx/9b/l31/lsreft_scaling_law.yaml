@@ -3,7 +3,7 @@ generate:
   output_length: 128
   num_of_examples: 144
   concept_path: "axbench/data/gemma-2-9b_31-gemmascope-res-16k.json"
-  max_concepts: 500
+  max_concepts: 10
   master_data_dir: "axbench/data"
   dataset_category: "instruction"
   lm_use_cache: false
@@ -14,11 +14,11 @@ train:
   component: "res"
   seed: 42
   use_bf16: true
+  max_num_of_examples: 144 # [6, 12, 24, 48, 72, 96, 120, 144]
   models:
     LsReFT:
       batch_size: 6
       gradient_accumulation_steps: 1
-      n_epochs: 3
       lr: 0.005
       weight_decay: 0.00
       topk: 8

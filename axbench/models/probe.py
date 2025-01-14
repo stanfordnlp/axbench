@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from .interventions import (
     AdditionIntervention,
     SubspaceIntervention,
+    ProbeIntervention,
     SparseProbeIntervention
 )
 from ..utils.model_utils import (
@@ -89,10 +90,9 @@ def make_data_module(
     return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
 
 
-class SparseLinearProbe(Model):
-    """SparseLinearProbe is a special case of LsReFT with no steering"""
+class LinearProbe(Model):
     def __str__(self):
-        return 'SparseLinearProbe'
+        return 'LinearProbe'
 
     def make_model(self, **kwargs):
         mode = kwargs.get("mode", "latent")
@@ -109,7 +109,7 @@ class SparseLinearProbe(Model):
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
         else:
-            ax = SparseProbeIntervention(
+            ax = ProbeIntervention(
                 embed_dim=self.model.config.hidden_size, 
                 low_rank_dimension=kwargs.get("low_rank_dimension", 1),
             )
@@ -168,24 +168,21 @@ class SparseLinearProbe(Model):
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, subspaces=subspaces, use_cache=False)
                 
-                max_mean_latent, non_topk_latent, latent = \
-                    self.ax_model.full_intervention_outputs[0].latent
-                preds = torch.sigmoid(max_mean_latent)
-
-                # loss
-                loss = criterion(preds.float(), inputs["labels"].float())
-                latent_l1_loss = calculate_l1_losses(
-                    latent, non_topk_latent,
-                    mask=inputs["intervention_masks"],
+                latent = self.ax_model.full_intervention_outputs[0].latent[0] # bs, n_tokens
+                preds = torch.sigmoid(latent) # bs, n_tokens
+                expanded_labels = inputs["labels"].unsqueeze(-1).expand_as(preds) # bs, n_tokens
+                # Compute loss only on valid tokens
+                loss = criterion(
+                    preds[inputs["intervention_masks"].bool()].float(), 
+                    expanded_labels[inputs["intervention_masks"].bool()].float()
                 )
                 l1_loss = sum(p.abs().sum() for p in self.ax.parameters())
-                coeff = curr_step/num_training_steps
-                loss += self.training_args.coeff_l1_loss*l1_loss + \
-                    coeff*self.training_args.coeff_latent_l1_loss*latent_l1_loss
+                loss += self.training_args.coeff_l1_loss*l1_loss
                 
                 # accuracy
                 pred_labels = (preds > 0.5).long()
-                acc = (pred_labels == inputs["labels"]).float().mean()
+                acc = (pred_labels[inputs["intervention_masks"].bool()] == 
+                       expanded_labels[inputs["intervention_masks"].bool()]).float().mean()
 
                 # grads
                 loss.backward()
@@ -199,8 +196,8 @@ class SparseLinearProbe(Model):
                 optimizer.zero_grad()
                 progress_bar.update(1)
                 progress_bar.set_description(
-                    "lr %.6f || loss %.6f || latent l1 loss %.6f || acc %.3f" % (
-                        curr_lr, loss, latent_l1_loss, acc))
+                    "lr %.6f || loss %.6f || acc %.3f" % (
+                        curr_lr, loss, acc))
         progress_bar.close()
 
     @torch.no_grad()

@@ -41,7 +41,8 @@ METADATA_FILE = "metadata.jsonl"
 
 def data_generator(data_dir):
     """
-    Generator function to read data files and yield data subsets by concept_id.
+    Generator function to read multiple data files and yield data subsets by concept_id.
+    Processes files in order: train_data.parquet, train_data_0.parquet, train_data_1.parquet, etc.
 
     Args:
         data_dir (str): Path to the data directory.
@@ -49,13 +50,28 @@ def data_generator(data_dir):
     Yields:
         (concept_id, df_subset): A tuple containing the concept_id and subset DataFrame.
     """
-    df = pd.read_parquet(os.path.join(data_dir, 'train_data.parquet'))
-    concept_ids = df['concept_id'].unique()
-    concept_ids.sort()
-    for concept_id in concept_ids:
-        if concept_id >= 0:
-            df_subset = df[df['concept_id'] == concept_id]
-            yield (concept_id, df_subset)
+    # Gather all file paths in the directory
+    file_paths = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.startswith('train_data') and f.endswith('.parquet')]
+
+    # Sort files: 'train_data.parquet' comes first, then 'train_data_X.parquet' sorted by X
+    def extract_index(file_name):
+        if file_name == 'train_data.parquet':
+            return -1  # Ensure 'train_data.parquet' comes first
+        else:
+            # Extract the number X from 'train_data_X.parquet'
+            return int(file_name.split('_')[-1].split('.')[0])
+
+    file_paths.sort(key=lambda x: extract_index(os.path.basename(x)))
+
+    for file_path in file_paths:
+        df = pd.read_parquet(file_path)
+        concept_ids = df['concept_id'].unique()
+        concept_ids.sort()
+        for concept_id in concept_ids:
+            if concept_id >= 0:
+                # print(f"Processing concept_id {concept_id}")
+                df_subset = df[df['concept_id'] == concept_id]
+                yield (concept_id, df_subset)
 
 
 def load_metadata(metadata_path):
@@ -70,12 +86,15 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model):
+def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model, max_num_of_examples=None):
     suffix_length = get_suffix_length(tokenizer)
     genre = metadata["concept_genres_map"][concept][0]
     # assign input and output containing concept with 1, otherwise 0
     positive_df = original_df[(original_df["output_concept"] == concept) & (original_df["category"] == "positive")]
     negative_df = negative_df[(negative_df["concept_genre"] == genre)]
+    if max_num_of_examples:
+        positive_df = positive_df.head(max_num_of_examples // 2)
+        negative_df = negative_df.head(max_num_of_examples // 2)
     if binarize:
         if is_chat_model:
             def apply_chat_template(row):
@@ -210,6 +229,7 @@ def main():
     all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
     negative_df = all_df[(all_df["output_concept"] == EMPTY_CONCEPT) & (all_df["category"] == "negative")]
     df_list = list(df_generator)
+    logger.warning(f"Total number of concept df loaded: {len(df_list)}")
     if args.max_concepts:
         logger.warning(f"All ranks only processing {args.max_concepts} concepts")
         df_list = df_list[:args.max_concepts]
@@ -229,7 +249,6 @@ def main():
     # Partition df_list among ranks
     df_list_per_rank = partition_list(df_list, world_size)
     my_df_list = df_list_per_rank[rank]
-
 
     # Load model instance onto device
     if args.use_bf16:
@@ -251,6 +270,7 @@ def main():
 
     # Run training for assigned concept_ids
     # logger.warning(metadata)
+
     for concept_id, concept_df in my_df_list:
         concept_id = int(concept_id)
         if last_concept_id is not None and concept_id <= last_concept_id:
@@ -263,6 +283,7 @@ def main():
             benchmark_model = getattr(axbench, model_name)(
                 model_instance, tokenizer, layer=args.layer,
                 training_args=args.models[model_name],
+                lm_model_name=args.model_name,
                 device=device, seed=args.seed, 
             )
             low_rank_dimension = args.models[model_name].low_rank_dimension \
@@ -275,6 +296,7 @@ def main():
                 concept_id=concept_id,
                 sae_params=sae_params,
                 metadata_path=metadata_path,
+                dump_dir=dump_dir,
             )
             if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
@@ -289,7 +311,8 @@ def main():
                 prepared_df, negative_df, concept, metadata[concept_id], tokenizer, 
                 binarize=args.models[model_name].binarize_dataset, 
                 train_on_negative=args.models[model_name].train_on_negative,
-                is_chat_model=is_chat_model
+                is_chat_model=is_chat_model,
+                max_num_of_examples=args.max_num_of_examples
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")

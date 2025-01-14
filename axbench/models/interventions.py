@@ -326,6 +326,37 @@ class JumpReLUSAECollectIntervention(
         return acts
     
 
+class ProbeIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        
+        # get latent
+        latent = torch.bmm(base, v).squeeze(dim=-1) # bs, s
+
+        return InterventionOutput(
+            output=base,
+            latent=[latent]
+        )
+    
+
 class SparseProbeIntervention(
     # We still inherit from these classes to keep it as close as possible to the LsReFT impl.
     SourcelessIntervention,

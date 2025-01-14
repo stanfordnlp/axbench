@@ -38,7 +38,7 @@ inference:
   # latent related params
   output_length: 128
   latent_num_of_examples: 36
-  master_data_dir: "axbench/data"
+  latent_batch_size: 16
   # steering related params
   steering_intervention_type: "addition" # clamping
   steering_model_name: "google/gemma-2-2b-it"

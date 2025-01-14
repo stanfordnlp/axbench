@@ -15,11 +15,6 @@ train:
   seed: 42
   use_bf16: true
   models:
-    DiffMean:
-      batch_size: 6
-      n_epochs: 1
-      binarize_dataset: true
-      low_rank_dimension: 1
     LsReFT:
       batch_size: 6
       gradient_accumulation_steps: 1
