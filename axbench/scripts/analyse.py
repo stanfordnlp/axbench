@@ -18,6 +18,10 @@ import numpy as np
 from scipy.stats import bootstrap, ttest_rel
 from collections import defaultdict
 
+from evaluate import data_generator
+from axbench import LatentStatsEvaluator
+from tqdm import tqdm
+
 # set the theme
 rcParams['font.family'] = "P052"
 theme_set(theme_gray(base_family="P052") + theme(axis_text_x=element_text(angle=45, hjust=0.5)))
@@ -29,8 +33,8 @@ SUBFOLDERS = [
     "prod_2b_l20_concept500",
     "prod_9b_l20_concept500",
     "prod_9b_l31_concept500",
-    "prod_2b_l20_concept16k",
-    "prod_9b_l20_concept16k",
+    # "prod_2b_l20_concept16k",
+    # "prod_9b_l20_concept16k",
 ]
 PLOT_FOLDER = "paper/"
 
@@ -70,10 +74,14 @@ METRIC_MAP = {
     "max_relevance_concept_rating": "Concept Score",
     "max_relevance_instruction_rating": "Instruct Score",
     "max_factor": "Steering Factor",
+    "overall_accuracy": "Overall Accuracy",
+    "f1": "F1",
+    "precision": "Precision",
+    "recall": "Recall",
 }
 FLOAT_METRICS = ['macro_avg_accuracy', 'max_act', 'optimal_threshold', 'roc_auc',
                  'max_lm_judge_rating', 'max_fluency_rating', 'max_relevance_concept_rating',
-                 'max_relevance_instruction_rating', 'max_factor']
+                 'max_relevance_instruction_rating', 'max_factor', 'overall_accuracy', 'f1', 'precision', 'recall']
 INT_METRICS = ['concept_id']
 
 
@@ -93,6 +101,9 @@ def mean_and_ci(group, n_bootstraps=1000, ci=0.95):
     values = group["values"].values
     # Compute mean
     mean_value = np.mean(values)
+    if np.isnan(mean_value):
+        print(values)
+        print("bruh its nan")
     # Compute bootstrap CI
     result = bootstrap(
         data=(values,),
@@ -102,8 +113,7 @@ def mean_and_ci(group, n_bootstraps=1000, ci=0.95):
         method="percentile"
     )
     lower_ci, upper_ci = result.confidence_interval
-    plus_minus = (upper_ci - lower_ci) / 2
-    return pd.Series({"mean": mean_value, "lower_ci": lower_ci, "upper_ci": upper_ci, "plus_minus": plus_minus})
+    return pd.Series({"mean": mean_value, "lower_ci": lower_ci, "upper_ci": upper_ci})
 
 
 def format_ci(mean, lower_ci, upper_ci, only_mean=False, percent=False):
@@ -149,6 +159,7 @@ def main(reload=False, pairs=False):
             dfs = []
             for method in METHODS:
                 method_folder = f"{RESULTS_FOLDER}/{folder}_{method}/evaluate"
+                inference_folder = f"{RESULTS_FOLDER}/{folder}_{method}/inference"
                 if not os.path.exists(method_folder):
                     continue
                     
@@ -161,6 +172,21 @@ def main(reload=False, pairs=False):
                         for line in f:
                             json_line = json.loads(line)
                             megadict[json_line['concept_id']]['latent'] = json_line['results']
+
+                # load latent parquet
+                if not os.path.exists(f"{inference_folder}/latent_data.parquet"):
+                    print(f"Skipping {method} because no latent.parquet found")
+                else:
+                    df_generator = data_generator(inference_folder, mode="latent")
+                    for concept_id, df in tqdm(df_generator, total=500):
+                        eval_results = {}
+                        for method in METHOD_MAP:
+                            if f"{method}_max_act" not in df.columns:
+                                continue
+                            evaluator = LatentStatsEvaluator(method)
+                            eval_result = evaluator.compute_metrics(df)
+                            eval_results[method] = eval_result
+                        megadict[concept_id]['latent']['LatentStatsEvaluator'] = eval_results
                 
                 # load steering eval
                 steering_eval = f"{method_folder}/steering.jsonl"
@@ -179,7 +205,7 @@ def main(reload=False, pairs=False):
             if len(dfs) == 0:
                 continue
             df = pd.concat(dfs)
-            print(list(df.columns))
+            # print(list(df.columns))
             # print("Duplicates:", len(df.duplicated(subset=["concept_id", "model", "layer"])))
             df = df.groupby("concept_id").first().reset_index()
             df["model"] = MODEL_MAP[model]
@@ -230,6 +256,19 @@ def main(reload=False, pairs=False):
         df = pivot_df[pivot_df["split"] == split]
         if len(df) == 0:
             continue
+        
+        # plot precision vs recall
+        df_subset = df.copy()
+        df_subset = df_subset[["Method", "model", "layer", "identifier", "Precision", "Recall"]]
+        df_subset = df_subset.dropna(subset=["Precision", "Recall"])
+        df_subset = df_subset.groupby(["identifier", "Method", "model", "layer"]).mean().reset_index()
+        plot = (
+            ggplot(df_subset, aes(x="Precision", y="Recall", color="Method"))
+            + facet_wrap('model + ": " + layer')
+            + geom_point()
+            + labs(x="Precision", y="Recall")
+        )
+        plot.save(f"{PLOT_FOLDER}/{split}_precision_vs_recall.pdf", width=4, height=3)
 
         # plot max_factor
         df_subset = df.copy()
@@ -261,7 +300,7 @@ def main(reload=False, pairs=False):
         # make latex table
         detection_order = []
         steering_order = []
-        for metric in ["ROC AUC", "Overall Score", "Winrate"]:
+        for metric in ["ROC AUC", "Overall Score", "Winrate", "Overall Accuracy", "F1", "Precision", "Recall"]:
             with open(f"{PLOT_FOLDER}/{split}_{metric}.txt", "w") as f:
                 for only_mean in [True, False]:
                     df_subset: pd.DataFrame = df.copy().dropna(subset=[metric])
@@ -270,24 +309,30 @@ def main(reload=False, pairs=False):
                     f.write("NaN count:\n")
                     for method in df_subset["Method"].unique():
                         f.write(f"{method}: {sum(df_subset[df_subset['Method'] == method]['values'].apply(lambda x: np.isnan(x)))}\n")
+                    avg_df = df_subset.copy()
+                    avg_df["identifier"] = "Average"
+                    df_subset = pd.concat([df_subset, avg_df])
                     df_subset = df_subset.groupby(["identifier", "Method"]).apply(mean_and_ci).reset_index()
+                    
+                    # Append the averages to the original dataframe
                     df_subset["values"] = df_subset.apply(lambda row: format_ci(row['mean'], row['lower_ci'], row['upper_ci'], only_mean, percent=(metric == "Winrate")), axis=1)
                     df_subset = df_subset.pivot(index="Method", columns="identifier", values="values").reset_index()
-                    # df_subset["Average"] = df_subset.apply(lambda row: f"{np.mean([float(row[col].split("$")[0]) if isinstance(row[col], str) else float(row[col]) for col in df["identifier"].unique()]):.3f}", axis=1)
-                    # df_subset = df_subset.sort_values(by="Average", ascending=False)
-
-                    df_subset_avg = df.copy()
-                    df_subset_avg = df_subset_avg.rename(columns={metric: "values"})
-                    df_subset_avg = df_subset_avg[["Method", "identifier", "values"]].groupby(["Method"]).apply(mean_and_ci).reset_index()
-                    df_subset_avg["values"] = df_subset_avg.apply(lambda row: format_ci(row['mean'], row['lower_ci'], row['upper_ci'], only_mean, percent=(metric == "Winrate")), axis=1)
-                    df_subset["Average"] = df_subset.apply(lambda row: df_subset_avg[df_subset_avg["Method"] == row["Method"]]["values"].values[0], axis=1)
                     df_subset = df_subset.sort_values(by="Average", ascending=False)
+
+                    # df_subset_avg = df.copy()
+                    # df_subset_avg = df_subset_avg.rename(columns={metric: "values"})
+                    # df_subset_avg = df_subset_avg[["Method", "identifier", "values"]].groupby(["Method"]).apply(mean_and_ci).reset_index()
+                    # df_subset_avg["values"] = df_subset_avg.apply(lambda row: format_ci(row['mean'], row['lower_ci'], row['upper_ci'], only_mean, percent=(metric == "Winrate")), axis=1)
+                    # df_subset["Average"] = df_subset.apply(lambda row: df_subset_avg[df_subset_avg["Method"] == row["Method"]]["values"].values[0], axis=1)
+                    # df_subset = df_subset.sort_values(by="Average", ascending=False)
                     if metric == "ROC AUC":
                         detection_order = df_subset["Method"].tolist()
                     elif metric == "Overall Score":
                         steering_order = df_subset["Method"].tolist()
-                    else:
+                    elif metric in ["Winrate"]:
                         df_subset["Method"] = pd.Categorical(df_subset["Method"], categories=steering_order, ordered=True)
+                    else:
+                        df_subset["Method"] = pd.Categorical(df_subset["Method"], categories=detection_order, ordered=True)
                     flattened = df_subset.to_latex(index=False)
                     f.write(flattened)
                     f.write("\n\n")

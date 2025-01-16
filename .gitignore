@@ -187,3 +187,4 @@ cython_debug/
 #.idea/
 *.pkl
 *.pdf
+axbench/scripts/paper/
