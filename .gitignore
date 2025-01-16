@@ -25,6 +25,10 @@ axbench/data/seed_sentences/
 axbench/data/seed_instructions/
 axbench/models/dbm.py
 
+axbench/examples/*.pt
+axbench/examples/*.pth
+axbench/examples/*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
