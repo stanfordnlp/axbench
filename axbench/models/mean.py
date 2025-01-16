@@ -41,7 +41,9 @@ class LogisticRegressionModel(torch.nn.Module):
         super(LogisticRegressionModel, self).__init__()
         # Linear layer: input_dim -> 1 output (since binary classification)
         self.proj = torch.nn.Linear(input_dim, low_rank_dimension)
-    
+        with torch.no_grad():
+            self.proj.bias.fill_(0)
+
     def forward(self, x):
         return self.proj(x)
 
