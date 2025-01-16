@@ -8,14 +8,16 @@
 ## What is AxBench?
 It is a framework for evaluating existing interpretability methods at scale using synthetic data. We evaluate along two utility **ax**es: **concept detection** and **model steering**.
 
-🔥 **Highlights** of AxBench:
+### Highlights of AxBench:
 ✅ 10+ existing interpretability methods are evaluated at scale, against finetuning or prompting methods.    
 ✅ 3 datasets for supervised dictionary learning (SDL), up to **16K concepts**.    
 ✅ 2 SoTA SDL models as drop-in replacements for SAEs.   
 ✅ 1 unified pipeline benchmarking interpretability methods.   
 ✅ 1 LLM-in-the-loop supervised dictionary learning pipeline that **costs less than a cent per concept**.   
 
+
 ### Access our SoTA dictionaries for `Gemma 2B` and `Gemma 9B`
+
 Our SDL models are hosted on HuggingFace. Currently, we train two dictionaries for layer 20 residual stream of `Gemma 2B` and `Gemma 9B`. These dictionaries are trained with 16K concepts. These concepts are sampled from SAEs concept list provided by [neuronpedia.org](https://neuronpedia.org).
 
 Huggingface page: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
