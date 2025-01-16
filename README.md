@@ -6,9 +6,9 @@
 </div>     
 
 ## What is AxBench?
-In this work, we introduce AxBench, a framework for evaluating existing interpretability methods at scale using synthetic data. We evaluate along two utility **ax**es: **concept detection** and **model steering**. Surprisingly, we find that all existing steering methods fail to outperform a simple prompting-only baseline and generally lag behind gradient-based finetuning methods, disqualifying them from practical usage in *the status quo*.
+It is a framework for evaluating existing interpretability methods at scale using synthetic data. We evaluate along two utility **ax**es: **concept detection** and **model steering**.
 
-Here are some highlights of our release:
+**Highlights** of AxBench:
 - 10+ existing interpretability methods are evaluated at scale, against finetuning or prompting methods.
 - 3 datasets for supervised dictionary learning (SDL), up to **16K concepts**.
 - 2 SoTA SDL models as drop-in replacements for SAEs.
