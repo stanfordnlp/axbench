@@ -22,7 +22,7 @@ Our SDL models are hosted on HuggingFace. Currently, we train two dictionaries f
 
 Huggingface page: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
 
-Tutorial: [How to use our dictionaries](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
+Tutorial: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github.com/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**How to use our dictionaries**]
 
 ## Other experiments
 Building on top of our results, we did some early exploration on our trained dictionaries. Some of the results can be found under `axbench/examples`. Here is a table telling you more about the experiments:
