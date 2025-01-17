@@ -1,6 +1,6 @@
 
 <div align="center">
-  <a align="center"><img src="https://github.com/user-attachments/assets/cd86ded9-d3cb-46e2-8e62-280bbadbdbdc" width="300" height="300"></a>
+  <a align="center"><img src="https://github.com/user-attachments/assets/cd86ded9-d3cb-46e2-8e62-280bbadbdbdc" width="100" height="100"></a>
   <h1 align="center"> <p>AxBench<sub> by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></p></h1>
   <a href=""><strong>Read our paper »</strong></a></a>
 </div>     
@@ -20,9 +20,9 @@ It is a framework for evaluating existing interpretability methods at scale usin
 
 Our SDL models are hosted on HuggingFace. Currently, we train two dictionaries for layer 20 residual stream of `Gemma 2B` and `Gemma 9B`. These dictionaries are trained with 16K concepts. These concepts are sampled from SAEs concept list provided by [neuronpedia.org](https://neuronpedia.org).
 
-Huggingface page: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
+Huggingface page: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
 
-Tutorial: [How to use our dictionaries](some colab link)
+Tutorial: [How to use our dictionaries](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
 
 ## Other experiments
 Building on top of our results, we did some early exploration on our trained dictionaries. Some of the results can be found under `axbench/examples`. Here is a table telling you more about the experiments:
