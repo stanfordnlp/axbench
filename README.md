@@ -5,9 +5,7 @@
   <a href=""><strong>Read our paper »</strong></a></a>
 </div>     
 
-## What is AxBench?
-
-### 🎯 **Key Highlights of AxBench**
+## 🎯 **Key Highlights of AxBench**
 
 1️⃣ **Comprehensive Evaluation**  
    🔍 Over **10+ existing interpretability methods** evaluated at scale using finetuning and prompting techniques.
