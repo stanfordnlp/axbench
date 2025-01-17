@@ -25,6 +25,8 @@ axbench/data/seed_sentences/
 axbench/data/seed_instructions/
 axbench/models/dbm.py
 
+axbench/examples/upload.ipynb
+
 axbench/examples/*.pt
 axbench/examples/*.pth
 axbench/examples/*.csv
