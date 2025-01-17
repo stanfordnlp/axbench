@@ -12,6 +12,7 @@ from .evaluators.ppl import *
 from .evaluators.lm_judge import *
 from .evaluators.hard_negative import *
 from .evaluators.winrate import *
+from .evaluators.latent_stats import *
 
 from .models.sft import *
 from .models.lora import *
