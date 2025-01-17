@@ -6,23 +6,29 @@
 </div>     
 
 ## What is AxBench?
-It is a framework for evaluating existing interpretability methods at scale using synthetic data. We evaluate along two utility **ax**es: **concept detection** and **model steering**.
 
-### Highlights of AxBench:
-✅ 10+ existing interpretability methods are evaluated at scale, against finetuning or prompting methods.    
-✅ 3 datasets for supervised dictionary learning (SDL), up to **16K concepts**.    
-✅ 2 SoTA SDL models as drop-in replacements for SAEs.   
-✅ 1 unified pipeline benchmarking interpretability methods.   
-✅ 1 LLM-in-the-loop supervised dictionary learning pipeline that **costs less than a cent per concept**.   
+### 🎯 **Key Highlights of AxBench**
 
+1️⃣ **Comprehensive Evaluation**  
+   🔍 Over **10+ existing interpretability methods** evaluated at scale using finetuning and prompting techniques.
 
-### Access our SoTA dictionaries for `Gemma 2B` and `Gemma 9B`
+2️⃣ **Extensive Datasets**  
+   📚 Includes **3 diverse datasets** tailored for **Supervised Dictionary Learning (SDL)**, featuring up to **16,000 concepts** for robust evaluation.
 
-Our SDL models are hosted on HuggingFace. Currently, we train two dictionaries for layer 20 residual stream of `Gemma 2B` and `Gemma 9B`. These dictionaries are trained with 16K concepts. These concepts are sampled from SAEs concept list provided by [neuronpedia.org](https://neuronpedia.org).
+3️⃣ **State-of-the-Art Models**  
+   🚀 Integrates **2 cutting-edge SDL models** as drop-in replacements for traditional Sparse Autoencoders (SAEs).
 
-Huggingface page: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
+4️⃣ **Unified Benchmarking Pipeline**  
+   🛠️ Provides **1 streamlined pipeline** to benchmark interpretability methods, ensuring ease of use and reproducibility.
 
-Tutorial: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github.com/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**How to use our dictionaries**]
+5️⃣ **Cost-Effective LLM Integration**  
+   💡 Implements an **LLM-in-the-loop SDL pipeline** that processes concepts at a cost of **less than $0.01 per concept**.  
+
+## Access our SoTA SDL models for `Gemma 2B` and `Gemma 9B`
+
+**Huggingface page**: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
+
+**Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github.com/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**How to use our dictionaries**]
 
 ## Other experiments
 Building on top of our results, we did some early exploration on our trained dictionaries. Some of the results can be found under `axbench/examples`. Here is a table telling you more about the experiments:
