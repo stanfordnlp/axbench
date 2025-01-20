@@ -30,3 +30,6 @@ from .models.language_models import *
 from .scripts.args.eval_args import *
 from .scripts.args.training_args import *
 from .scripts.args.dataset_args import *
+
+from .scripts.evaluate import *
+from .scripts.inference import *

@@ -36,7 +36,7 @@ inference:
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
-  latent_num_of_examples: 20
+  latent_num_of_examples: 36
   latent_batch_size: 16
   # steering related params
   steering_intervention_type: "addition" # clamping

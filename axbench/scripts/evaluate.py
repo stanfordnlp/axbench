@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 import httpx, asyncio
 import datetime
 import yaml
-from inference import LATENT_EXCLUDE_MODELS, STEERING_EXCLUDE_MODELS
+from axbench.scripts.inference import LATENT_EXCLUDE_MODELS, STEERING_EXCLUDE_MODELS
 import axbench
 from axbench.utils.plot_utils import (
     plot_aggregated_roc, 
@@ -31,7 +31,7 @@ from axbench.utils.plot_utils import (
 from axbench.templates.html_templates import (
     generate_html_with_highlight_text,
 )
-from args.eval_args import EvalArgs
+from axbench.scripts.args.eval_args import EvalArgs
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import multiprocessing
