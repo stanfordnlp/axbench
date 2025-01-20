@@ -119,7 +119,7 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
 ```
 
 ##### Imbalaced Concept Detection Eval
-In real-world usecases, only less than 1% of examples should activate the learned subspace ([Neuronpedia](https://www.neuronpedia.org/)'s page has the activation density and it is usually smaller than 1%). To evaluate methods under this condition, we upsample more negatives (negative to positive ratio is now set to 100:1) and re-evaluate all methods. To generate latens for these negatives, we design a new script for quicker inference since we can generate activations for all latent in a batch for a shared pool of negatives:
+In real-world use cases, fewer than 1% of examples should activate the learned subspace ([Neuronpedia](https://www.neuronpedia.org/)'s page includes the activation density, which is usually smaller than 1%). To evaluate methods under this condition, we upsample more negatives (the negative-to-positive ratio is now set to 100:1) and re-evaluate all methods. To generate latents for these negatives, we designed a new script for quicker inference since we can generate activations for all latents in a batch from a shared pool of negatives:
 ```bash
 torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
