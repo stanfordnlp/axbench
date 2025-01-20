@@ -167,6 +167,73 @@ class Model(BaseModel):
         }
 
     @torch.no_grad()
+    def predict_latents(self, examples, **kwargs):
+        self.ax.eval()
+        batch_size = kwargs.get('batch_size', 32)
+        
+        all_acts = []
+        all_max_act = []
+        all_max_act_idx = []
+        all_max_token = []
+        all_tokens = []
+        # Process in batches
+        for i in range(0, len(examples), batch_size):
+            batch = examples.iloc[i:i + batch_size]
+            
+            # Batch encode all inputs and send to model's device
+            inputs = self.tokenizer(
+                batch["input"].tolist(),
+                return_tensors="pt",
+                padding=True,
+                add_special_tokens=True
+            ).to(self.device)  # Use model's device
+            
+            act_in = gather_residual_activations(
+                self.model, self.layer, inputs)
+            
+            ax_acts_batch = self.ax(act_in[:, kwargs["prefix_length"]:]).float().cpu().numpy()  # no bos token
+            # Process each sequence in the batch
+            seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
+            for seq_idx, row in enumerate(batch.itertuples()):
+                # select acts with attention mask
+                acts_batch = ax_acts_batch[
+                    seq_idx, :seq_lens[seq_idx]]
+                
+                concept_acts = []
+                concept_max_act = []
+                concept_max_act_idx = []
+                concept_max_token = []
+                concept_tokens = []
+                for row_idx in range(ax_acts_batch.shape[-1]):
+                    # row_idx here is the concept id
+                    acts = acts_batch[:, row_idx].flatten().tolist()
+                    acts = [round(x, 3) for x in acts]
+                    max_act = max(acts)
+                    max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
+                    max_act_idx = max_act_indices[0]
+                    # Get tokens for this specific sequence
+                    tokens = self.tokenizer.tokenize(row.input)[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
+                    max_token = tokens[max_act_idx]
+                    concept_acts.append(acts)
+                    concept_max_act.append(max_act)
+                    concept_max_act_idx.append(max_act_idx)
+                    concept_max_token.append(max_token)
+                    concept_tokens.append(tokens)
+                all_acts.append(concept_acts)
+                all_max_act.append(concept_max_act)
+                all_max_act_idx.append(concept_max_act_idx)
+                all_max_token.append(concept_max_token)
+                all_tokens.append(concept_tokens)
+
+        return {
+            # "acts": all_acts,
+            "max_act": all_max_act,
+            # "max_act_idx": all_max_act_idx,
+            # "max_token": all_max_token,
+            # "tokens": all_tokens
+        }
+
+    @torch.no_grad()
     def predict_steer(self, examples, **kwargs):
         self.ax.eval()
         # set tokenizer padding to left

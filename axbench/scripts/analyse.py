@@ -29,16 +29,21 @@ theme_set(theme_gray(base_family="P052") + theme(axis_text_x=element_text(angle=
 
 RESULTS_FOLDER = "/nlp/scr/wuzhengx/pyreax/axbench/results"
 SUBFOLDERS = [
-    "prod_2b_l10_concept500",
-    "prod_2b_l20_concept500",
-    "prod_9b_l20_concept500",
-    "prod_9b_l31_concept500",
-    # "prod_2b_l20_concept16k",
-    # "prod_9b_l20_concept16k",
+    # "prod_2b_l10_concept500",
+    # "prod_2b_l20_concept500",
+    # "prod_9b_l20_concept500",
+    # "prod_9b_l31_concept500",
+    "prod_2b_l20_concept16k",
+    "prod_9b_l20_concept16k",
 ]
 PLOT_FOLDER = "paper/"
 
-METHODS = ["ig", "lsreft", "steering_vec", "sft", "probe", "no_grad", "crossfit", "lora", "loreft"]
+# METHODS = ["ig", "lsreft", "steering_vec", "sft", "probe", "no_grad", "crossfit", "lora", "loreft"]
+METHODS = ["lsreft_gen"]
+METHOD_RENAME = {
+    "lsreft_gen": "LsReFT",
+    "lsreft_platonic": "LsReFT",
+}
 METHOD_MAP = {
     "LsReFT": "ReFT-r1",
     "SteeringVector": "SSV",
@@ -180,10 +185,10 @@ def main(reload=False, pairs=False):
                     df_generator = data_generator(inference_folder, mode="latent")
                     for concept_id, df in tqdm(df_generator, total=500):
                         eval_results = {}
-                        for method in METHOD_MAP:
-                            if f"{method}_max_act" not in df.columns:
+                        for method_inner in METHOD_MAP:
+                            if f"{method_inner}_max_act" not in df.columns:
                                 continue
-                            evaluator = LatentStatsEvaluator(method)
+                            evaluator = LatentStatsEvaluator(method_inner)
                             eval_result = evaluator.compute_metrics(df)
                             eval_results[method] = eval_result
                         megadict[concept_id]['latent']['LatentStatsEvaluator'] = eval_results
@@ -284,7 +289,11 @@ def main(reload=False, pairs=False):
             # + stat_count(geom="point")
             + labs(x="Setting", y="Steering Factor", fill="")
             + scale_y_log10()
-            + theme(legend_position="top", axis_text_x=element_blank(), axis_ticks_x=element_blank())
+            + theme(
+                legend_position="top", 
+                axis_text_x=element_blank(),
+                axis_ticks=element_blank()
+            )
         )
         plot.save(f"{PLOT_FOLDER}/{split}_best_factor.pdf", width=6, height=4)
 

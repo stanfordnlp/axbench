@@ -187,15 +187,32 @@ class DatasetFactory(object):
         logger.warning(f"Init finished in {round(time.time() - start, 3)} sec.")
         return concept_genres_map, contrast_concepts_map
 
+    def create_imbalance_eval_df(self, subset_n):
+        # we dont care about concept, there is only one unified imbalanced negative set.
+        self.logger.warning(
+            "Using pre-generated data for imbalanced eval dataset "
+            "(positive examples only occupy less than 1% of the dataset).")
+        negative_n_upsamples = int(subset_n*100) # 100
+        # we sample negative_n_upsamples from other concepts.
+        negative_df = self.pregenerated_inference_df[self.pregenerated_inference_df["category"] == "negative"].copy()
+        negative_df = negative_df.sample(negative_n_upsamples, random_state=self.seed)
+        negative_df["output_concept"] = EMPTY_CONCEPT
+        # overwrite negative df fields to be compatible.
+        concept_df = negative_df
+        return concept_df
+
     def create_eval_df(
         self, concepts, subset_n, concept_genres_map, 
-        train_contrast_concepts_map, eval_contrast_concepts_map, **kwargs):
+        train_contrast_concepts_map, eval_contrast_concepts_map, mode="balance", **kwargs):
         """category: positive, negative, hard negative"""
         
         if self.overwrite_inference_data_dir is not None and os.path.exists(self.overwrite_inference_data_dir):
-            self.logger.warning("Using pre-generated data.")
-            concept_df = self.pregenerated_inference_df[self.pregenerated_inference_df["concept_id"] == kwargs.get("concept_id")].copy()
-            assert len(concept_df) >= subset_n * 2, "Number of examples does not meet the requirement."
+            if mode == "balance":
+                self.logger.warning("Using pre-generated data.")
+                concept_df = self.pregenerated_inference_df[self.pregenerated_inference_df["concept_id"] == kwargs.get("concept_id")].copy()
+                assert len(concept_df) >= subset_n * 2, "Number of examples does not meet the requirement."
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
             return concept_df
                
         # start logging

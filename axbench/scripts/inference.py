@@ -17,8 +17,8 @@ from axbench.utils.dataset import (
 )
 from axbench.utils.constants import * 
 from axbench.utils.model_utils import get_prefix_length, get_suffix_length
-from args.dataset_args import DatasetArgs
-from args.training_args import TrainingArgs
+from axbench.scripts.args.dataset_args import DatasetArgs
+from axbench.scripts.args.training_args import TrainingArgs
 from transformers import set_seed
 
 # all supported methods
@@ -54,19 +54,19 @@ def load_config(config_path):
     return d
 
 
-def load_state(dump_dir, mode, rank):
+def load_state(dump_dir, mode, rank, subfolder="inference"):
     """
     Load the state from a file if it exists.
     """
-    state_path = os.path.join(f"{dump_dir}/inference", f"{mode}_{STATE_FILE}_rank_{rank}")
+    state_path = os.path.join(f"{dump_dir}/{subfolder}", f"{mode}_{STATE_FILE}_rank_{rank}")
     if os.path.exists(state_path):
         with open(state_path, "rb") as f:
             return pickle.load(f)
     return None
 
 
-def save_state(dump_dir, state, partition, rank):
-    dump_dir = Path(dump_dir) / "inference"
+def save_state(dump_dir, state, partition, rank, subfolder="inference"):
+    dump_dir = Path(dump_dir) / subfolder
     dump_dir.mkdir(parents=True, exist_ok=True)
     # Save state
     state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}_rank_{rank}")
@@ -97,9 +97,9 @@ def load_metadata_flatten(metadata_path):
 
 def save(
     dump_dir, partition,
-    current_df, rank):
+    current_df, rank, subfolder="inference"):
     # This function saves DataFrames per rank per partition (latent or steering)
-    dump_dir = Path(dump_dir) / "inference"
+    dump_dir = Path(dump_dir) / subfolder
     dump_dir.mkdir(parents=True, exist_ok=True)
     # Save DataFrame
     df_path = os.path.join(dump_dir, f"rank_{rank}_{partition}_data.parquet")
@@ -575,6 +575,114 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
                     f.write(json.dumps(top_logits_entry) + "\n")
 
 
+def infer_latent_imbalance(args, rank, world_size, device, logger, training_args, generate_args):
+    data_dir = args.data_dir
+    train_dir = args.train_dir
+    dump_dir = args.dump_dir
+    num_of_examples = args.latent_num_of_examples
+    config = load_config(train_dir)
+    metadata = load_metadata_flatten(data_dir)
+    layer = config["layer"] if config else 0  # default layer for prompt baselines
+
+    # Get list of all concept_ids
+    concept_ids = [metadata[i]["concept_id"] for i in range(len(metadata))]
+
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100,
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, model_max_length=1024)
+    tokenizer.padding_side = "right"
+
+    # Load model instance onto device
+    if args.use_bf16:
+        logger.warning(f"Using bfloat16 for model {args.model_name}")
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.model_name, 
+        torch_dtype=torch.bfloat16 if args.use_bf16 else None, 
+        device_map="auto"
+    )
+    is_chat_model = True if args.model_name in CHAT_MODELS else False
+    model_instance = model_instance.eval()
+
+    prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
+    if is_chat_model:
+        prefix_length = get_prefix_length(tokenizer)
+        logger.warning(f"Chat model prefix length: {prefix_length}")
+
+    # Load dataset factory for evals.
+    dataset_factory = DatasetFactory(
+        None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
+        use_cache=False, master_data_dir=args.master_data_dir,
+        lm_model=args.lm_model, logger=logger, is_inference=True,
+        overwrite_inference_data_dir=training_args.overwrite_inference_data_dir
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
+
+    has_latent_model = False
+    for model_name in args.models:
+        # load model on the fly to save memory
+        if model_name not in LATENT_EXCLUDE_MODELS:
+            has_latent_model = True
+            break
+
+    if not has_latent_model:
+        logger.warning("No latent model to infer. Exiting.")
+        return
+
+    logger.warning(f"We are inferencing imbalanced latent once for all concepts.")
+    all_negative_df = dataset_factory.create_imbalance_eval_df(num_of_examples)
+    all_negative_df = prepare_df(all_negative_df, tokenizer, is_chat_model)
+
+    # save all_negative_df to disk
+    dump_dir = Path(dump_dir) / "inference_imbalance"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    all_negative_df.to_parquet(Path(dump_dir) / "all_negative_df.parquet", engine='pyarrow')
+
+    for model_name in args.models:
+        # load model on the fly to save memory
+        if model_name in LATENT_EXCLUDE_MODELS:
+            continue
+        model_class = getattr(axbench, model_name)
+        logger.warning(f"Loading {model_class} on {device}.")
+        benchmark_model = model_class(
+            model_instance, tokenizer, layer=layer,
+            low_rank_dimension=len(metadata),
+            device=device
+        )
+        benchmark_model.load(
+            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
+        )
+        benchmark_model.to(device)
+        if hasattr(benchmark_model, 'ax') and args.use_bf16:
+            benchmark_model.ax.eval()
+            benchmark_model.ax.to(torch.bfloat16)
+
+        # we only save the max act for each concept to save disk space, otherwise each file will be ~3GB.
+        # if you wish to save the raw acts, you can go into predict_latents and modify the output.
+        results = benchmark_model.predict_latents(
+            all_negative_df, 
+            batch_size=args.latent_batch_size, 
+            prefix_length=prefix_length
+        )
+        # save results to disk
+        with open(dump_dir / f"{model_name}_latent_results.pkl", "wb") as f:
+            pickle.dump(results, f)
+
+
 def main():
     custom_args = [
         {
@@ -651,6 +759,8 @@ def main():
 
     if args.mode == "latent":
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
+    elif args.mode == "latent_imbalance":
+        infer_latent_imbalance(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
         infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
