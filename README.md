@@ -1,6 +1,5 @@
-
 <div align="center">
-  <a align="center"><img src="https://github.com/user-attachments/assets/cd86ded9-d3cb-46e2-8e62-280bbadbdbdc" width="100" height="100"></a>
+  <a align="center"><img src="https://github.com/user-attachments/assets/661f78cf-4044-4c46-9a71-1316bb2c69a5" width="100" height="100"></a>
   <h1 align="center"> <p>AxBench<sub> by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></p></h1>
   <a href=""><strong>Read our paper »</strong></a></a>
 </div>     
@@ -118,6 +117,18 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
   --mode latent
 ```
+
+##### Imbalaced Concept Detection Eval
+In real-world usecases, only less than 1% of examples should activate the learned subspace ([Neuronpedia]'s page has the activation density and it is usually smaller than 1%). To evaluate methods under this condition, we upsample more negatives (negative to positive ratio is now set to 100:1) and re-evaluate all methods. To generate latens for these negatives, we design a new script for quicker inference since we can generate activations for all latent in a batch for a shared pool of negatives:
+```bash
+torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --mode latent_imbalance
+```
+
 
 #### Model Steering
 Inference with model steering with representation abstractions:
