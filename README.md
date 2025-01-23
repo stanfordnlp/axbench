@@ -4,28 +4,21 @@
   <a href=""><strong>Read our paper »</strong></a></a>
 </div>     
 
-## 🎯 **Key Highlights of AxBench**
+### Accessing SoTA dictionary learning model and its training data for 16K concepts
 
-1️⃣ **Comprehensive Evaluation**  
-   🔍 Over **10+ existing interpretability methods** evaluated at scale using finetuning and prompting techniques.
+**Huggingface page**: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117).
 
-2️⃣ **Extensive Datasets**  
-   📚 Includes **3 diverse datasets** tailored for **Supervised Dictionary Learning (SDL)**, featuring up to **16,000 concepts** for robust evaluation.
+**Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github.com/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**How to use our dictionary with [pyvene](https://github.com/stanfordnlp/pyvene)**]
 
-3️⃣ **State-of-the-Art Models**  
-   🚀 Integrates **2 cutting-edge SDL models** as drop-in replacements for traditional Sparse Autoencoders (SAEs).
+## 🎯 **Highlights of AxBench**
 
-4️⃣ **Unified Benchmarking Pipeline**  
-   🛠️ Provides **1 streamlined pipeline** to benchmark interpretability methods, ensuring ease of use and reproducibility.
+1️⃣ Over **10+ existing interpretability methods** evaluated at scale using finetuning and prompting techniques.
 
-5️⃣ **Cost-Effective LLM Integration**  
-   💡 Implements an **LLM-in-the-loop SDL pipeline** that processes concepts at a cost of **less than $0.01 per concept**.  
+2️⃣ Includes 16K concepts training data for **Supervised Dictionary Learning (SDL)**.
 
-## Access our SoTA SDL models for `Gemma 2B` and `Gemma 9B`
+3️⃣ Releases **2 SDL models** as drop-in replacements for SAEs.
 
-**Huggingface page**: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
-
-**Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github.com/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**How to use our dictionaries**]
+4️⃣ Implements an **LLM-in-the-loop SDL pipeline** that trains vector dictionaries for concepts for **less than $0.01 per concept**.  
 
 ## Other experiments
 Building on top of our results, we did some early exploration on our trained dictionaries. Some of the results can be found under `axbench/examples`. Here is a table telling you more about the experiments:
