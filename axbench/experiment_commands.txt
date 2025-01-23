@@ -1,0 +1,1497 @@
+##########################
+#
+# Dataset generations.
+#
+##########################
+
+
+# long runing concept job
+python axbench/scripts/generate.py \
+  --config axbench/sweep/wuzhengx/generate/prod_2b_l10_v1.yaml \
+  --dump_dir axbench/results/prod_2b_l10_v1 \
+  --run_name official
+
+python axbench/scripts/generate.py \
+  --config axbench/sweep/wuzhengx/generate/prod_2b_l20_v1.yaml \
+  --dump_dir axbench/results/prod_2b_l20_v1 \
+  --run_name official
+
+python axbench/scripts/generate.py \
+  --config axbench/sweep/wuzhengx/generate/prod_9b_l20_v1.yaml \
+  --dump_dir axbench/results/prod_9b_l20_v1 \
+  --run_name official
+
+python axbench/scripts/generate.py \
+  --config axbench/sweep/wuzhengx/generate/prod_9b_l31_v1.yaml \
+  --dump_dir axbench/results/prod_9b_l31_v1 \
+  --run_name official
+
+# generate latent eval dataset
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+  --config axbench/sweep/wuzhengx/generate/prod_2b_l10_v1.yaml \
+  --dump_dir axbench/concept500/prod_2b_l10_v1 \
+  --run_name official
+
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+  --config axbench/sweep/wuzhengx/generate/prod_2b_l20_v1.yaml \
+  --dump_dir axbench/concept500/prod_2b_l20_v1 \
+  --run_name official
+
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+  --config axbench/sweep/wuzhengx/generate/prod_9b_l20_v1.yaml \
+  --dump_dir axbench/concept500/prod_9b_l20_v1 \
+  --run_name official
+
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+  --config axbench/sweep/wuzhengx/generate/prod_9b_l31_v1.yaml \
+  --dump_dir axbench/concept500/prod_9b_l31_v1 \
+  --run_name official
+
+
+##########################
+#
+# Training.
+#
+##########################
+
+
+# no_grad methods training
+torchrun --nproc_per_node=1 --master_port=29560 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29561 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29562 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29563 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# probe
+torchrun --nproc_per_node=1 --master_port=29564 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29565 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29566 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29567 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# lsreft
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29569 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29570 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29571 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# steering_vec
+torchrun --nproc_per_node=1 --master_port=29572 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29573 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29574 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29575 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# ig (IG and IxG)
+torchrun --nproc_per_node=1 --master_port=29576 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_ig \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29577 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_ig \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29578 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_ig \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29579 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_ig \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# loreft
+torchrun --nproc_per_node=1 --master_port=60000 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_loreft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60001 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_loreft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60002 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_loreft \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60003 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_loreft \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# lora
+torchrun --nproc_per_node=1 --master_port=60004 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lora \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60005 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lora \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60006 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lora \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=60007 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lora \
+  --overwrite_data_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --run_name official
+
+# sft (20 concepts)
+torchrun --nproc_per_node=1 --master_port=29580 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_sft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=2 --master_port=29581 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_sft \
+  --overwrite_data_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=2 --master_port=29581 axbench/scripts/train_fsdp.py \
+  --config axbench/sweep/wuzhengx/9b/l20/sft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_sft \
+  --overwrite_data_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --run_name official
+
+
+# 16k lsreft
+torchrun --nproc_per_node=4 --master_port=30000 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/16k_lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft \
+  --overwrite_data_dir axbench/concept16k/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=4 --master_port=30001 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/16k_lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft \
+  --overwrite_data_dir axbench/concept16k/prod_9b_l20_v1/generate \
+  --run_name official
+
+# 16k lsreft (cross-fit)
+torchrun --nproc_per_node=4 --master_port=30002 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/16k_lsreft_crossfit.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_crossfit \
+  --overwrite_data_dir axbench/concept16k/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=4 --master_port=30003 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/16k_lsreft_crossfit.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_crossfit \
+  --overwrite_data_dir axbench/concept16k/prod_2b_l20_v1/generate \
+  --run_name official
+
+
+# 16k diffmean
+torchrun --nproc_per_node=2 --master_port=30000 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/16k_diffmean.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_diffmean \
+  --overwrite_data_dir axbench/concept16k/prod_2b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=2 --master_port=30001 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/16k_diffmean.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_diffmean \
+  --overwrite_data_dir axbench/concept16k/prod_9b_l20_v1/generate \
+  --run_name official
+
+# 16k diffmean (cross-fit)
+torchrun --nproc_per_node=2 --master_port=30002 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l20/16k_diffmean_crossfit.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_diffmean_crossfit \
+  --overwrite_data_dir axbench/concept16k/prod_9b_l20_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=2 --master_port=30003 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/9b/l20/16k_diffmean_crossfit.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_diffmean_crossfit \
+  --overwrite_data_dir axbench/concept16k/prod_2b_l20_v1/generate \
+  --run_name official
+
+
+# scaling law on concept10
+
+# lsreft
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 6 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 12 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 24 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 48 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 96 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29569 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 120 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+torchrun --nproc_per_node=1 --master_port=29567 axbench/scripts/train.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --max_num_of_examples 144 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --run_name official
+
+
+
+##########################
+#
+# Latent inference.
+#
+##########################
+
+# newly added prompt baseline for concept detection
+torchrun --nproc_per_node=1 --master_port=29511 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+
+torchrun --nproc_per_node=1 --master_port=29514 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+
+# no_grad methods latent inference
+torchrun --nproc_per_node=1 --master_port=29511 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29514 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+# probe
+torchrun --nproc_per_node=1 --master_port=29521 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29522 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29523 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29524 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+
+# lsreft
+torchrun --nproc_per_node=1 --master_port=29531 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29533 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29534 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+
+# steering_vec
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29536 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29537 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29538 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+# ig methods latent
+torchrun --nproc_per_node=1 --master_port=60000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_ig \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_ig \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60009 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_ig \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60010 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_ig \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent
+
+
+# lsreft scaling law
+torchrun --nproc_per_node=1 --master_port=60000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60002 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60004 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60005 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=60006 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
+  --run_name official --mode latent
+
+
+# subspace generator for lsreft
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent
+
+
+##########################
+#
+# Latent Eval.
+#
+##########################
+
+# newly added prompt baseline for concept detection
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_prompt_detection \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_prompt_detection \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_prompt_detection \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_prompt_detection \
+  --run_name official --mode latent
+
+
+# no_grad methods steering inference (including SAE here)
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --run_name official --mode latent
+
+# probe
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --run_name official --mode latent
+
+# lsreft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --run_name official --mode latent
+
+# steering_vec
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --run_name official --mode latent
+
+
+# ig
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_ig \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_ig \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_ig \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/ig.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_ig \
+  --run_name official --mode latent
+
+# lsreft scaling law
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --run_name official --mode latent
+
+
+# subspace generator for lsreft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_gen \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_platonic \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
+  --run_name official --mode latent
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_gen \
+  --run_name official --mode latent
+
+
+
+##########################
+#
+# Steering inference.
+#
+##########################
+
+# Lsreft + Prompting steering
+torchrun --nproc_per_node=1 --master_port=40000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_synergy.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft_synergy \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft_synergy.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft_synergy \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40002 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft_synergy.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft_synergy \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft_synergy.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft_synergy \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+# SAE clamping based steering
+torchrun --nproc_per_node=1 --master_port=40000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_gemmascope_clamp \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_gemmascope_clamp \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40002 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_gemmascope_clamp \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=40003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_gemmascope_clamp \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# no_grad methods latent inference
+torchrun --nproc_per_node=2 --master_port=40000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=40001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=40002 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=40003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+# probe
+torchrun --nproc_per_node=2 --master_port=29521 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=29522 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=29523 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=29524 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# lsreft
+torchrun --nproc_per_node=1 --master_port=29531 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29533 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29534 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# steering_vec
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29536 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29537 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29538 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# lora
+torchrun --nproc_per_node=1 --master_port=50000 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lora \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=50001 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lora \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=50002 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lora \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=50003 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lora \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# loreft
+torchrun --nproc_per_node=2 --master_port=50004 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_loreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=50005 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_loreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=50006 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_loreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=2 --master_port=50007 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_loreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode steering
+
+
+# sft
+torchrun --nproc_per_node=1 --master_port=50008 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_sft \
+  --overwrite_metadata_dir axbench/results/prod_2b_l10_concept500_sft/train \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=50009 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_sft \
+  --overwrite_metadata_dir axbench/results/prod_2b_l20_concept500_sft/train \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+# subspace generator for lsreft
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode steering
+
+
+##########################
+#
+# Steering eval. (No winrate)
+#
+##########################
+
+# gemmascope clamping
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_gemmascope_clamp \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_gemmascope_clamp \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_gemmascope_clamp \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/gemmascope_clamp.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_gemmascope_clamp \
+  --run_name official --mode steering
+
+# no_grad methods steering inference (including SAE here)
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --run_name official --mode steering
+
+# probe
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --run_name official --mode steering
+
+# lsreft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --run_name official --mode steering
+
+# steering_vec
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --run_name official --mode steering
+
+
+# loreft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_loreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_loreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_loreft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/loreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_loreft \
+  --run_name official --mode steering
+
+
+# lora
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lora \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lora \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lora \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lora.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lora \
+  --run_name official --mode steering
+
+
+# sft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_sft \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/sft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_sft \
+  --run_name official --mode steering
+
+# subspace generator for lsreft
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_gen \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_platonic \
+  --run_name official --mode steering
+
+nlprun -q jag -x jagupard[19,20] -g 1 -a wuzhengx-310 python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_gen \
+  --run_name official --mode steering
+
+nlprun -q jag -x jagupard[19,20] -g 1 -a wuzhengx-310 python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
+  --run_name official --mode steering
+
+
+##########################
+#
+# Latent inference (Imbalanced, no prepare for evaluator!).
+#
+##########################
+
+
+# prompt for concept detection
+torchrun --nproc_per_node=1 --master_port=29511 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29514 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29529 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/prompt_detection.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_prompt_detection \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent_imbalance
+
+
+# no_grad methods latent inference
+torchrun --nproc_per_node=1 --master_port=29511 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29514 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29519 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29529 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/no_grad.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_no_grad \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent_imbalance
+
+# probe
+torchrun --nproc_per_node=1 --master_port=29521 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29522 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29523 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29524 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/probe.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_probe \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent_imbalance
+
+
+# lsreft
+torchrun --nproc_per_node=1 --master_port=29531 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29533 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29534 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_lsreft \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent_imbalance
+
+
+# steering_vec
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l10/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l10_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29536 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29537 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29538 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l31/steering_vec.yaml \
+  --dump_dir axbench/results/prod_9b_l31_concept500_steering_vec \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l31_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l31_v1/inference \
+  --run_name official --mode latent_imbalance
+
+
+# subspace generator for lsreft
+torchrun --nproc_per_node=1 --master_port=29532 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/2b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_2b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_2b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_2b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+torchrun --nproc_per_node=1 --master_port=29535 axbench/scripts/inference.py \
+  --config axbench/sweep/wuzhengx/9b/l20/lsreft.yaml \
+  --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_gen \
+  --overwrite_metadata_dir axbench/concept500/prod_9b_l20_v1/generate \
+  --overwrite_inference_data_dir axbench/concept500/prod_9b_l20_v1/inference \
+  --run_name official --mode latent_imbalance
+
+
