@@ -27,6 +27,7 @@ from transformers import set_seed
 
 
 class LsReFT(Model):
+    """In paper, we name this ReFT-r1, which stands for rank-1 representation finetuning"""
     def __str__(self):
         return 'LsReFT'
 
