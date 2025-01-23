@@ -361,7 +361,7 @@ async def get_steering_prompts(client, concepts):
 
 class SteeringDatasetFactory(object):
     def __init__(
-        self, tokenizer, dump_dir, **kwargs):
+        self, tokenizer, dump_dir, has_prompt_steering=False, **kwargs):
         self.tokenizer = tokenizer
         self.master_data_dir = kwargs.get("master_data_dir", None)
         if kwargs.get("lm_client", None):
@@ -369,6 +369,7 @@ class SteeringDatasetFactory(object):
                 kwargs.get("lm_model", "gpt-4o-mini"), kwargs["lm_client"], dump_dir, 
                 use_cache=True, master_data_dir=self.master_data_dir
             )
+        self.has_prompt_steering = has_prompt_steering
 
     def create_eval_df(self, concepts, subset_n, steering_factors, steering_datasets, concept_id):
         for dataset_name in steering_datasets:
@@ -397,8 +398,12 @@ class SteeringDatasetFactory(object):
                 alpaca_eval_df = pd.read_json(alpaca_eval_path)
 
                 # get gpt-4o boosted steering prompts.
-                steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
-                steering_prompts = [prompt.strip() for prompt in steering_prompts]
+                if self.has_prompt_steering:
+                    steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
+                    steering_prompts = [prompt.strip() for prompt in steering_prompts]
+                else:
+                    # simply just a dummy one since no method is going to use it.
+                    steering_prompts = [T_PROMPT_STEERING % (concept) for concept in concepts]
                 all_examples = []
                 for idx, concept in enumerate(concepts):
                     # sample a random example from alpaca eval dataset.

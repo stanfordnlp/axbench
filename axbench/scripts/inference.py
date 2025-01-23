@@ -38,7 +38,7 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
-STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients"}
+STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients", "PromptDetection"}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
@@ -236,7 +236,8 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
         master_data_dir=args.master_data_dir, lm_client=lm_client,
-        lm_model=args.lm_model
+        lm_model=args.lm_model,
+        has_prompt_steering=True if "PromptSteering" in args.models else False
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
@@ -279,7 +280,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
             )
             benchmark_model.load(
                 dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
-                intervention_type=args.steering_intervention_type, # SAE uses clamping
+                intervention_type=args.steering_intervention_type,
                 concept_id=concept_id
             )
             benchmark_model.to(device)
@@ -671,16 +672,28 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
             benchmark_model.ax.eval()
             benchmark_model.ax.to(torch.bfloat16)
 
-        # we only save the max act for each concept to save disk space, otherwise each file will be ~3GB.
-        # if you wish to save the raw acts, you can go into predict_latents and modify the output.
-        results = benchmark_model.predict_latents(
-            all_negative_df, 
-            batch_size=args.latent_batch_size, 
-            prefix_length=prefix_length
-        )
-        # save results to disk
-        with open(dump_dir / f"{model_name}_latent_results.pkl", "wb") as f:
-            pickle.dump(results, f)
+        if model_name == "PromptDetection":
+            for concept_id in concept_ids:
+                results = benchmark_model.predict_latent(
+                    all_negative_df, 
+                    batch_size=args.latent_batch_size, 
+                    prefix_length=prefix_length,
+                    concept=metadata[concept_id]["concept"],
+                )
+                # save results to disk
+                with open(dump_dir / f"{model_name}_concept_{concept_id}_latent_results.pkl", "wb") as f:
+                    pickle.dump(results, f)
+        else:
+            # we only save the max act for each concept to save disk space, otherwise each file will be ~3GB.
+            # if you wish to save the raw acts, you can go into predict_latents and modify the output.
+            results = benchmark_model.predict_latents(
+                all_negative_df, 
+                batch_size=args.latent_batch_size, 
+                prefix_length=prefix_length
+            )
+            # save results to disk
+            with open(dump_dir / f"{model_name}_latent_results.pkl", "wb") as f:
+                pickle.dump(results, f)
 
 
 def main():
