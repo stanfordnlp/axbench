@@ -1,1 +1,2 @@
 axbench/examples/* linguist-vendored
+axbench/scripts/*.ipynb linguist-vendored

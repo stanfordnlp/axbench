@@ -28,6 +28,8 @@ axbench/models/dbm.py
 axbench/examples/upload.ipynb
 tmp.ipynb
 axbench/examples_internal
+*.ipynb
+tmp.csv
 
 axbench/examples/*.pt
 axbench/examples/*.pth
