@@ -4,7 +4,7 @@
   <a href=""><strong>Read our paper »</strong></a></a>
 </div>     
 
-### Accessing SoTA dictionary learning model and its training data for 16K concepts
+### Accessing SoTA dictionary ReFT-r1 and its training data for 16K concepts
 
 **Huggingface page**: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117).
 
@@ -18,7 +18,7 @@
 
 3️⃣ Releases **2 SDL models** as drop-in replacements for SAEs.
 
-4️⃣ Implements an **LLM-in-the-loop SDL pipeline** that trains vector dictionaries for concepts for **less than $0.01 per concept**.  
+4️⃣ Implements an **LLM-in-the-loop SDL pipeline** that trains dictionaries at a cost of **less than $0.01 per concept**.  
 
 ## Other experiments
 Building on top of our results, we did some early exploration on our trained dictionaries. Some of the results can be found under `axbench/examples`. Here is a table telling you more about the experiments:
