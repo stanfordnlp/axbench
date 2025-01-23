@@ -58,6 +58,7 @@ class ModelParams:
     weight_decay: Optional[float] = 0.0
     temperature_start: Optional[float] = 1e-2
     temperature_end: Optional[float] = 1e-7
+    use_synergy: Optional[bool] = False
 
 class TrainingArgs:
     def __init__(
@@ -82,7 +83,7 @@ class TrainingArgs:
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
             'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts',
-            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'max_num_of_examples'
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'max_num_of_examples',
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
@@ -91,7 +92,7 @@ class TrainingArgs:
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
             'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end',
-            'train_on_negative'
+            'train_on_negative', 'use_synergy'
         ]
         all_params = global_params + hierarchical_params
 
@@ -178,7 +179,7 @@ class TrainingArgs:
 
     @staticmethod
     def _infer_type(param_name: str):
-        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset', 'train_on_negative']
+        bool_params = ['use_bf16', 'exclude_bos', 'binarize_dataset', 'train_on_negative', 'use_synergy']
         int_params = ['layer', 'batch_size', 'n_epochs', 'topk', 'seed', 'low_rank_dimension', 
                       'gradient_accumulation_steps', 'lora_alpha', 'max_concepts', 'max_num_of_examples']
         float_params = [

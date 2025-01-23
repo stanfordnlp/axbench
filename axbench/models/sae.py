@@ -47,7 +47,7 @@ def load_metadata_flatten(metadata_path):
     with open(metadata_path, 'r') as f:
         for line in f:
             data = json.loads(line)
-            concept, ref =data["concept"], data["ref"]
+            concept, ref = data["concept"], data["ref"]
             concept_genres_map = data["concept_genres_map"][concept]
             ref = data["ref"]
             flatten_data = {

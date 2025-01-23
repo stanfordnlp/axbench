@@ -233,11 +233,18 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
     tokenizer = AutoTokenizer.from_pretrained(
         args.steering_model_name, use_fast=False, model_max_length=1024)
     tokenizer.padding_side = "right"
+    if "PromptSteering" in args.models:
+        has_prompt_steering = True
+    else:
+        if "LsReFT" in args.models and training_args.models["LsReFT"].use_synergy:
+            has_prompt_steering = True
+        else:
+            has_prompt_steering = False
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
         master_data_dir=args.master_data_dir, lm_client=lm_client,
         lm_model=args.lm_model,
-        has_prompt_steering=True if "PromptSteering" in args.models else False
+        has_prompt_steering=has_prompt_steering
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
@@ -301,6 +308,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 temperature=args.temperature,
                 prefix_length=prefix_length,
                 positions=training_args.models[model_name].intervention_positions if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None,
+                use_synergy=training_args.models[model_name].use_synergy if model_name in {"LsReFT"} else False,
             )
             # Store the results in current_df
             for k, v in results.items():

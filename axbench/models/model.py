@@ -240,6 +240,7 @@ class Model(BaseModel):
         self.tokenizer.padding_side = "left"
         # depending on the model, we use different concept id columns
         concept_id_col = "sae_id" if "sae" in self.__str__().lower() else "concept_id"
+        use_synergy = kwargs.get("use_synergy", False)
 
         # iterate rows in batch
         batch_size = kwargs.get("batch_size", 64)
@@ -253,7 +254,11 @@ class Model(BaseModel):
         progress_bar = tqdm(range(0, len(examples), batch_size), position=rank, leave=True)
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['input'].tolist()
+            if use_synergy:
+                # print("Using steered prompt to evaluate synergy of prompt and lsreft.")
+                input_strings = batch_examples['steered_input'].tolist()
+            else:
+                input_strings = batch_examples['input'].tolist()
             mag = torch.tensor(batch_examples['factor'].tolist()).to(self.device)
             idx = torch.tensor(batch_examples["concept_id"].tolist()).to(self.device)
             max_acts = torch.tensor([
