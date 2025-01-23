@@ -169,4 +169,4 @@ python axbench/scripts/evaluate.py \
 ```
 
 ### Reproducing our results
-To reproduce our results, please refer to `axbench/experiment_commands.sh`.
+To reproduce our results, please refer to `axbench/experiment_commands.txt`.
