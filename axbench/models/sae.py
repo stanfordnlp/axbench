@@ -28,6 +28,8 @@ from transformers import get_scheduler
 from torch.utils.data import DataLoader
 from .probe import DataCollator, make_data_module
 
+from sklearn.metrics import roc_auc_score
+
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
@@ -290,6 +292,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
+        print("saving", model_name)
         top_feature = self.top_feature
         top_features = []
         if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
@@ -301,8 +304,69 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
 
         # save the pruned SAE
         save_pruned_sae(
-            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEMaxDiff.pt", sae_params=self.sae_params
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile=f"{model_name}.pt", sae_params=self.sae_params
         )
+
+
+class GemmaScopeSAEMaxAUC(GemmaScopeSAEMaxDiff):
+    """
+    pick the SAE feature with the best ROC AUC score
+    """
+    def __str__(self):
+        return 'GemmaScopeSAEMaxAUC'
+    
+    def train(self, examples, **kwargs):
+        train_dataloader = self.make_dataloader(examples)
+        torch.cuda.empty_cache()
+        prefix_length = kwargs.get("prefix_length", 1)
+
+        all_positive_acts = []
+        all_negative_acts = []
+        
+        for epoch in range(self.training_args.n_epochs):
+            for step, batch in enumerate(train_dataloader):
+                # prepare input
+                inputs = {k: v.to(self.device) for k, v in batch.items()}
+                inputs = {
+                    "input_ids": inputs["input_ids"],
+                    "attention_mask": inputs["attention_mask"],
+                }
+
+                # get SAE latents
+                act_in = gather_residual_activations(
+                    self.model, self.layer, inputs)
+                ax_acts_batch = self.ax(act_in[:, prefix_length:])  # no bos token; shape = (batch_size, seq_len, sae_width)
+                seq_lens = inputs["attention_mask"].sum(dim=1) - prefix_length # no bos token
+
+                # add max latents for each sequence
+                for i in range(len(batch)):
+                    acts = ax_acts_batch[i, :seq_lens[i]] # shape = (seq_len, sae_width)
+                    label = batch["labels"][i]
+                    max_acts = torch.max(acts, dim=0).values # shape = (sae_width, )
+                    if label == 1:
+                        all_positive_acts += [max_acts]
+                    else:
+                        all_negative_acts += [max_acts]
+
+        # get latent activations
+        positive_acts = torch.stack(all_positive_acts) # shape = (num_positive_examples, sae_width)
+        negative_acts = torch.stack(all_negative_acts) # shape = (num_negative_examples, sae_width)
+        true_labels = torch.ones(len(positive_acts))
+        false_labels = torch.zeros(len(negative_acts))
+        all_labels = torch.cat([true_labels, false_labels], dim=0).detach().cpu().to(torch.float32) # shape = (num_examples, )
+        all_acts = torch.cat([positive_acts, negative_acts], dim=0).detach().cpu().to(torch.float32) # shape = (num_examples, sae_width)
+
+        # compute AUC for each feature
+        auc_scores = []
+        for i in range(self.sae_width):
+            auc_scores += [roc_auc_score(all_labels, all_acts[:, i])]
+
+        # print top 10 features by AUC
+        top = torch.tensor(auc_scores).topk(10)
+        for i in range(10):
+            print(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
+        self.top_feature = top.indices[0].item() # only pick the first feature
+
 
 class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
     """
@@ -358,8 +422,9 @@ class GemmaScopeSAEBinaryMask(GemmaScopeSAE):
             json.dump(top_features, f)
 
         # save the pruned SAE
+
         save_pruned_sae(
-            self.metadata_path, dump_dir, modified_refs=top_features, savefile="GemmaScopeSAEBinaryMask.pt", sae_params=self.sae_params
+            self.metadata_path, dump_dir, modified_refs=top_features, savefile=f"{model_name}.pt", sae_params=self.sae_params
         )
     
     def train(self, examples, **kwargs):
