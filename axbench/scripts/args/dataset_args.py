@@ -36,6 +36,7 @@ class DatasetArgs:
     use_bf16: Optional[bool] = False
     dataset_category: Optional[str] = "instruction"
     lm_use_cache: Optional[bool] = True
+    disable_neuronpedia_max_act: Optional[bool] = False
 
     def __init__(
         self,

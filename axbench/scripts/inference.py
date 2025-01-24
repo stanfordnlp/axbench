@@ -297,7 +297,9 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
             # Pre-compute mean activations once
             if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
                 benchmark_model.pre_compute_mean_activations(
-                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+                    os.path.join(dump_dir, "inference"), 
+                    master_data_dir=args.master_data_dir,
+                    disable_neuronpedia_max_act=args.disable_neuronpedia_max_act,
                 )
             logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
