@@ -350,7 +350,7 @@ class DictionaryMinClampingIntervention(
 
         # minimum is current value if it is positive
         acts_modified[:, :, subspaces['idx']] = torch.max(
-            acts[:, :, subspaces['idx']], proposed_feature_acts)
+            acts[:, :, subspaces['idx']], proposed_feature_acts).to(base.dtype)
 
         modified_SAE_x = self.decode(acts_modified)
         x_new = modified_SAE_x + error_x 

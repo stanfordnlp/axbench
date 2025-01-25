@@ -311,6 +311,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 prefix_length=prefix_length,
                 positions=training_args.models[model_name].intervention_positions if model_name not in {"PromptSteering", "GemmaScopeSAE"} else None,
                 use_synergy=training_args.models[model_name].use_synergy if model_name in {"LsReFT"} else False,
+                disable_neuronpedia_max_act=args.disable_neuronpedia_max_act,
             )
             # Store the results in current_df
             for k, v in results.items():
