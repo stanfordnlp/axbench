@@ -6,16 +6,16 @@
 
 ---
 
-## Accessing the SoTA Dictionary ReFT-r1 and 16K Training Concepts
+## Accessing the SoTA dictionary ReFT-r1 and training data on 16K concepts.
 
 - 🤗 **HuggingFace**: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)  
-- 🤗 **Gradio Chat**: [**Steered LM Demo (ReFT-r1)**](#)  
+- 🤗 **Gradio Chat**: [**Steered LM Demo (ReFT-r1)**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)  
 
 - **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using Our Dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**]
 
 ---
 
-## 🎯 Highlights
+## 🎯 Highlights.
 
 1. **Large-Scale Evaluation**: 10+ interpretability methods evaluated via fine-tuning and prompting.  
 2. **16K Concept Training Data**: For **Supervised Dictionary Learning (SDL)**.  
@@ -24,7 +24,7 @@
 
 ---
 
-## Additional Experiments
+## Additional experiments.
 
 We include exploratory notebooks under `axbench/examples`, such as:
 
@@ -37,9 +37,9 @@ We include exploratory notebooks under `axbench/examples`, such as:
 
 ---
 
-## How to "AxBench" Your Methods
+## How to "AxBench" your methods.
 
-### Installation
+### Installation.
 
 ```bash
 git clone git@github.com:stanfordnlp/axbench.git
@@ -64,7 +64,7 @@ bash download-alpaca.sh
 python axbench/scripts/download-seed-sentences.py
 ```
 
-### A Simple Demo
+### A simple demo.
 
 To run a complete demo with a single config file:
 
@@ -74,7 +74,7 @@ bash axbench/demo/demo.sh
 
 ---
 
-## Data Generation
+## Data generation.
 
 (If using our pre-generated data, you can skip this.)
 
@@ -94,7 +94,7 @@ To modify the data generation process, edit `simple.yaml`.
 
 ---
 
-## Training
+## Training.
 
 Train and save your methods:
 
@@ -119,9 +119,9 @@ where `--dump_dir` is the output directory, and `--overwrite_data_dir` is where 
 
 ---
 
-## Inference
+## Inference.
 
-### Concept Detection
+### Concept detection.
 
 Infer with latent activations:
 
@@ -143,7 +143,7 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --mode latent
 ```
 
-#### Imbalanced Concept Detection
+#### Imbalanced concept detection.
 
 For real-world scenarios with fewer than 1% positive examples, we upsample negatives (100:1) and re-evaluate. Use:
 
@@ -156,7 +156,7 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --mode latent_imbalance
 ```
 
-### Model Steering
+### Model steering.
 
 For steering experiments:
 
@@ -180,9 +180,9 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
 
 ---
 
-## Evaluation
+## Evaluation.
 
-### Concept Detection
+### Concept detection.
 
 To evaluate concept detection results:
 
@@ -213,7 +213,7 @@ python axbench/scripts/evaluate.py \
   --mode latent
 ```
 
-### Model Steering
+### Model steering.
 
 To evaluate steering:
 
@@ -235,6 +235,6 @@ python axbench/scripts/evaluate.py \
 
 ---
 
-## Reproducing Our Results
+## Reproducing our results.
 
 Please see `axbench/experiment_commands.txt` for detailed commands and configurations.
