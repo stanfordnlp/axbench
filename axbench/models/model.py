@@ -239,7 +239,7 @@ class Model(BaseModel):
         # set tokenizer padding to left
         self.tokenizer.padding_side = "left"
         # depending on the model, we use different concept id columns
-        concept_id_col = "sae_id" if "sae" in self.__str__().lower() else "concept_id"
+        concept_id_col = "sae_id" if "sae" in self.__str__().lower() and not kwargs.get("disable_neuronpedia_max_act", False) else "concept_id"
         use_synergy = kwargs.get("use_synergy", False)
 
         # iterate rows in batch

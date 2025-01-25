@@ -14,6 +14,7 @@ from .interventions import (
     AdditionIntervention,
     SubspaceIntervention,
     DictionaryAdditionIntervention, # please try this one
+    DictionaryMinClampingIntervention,
     SigmoidMaskAdditionIntervention,
 )
 from ..utils.model_utils import (
@@ -131,6 +132,11 @@ class GemmaScopeSAE(Model):
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
+            elif intervention_type == "min_clamping":
+                ax = DictionaryMinClampingIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
             else:
                 raise ValueError(f"Invalid intervention type for steering: {intervention_type}")
         else:
@@ -168,6 +174,11 @@ class GemmaScopeSAE(Model):
                 self.ax.load_state_dict(pt_params, strict=False)
 
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        if kwargs.get("disable_neuronpedia_max_act", False):
+            logger.warning(f"Using AxBench dataset max activations instead of Neuronpedia.")
+            # we use max/mean activation from AxBench dataset.
+            return super().pre_compute_mean_activations(dump_dir, **kwargs)
+
         # Loop over all praqut files in dump_dir.
         sae_links = []
         for file in os.listdir(dump_dir):
