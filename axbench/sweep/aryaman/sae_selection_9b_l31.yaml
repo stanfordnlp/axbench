@@ -2,7 +2,7 @@ generate:
   lm_model: "gpt-4o-mini"
   output_length: 128
   num_of_examples: 144
-  concept_path: "axbench/data/gemma-2-2b_10-gemmascope-res-16k.json"
+  concept_path: "axbench/data/gemma-2-9b_31-gemmascope-res-16k.json"
   max_concepts: 500
   master_data_dir: "axbench/data"
   dataset_category: "instruction"
@@ -34,14 +34,14 @@ inference:
   use_bf16: true
   # models: ["GemmaScopeSAEMaxAUC", "GemmaScopeSAEMaxDiff", "GemmaScopeSAEDiffMean"]
   models: ["GemmaScopeSAEMaxAUC"]
-  model_name: "google/gemma-2-2b-it"
+  model_name: "google/gemma-2-9b-it"
   # latent related params
   output_length: 128
   latent_num_of_examples: 36
   latent_batch_size: 16
   # steering related params
   steering_intervention_type: "addition" # clamping
-  steering_model_name: "google/gemma-2-2b-it"
+  steering_model_name: "google/gemma-2-9b-it"
   steering_datasets: ["AlpacaEval"]
   steering_batch_size: 10
   steering_output_length: 128
