@@ -14,6 +14,12 @@ from transformers import set_seed
 import transformers, datasets
 from typing import Dict, Optional, Sequence, Union, List, Any
 
+import logging
+logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.WARN)
+logger = logging.getLogger(__name__)
+
 
 class BaseModel(object):
     """Base class for all models."""
@@ -264,6 +270,7 @@ class Model(BaseModel):
             max_acts = torch.tensor([
                 self.max_activations.get(id, 1.0) 
                 for id in batch_examples[concept_id_col].tolist()]).to(self.device)
+            # logger.warning(f"Using max activations: {max_acts}")
             # tokenize input_strings
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
