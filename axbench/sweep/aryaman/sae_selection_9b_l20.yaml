@@ -20,14 +20,15 @@ train:
       n_epochs: 1
       binarize_dataset: true
       low_rank_dimension: 1
-    GemmaScopeSAEMaxDiff:
-      batch_size: 6
-      n_epochs: 1
-      binarize_dataset: true
-      low_rank_dimension: 1
+    # GemmaScopeSAEMaxDiff:
+    #   batch_size: 6
+    #   n_epochs: 1
+    #   binarize_dataset: true
+    #   low_rank_dimension: 1
 inference:
   use_bf16: true
-  models: ["GemmaScopeSAEMaxAUC", "GemmaScopeSAEMaxDiff"]
+  # models: ["GemmaScopeSAEMaxAUC", "GemmaScopeSAEMaxDiff"]
+  models: ["GemmaScopeSAEMaxAUC"]
   model_name: "google/gemma-2-2b-it"
   # latent related params
   output_length: 128
@@ -49,7 +50,8 @@ inference:
   # generation related params
   temperature: 1.0
 evaluate:
-  models: ["GemmaScopeSAEMaxAUC", "GemmaScopeSAEMaxDiff"]
+  # models: ["GemmaScopeSAEMaxAUC", "GemmaScopeSAEMaxDiff"]
+  models: ["GemmaScopeSAEMaxAUC"]
   latent_evaluators: [
     "AUCROCEvaluator",
     "HardNegativeEvaluator",

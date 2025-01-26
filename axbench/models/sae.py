@@ -303,7 +303,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
-        logger.warning("saving", model_name)
+        logger.warning(f"saving {model_name}")
         top_feature = self.top_feature
         top_features = []
         if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
