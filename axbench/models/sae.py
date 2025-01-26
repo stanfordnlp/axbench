@@ -288,11 +288,11 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
         # print top 10 features
         top = (positive_acts - negative_acts).topk(10)
         for i in range(10):
-            print(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
+            logger.warning(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
-        print("saving", model_name)
+        logger.warning("saving", model_name)
         top_feature = self.top_feature
         top_features = []
         if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
@@ -306,6 +306,59 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
         save_pruned_sae(
             self.metadata_path, dump_dir, modified_refs=top_features, savefile=f"{model_name}.pt", sae_params=self.sae_params
         )
+
+    def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # get original sae features (keys of our dict)
+        sae_links = []
+        for file in os.listdir(dump_dir):
+            if file.endswith(".parquet") and file.startswith("latent_data"):
+                df = pd.read_parquet(os.path.join(dump_dir, file))
+                # sort by concept_id from small to large and enumerate through all concept_ids.
+                for sae_link in sorted(df["sae_link"].unique()):
+                    sae_links += [sae_link]
+
+        # load the selected top features (values of our dict)
+        model_name = kwargs.get("model_name", self.__str__())
+        file = os.path.join(dump_dir, f"../train/{model_name}_top_features.json")
+        with open(file, "r") as f:
+            top_features = json.load(f)
+        top_features = [int(f) for f in top_features]
+
+        model_name, sae_name = sae_links[0].split("/")[-3], sae_links[0].split("/")[-2]
+        max_activations = {} # sae_id to max_activation
+
+        # load existing max activations file and skip if exists.
+        max_activations_file = os.path.join(
+            kwargs.get("master_data_dir", "axbench/data"), 
+            f"{model_name}_{sae_name}_max_activations.json")
+        if os.path.exists(max_activations_file):
+            with open(max_activations_file, "r") as f:
+                max_activations = json.load(f)
+            max_activations = {int(k): v for k, v in max_activations.items()}
+        
+        has_new = False
+        shuffled_max_activations = {}
+        for i, sae_id in enumerate(tqdm(top_features)):
+            orig_sae_path = sae_links[i].split("https://www.neuronpedia.org/")[-1]
+            orig_sae_id = int(orig_sae_path.split("/")[-1])
+            sae_id = int(sae_id)
+            sae_path = "/".join(orig_sae_path.split("/")[:-1]) + "/" + str(sae_id)
+            if sae_id not in max_activations:
+                url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
+                headers = {"X-Api-Key": os.environ["NP_API_KEY"]}
+                response = requests.get(url, headers=headers)
+                max_activation = response.json()["activations"][0]["maxValue"]
+                max_activations[sae_id] = max_activation if max_activation > 0 else 50
+            shuffled_max_activations[orig_sae_id] = max_activations[sae_id]
+            has_new = True
+
+        if has_new:
+            with open(max_activations_file, "w") as f:
+                json.dump(max_activations, f)
+
+        logger.warning(f"Max activations: {shuffled_max_activations}")
+        self.max_activations = shuffled_max_activations
+        return max_activations
 
 
 class GemmaScopeSAEMaxAUC(GemmaScopeSAEMaxDiff):
@@ -339,7 +392,7 @@ class GemmaScopeSAEMaxAUC(GemmaScopeSAEMaxDiff):
                 seq_lens = inputs["attention_mask"].sum(dim=1) - prefix_length # no bos token
 
                 # add max latents for each sequence
-                for i in range(len(batch)):
+                for i in range(seq_lens.shape[0]):
                     acts = ax_acts_batch[i, :seq_lens[i]] # shape = (seq_len, sae_width)
                     label = batch["labels"][i]
                     max_acts = torch.max(acts, dim=0).values # shape = (sae_width, )
@@ -364,7 +417,7 @@ class GemmaScopeSAEMaxAUC(GemmaScopeSAEMaxDiff):
         # print top 10 features by AUC
         top = torch.tensor(auc_scores).topk(10)
         for i in range(10):
-            print(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
+            logger.warning(f"Feature {top.indices[i].item()}: {top.values[i].item()}")
         self.top_feature = top.indices[0].item() # only pick the first feature
 
 

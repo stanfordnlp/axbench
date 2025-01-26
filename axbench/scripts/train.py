@@ -364,6 +364,50 @@ def main():
             json.dump(config, f)
 
         for model_name in sorted(args.models.keys()):
+            # merge pruned SAEs
+            sae_files = [dump_dir / f"rank_{r}_{model_name}.pt" for r in range(world_size)]
+            sae_files_existing = [f for f in sae_files if f.exists()]
+            if not sae_files_existing:
+                logger.warning(f"No SAE files found for model {model_name}. Skipping.")
+            else:
+                sae_weights = [torch.load(f) for f in sae_files_existing]
+                combined_sae_params = {
+                    "b_dec": sae_weights[0]["b_dec"],
+                    "W_dec": [],
+                    "W_enc": [],
+                    "b_enc": [],
+                    "threshold": [],
+                }
+                for sae_weight in sae_weights:
+                    combined_sae_params["W_dec"].append(sae_weight["W_dec"])
+                    combined_sae_params["W_enc"].append(sae_weight["W_enc"])
+                    combined_sae_params["b_enc"].append(sae_weight["b_enc"])
+                    combined_sae_params["threshold"].append(sae_weight["threshold"])
+                for k, v in combined_sae_params.items():
+                    if k == "b_dec":
+                        continue
+                    if k == "W_enc":
+                        combined_sae_params[k] = torch.cat(v, dim=1)
+                    else:
+                        combined_sae_params[k] = torch.cat(v, dim=0)
+                torch.save(combined_sae_params, dump_dir / f"{model_name}.pt")
+                logger.warning(f"Saved merged SAE weights for model {model_name}")
+            
+            # merge top features
+            top_features_files = [dump_dir / f"rank_{r}_{model_name}_top_features.json" for r in range(world_size)]
+            top_features_files_existing = [f for f in top_features_files if f.exists()]
+            if not top_features_files_existing:
+                logger.warning(f"No top features files found for model {model_name}. Skipping.")
+            else:
+                combined_top_features = []
+                for top_feature_file in top_features_files:
+                    with open(top_feature_file, "r") as f:
+                        top_feature = json.load(f)
+                        combined_top_features.extend(top_feature)
+                with open(dump_dir / f"{model_name}_top_features.json", "w") as f:
+                    json.dump(combined_top_features, f)
+                logger.warning(f"Saved merged top features for model {model_name}")
+
             # Collect per-rank weight and bias files
             weight_files = [dump_dir / f"rank_{r}_{model_name}_weight.pt" for r in range(world_size)]
             bias_files = [dump_dir / f"rank_{r}_{model_name}_bias.pt" for r in range(world_size)]
