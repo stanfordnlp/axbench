@@ -368,8 +368,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
             with open(max_activations_file, "w") as f:
                 json.dump(max_activations, f)
 
-        logger.warning(f"Max activations: {shuffled_max_activations}")
-        input()
+        # logger.warning(f"Max activations: {shuffled_max_activations}")
         self.max_activations = shuffled_max_activations
         return max_activations
 
