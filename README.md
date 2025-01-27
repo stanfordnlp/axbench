@@ -11,7 +11,7 @@
 - 🤗 **HuggingFace**: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)  
 - 🤗 **Gradio Chat**: [**Steered LM Demo (ReFT-r1)**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)  
 
-- **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using Our Dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**]
+- **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**]
 
 ---
 
