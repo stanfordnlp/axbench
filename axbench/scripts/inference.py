@@ -300,6 +300,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                     os.path.join(dump_dir, "inference"), 
                     master_data_dir=args.master_data_dir,
                     disable_neuronpedia_max_act=args.disable_neuronpedia_max_act,
+                    metadata=metadata,
                 )
             logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction

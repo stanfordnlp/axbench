@@ -319,17 +319,18 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
         )
 
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # setup
+        model_name = kwargs.get("model_name", self.__str__())
+        metadata = kwargs.get("metadata", None)
+        if metadata is None:
+            assert False, f"Metadata is required for {model_name}"
+
         # get original sae features (keys of our dict)
         sae_links = []
-        for file in os.listdir(dump_dir):
-            if file.endswith(".parquet") and file.startswith("latent_data"):
-                df = pd.read_parquet(os.path.join(dump_dir, file))
-                # sort by concept_id from small to large and enumerate through all concept_ids.
-                for sae_link in sorted(df["sae_link"].unique()):
-                    sae_links += [sae_link]
+        for feature in metadata:
+            sae_links += [feature["ref"]]
 
         # load the selected top features (values of our dict)
-        model_name = kwargs.get("model_name", self.__str__())
         file = os.path.join(dump_dir, f"../train/{model_name}_top_features.json")
         with open(file, "r") as f:
             top_features = json.load(f)
@@ -368,6 +369,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
                 json.dump(max_activations, f)
 
         logger.warning(f"Max activations: {shuffled_max_activations}")
+        input()
         self.max_activations = shuffled_max_activations
         return max_activations
 
