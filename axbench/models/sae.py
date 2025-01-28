@@ -85,12 +85,15 @@ def save_pruned_sae(
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
     if sae_params is None:
+        logger.warning(f"Loading SAE params from {hf_repo}/{hf_folder}/params.npz")
         path_to_params = hf_hub_download(
             repo_id=hf_repo,
             filename=f"{hf_folder}/params.npz",
             force_download=False,
         )
         sae_params = np.load(path_to_params)
+        logger.warning(f"Loaded SAE params from {path_to_params}")
+        logger.warning(f"SAE params: {list(sae_params.keys())}")
     sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
     pruned_sae_pt_params = {
         "b_dec": sae_pt_params["b_dec"],
@@ -303,7 +306,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
     
     def save(self, dump_dir, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
-        logger.warning("saving", model_name)
+        logger.warning(f"saving {model_name}")
         top_feature = self.top_feature
         top_features = []
         if os.path.exists(dump_dir / f"{model_name}_top_features.json"):
@@ -319,17 +322,18 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
         )
 
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        # setup
+        model_name = kwargs.get("model_name", self.__str__())
+        metadata = kwargs.get("metadata", None)
+        if metadata is None:
+            assert False, f"Metadata is required for {model_name}"
+
         # get original sae features (keys of our dict)
         sae_links = []
-        for file in os.listdir(dump_dir):
-            if file.endswith(".parquet") and file.startswith("latent_data"):
-                df = pd.read_parquet(os.path.join(dump_dir, file))
-                # sort by concept_id from small to large and enumerate through all concept_ids.
-                for sae_link in sorted(df["sae_link"].unique()):
-                    sae_links += [sae_link]
+        for feature in metadata:
+            sae_links += [feature["ref"]]
 
         # load the selected top features (values of our dict)
-        model_name = kwargs.get("model_name", self.__str__())
         file = os.path.join(dump_dir, f"../train/{model_name}_top_features.json")
         with open(file, "r") as f:
             top_features = json.load(f)
@@ -367,7 +371,7 @@ class GemmaScopeSAEMaxDiff(GemmaScopeSAE):
             with open(max_activations_file, "w") as f:
                 json.dump(max_activations, f)
 
-        logger.warning(f"Max activations: {shuffled_max_activations}")
+        # logger.warning(f"Max activations: {shuffled_max_activations}")
         self.max_activations = shuffled_max_activations
         return max_activations
 
