@@ -85,12 +85,15 @@ def save_pruned_sae(
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
     if sae_params is None:
+        logger.warning(f"Loading SAE params from {hf_repo}/{hf_folder}/params.npz")
         path_to_params = hf_hub_download(
             repo_id=hf_repo,
             filename=f"{hf_folder}/params.npz",
             force_download=False,
         )
         sae_params = np.load(path_to_params)
+        logger.warning(f"Loaded SAE params from {path_to_params}")
+        logger.warning(f"SAE params: {list(sae_params.keys())}")
     sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
     pruned_sae_pt_params = {
         "b_dec": sae_pt_params["b_dec"],
