@@ -11,6 +11,7 @@
 - 🤗 **HuggingFace**: [AxBench Collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)  
 - 🤗 **ReFT-r1 Live Demo**: [**Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)
 - 🤗 **ReFT-cr1 Live Demo**: [**Conditional Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-cr1-16K)
+- 📚 **Feature Visualizer**: [**Visualize LM Activations**](https://nlp.stanford.edu/~wuzhengx/axbench/index.html)
 
 - **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**]
 
