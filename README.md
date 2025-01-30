@@ -13,7 +13,7 @@
 - 🤗 **ReFT-cr1 Live Demo**: [**Conditional Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-cr1-16K)
 - 📚 **Feature Visualizer**: [**Visualize LM Activations**](https://nlp.stanford.edu/~wuzhengx/axbench/index.html)
 - 🔍 **Subspace Gazer**: [**Visualize Subspaces via UMAP**](https://nlp.stanford.edu/~wuzhengx/axbench/visualization_UMAP.html)
-- **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**]
+- [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) **Tutorial of using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**
 
 <img src="https://github.com/user-attachments/assets/d885a8e0-f893-4231-9a43-7d2dcf621507" alt="MyMovie4" width="500" />
 
