@@ -1,7 +1,7 @@
 <div align="center">
   <a align="center"><img src="https://github.com/user-attachments/assets/661f78cf-4044-4c46-9a71-1316bb2c69a5" width="100" height="100" /></a>
   <h1 align="center">AxBench <sub>by <a href="https://github.com/stanfordnlp/pyvene">pyvene</a></sub></h1>
-  <a href="#"><strong>Read our paper »</strong></a>
+  <a href="https://arxiv.org/abs/2501.17148"><strong>Read our paper »</strong></a>
 </div>     
 
 <br>
@@ -10,9 +10,12 @@
 
 We introduced **supervised dictionary learning** (SDL) on synthetic data as an analogue to SAEs. You can access pretrained SDLs and our training/eval datasets here:
 
-- 🤗 **Gradio Chat**: [**Steered LM Demo (ReFT-r1)**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)  
-- 🤗 **HuggingFace**: [AxBench collections](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)
-- **Tutorial**: [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) [**Using SDLs via [pyvene](https://github.com/stanfordnlp/pyvene)**]
+- 🤗 **HuggingFace**: [**AxBench Collections**](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)  
+- 🤗 **ReFT-r1 Live Demo**: [**Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)
+- 🤗 **ReFT-cr1 Live Demo**: [**Conditional Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-cr1-16K)
+- 📚 **Feature Visualizer**: [**Visualize LM Activations**](https://nlp.stanford.edu/~wuzhengx/axbench/index.html)
+- 🔍 **Subspace Gazer**: [**Visualize Subspaces via UMAP**](https://nlp.stanford.edu/~wuzhengx/axbench/visualization_UMAP.html)
+- [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) **Tutorial of using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**
 
 ## 🎯 Highlights
 
