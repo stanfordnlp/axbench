@@ -4,9 +4,11 @@
   <a href="https://arxiv.org/abs/2501.17148"><strong>Read our paper »</strong></a>
 </div>     
 
----
+<br>
 
-## Accessing the SoTA dictionary ReFT-r1 and training data on 16K concepts.
+**AxBench** is a a scalable benchmark that evaluates interpretability techniques on two axes: *concept detection* and *model steering*. This repo includes all benchmarking code, including data generation, training, evaluation, and analysis.
+
+We introduced **supervised dictionary learning** (SDL) on synthetic data as an analogue to SAEs. You can access pretrained SDLs and our training/eval datasets here:
 
 - 🤗 **HuggingFace**: [**AxBench Collections**](https://huggingface.co/collections/pyvene/axbench-release-6787576a14657bb1fc7a5117)  
 - 🤗 **ReFT-r1 Live Demo**: [**Steering ChatLM**](https://huggingface.co/spaces/pyvene/AxBench-ReFT-r1-16K)
@@ -15,20 +17,16 @@
 - 🔍 **Subspace Gazer**: [**Visualize Subspaces via UMAP**](https://nlp.stanford.edu/~wuzhengx/axbench/visualization_UMAP.html)
 - [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/github/stanfordnlp/axbench/blob/main/axbench/examples/tutorial.ipynb) **Tutorial of using our dictionary via [pyvene](https://github.com/stanfordnlp/pyvene)**
 
-<img src="https://github.com/user-attachments/assets/d885a8e0-f893-4231-9a43-7d2dcf621507" alt="MyMovie4" width="500" />
+## 🎯 Highlights
 
----
+1. **Scalabale evaluation harness**: Framework for generating synthetic training + eval data from concept lists (e.g. GemmaScope SAE labels).
+2. **Comprehensive implementations**: 10+ interpretability methods evaluated, along with finetuning and prompting baselines.
+2. **16K concept training data**: Full-scale datasets for **supervised dictionary learning (SDL)**.  
+3. **Two pretrained SDL models**: Drop-in replacements for standard SAEs.  
+4. **LLM-in-the-loop training**: Generate your own datasets for less than \$0.01 per concept.
 
-## 🎯 Highlights.
 
-1. **Large-Scale Evaluation**: 10+ interpretability methods evaluated via fine-tuning and prompting.  
-2. **16K Concept Training Data**: For **Supervised Dictionary Learning (SDL)**.  
-3. **Two SDL Models**: Drop-in replacements for standard SAEs.  
-4. **LLM-in-the-Loop Training**: Build dictionaries at under \$0.01 per concept.
-
----
-
-## Additional experiments.
+## Additional experiments
 
 We include exploratory notebooks under `axbench/examples`, such as:
 
@@ -41,16 +39,19 @@ We include exploratory notebooks under `axbench/examples`, such as:
 
 ---
 
-## How to "AxBench" your methods.
+## Instructions for AxBenching your methods
 
-### Installation.
+### Installation
+
+We highly suggest using `uv` for your Python virtual environment, but you can use any venv manager.
 
 ```bash
 git clone git@github.com:stanfordnlp/axbench.git
 cd axbench
+uv sync # if using uv
 ```
 
-Set your API keys:
+Set up your API keys for OpenAI and Neuronpedia:
 
 ```python
 import os
@@ -61,14 +62,14 @@ os.environ["NP_API_KEY"] = "your_neuronpedia_api_key_here"
 Download the necessary datasets to `axbench/data`:
 
 ```bash
+uv run axbench/scripts/download-seed-sentences.py
 cd data
 bash download-2b.sh
 bash download-9b.sh
 bash download-alpaca.sh
-python axbench/scripts/download-seed-sentences.py
 ```
 
-### A simple demo.
+### Try a simple demo.
 
 To run a complete demo with a single config file:
 
@@ -76,41 +77,37 @@ To run a complete demo with a single config file:
 bash axbench/demo/demo.sh
 ```
 
----
-
-## Data generation.
+## Data generation
 
 (If using our pre-generated data, you can skip this.)
 
 **Generate training data:**
 
 ```bash
-python axbench/scripts/generate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
+uv run axbench/scripts/generate.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
 ```
 
 **Generate inference data:**
 
 ```bash
-python axbench/scripts/generate_latent.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
+uv run axbench/scripts/generate_latent.py --config axbench/demo/sweep/simple.yaml --dump_dir axbench/demo
 ```
 
 To modify the data generation process, edit `simple.yaml`.
 
----
-
-## Training.
+## Training
 
 Train and save your methods:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/train.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/train.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo
 ```
 
 (Replace `$gpu_count` with the number of GPUs to use.)
 
-For additional configs:
+For additional config:
 
 ```bash
 torchrun --nproc_per_node=$gpu_count axbench/scripts/train.py \
@@ -121,25 +118,23 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/train.py \
 
 where `--dump_dir` is the output directory, and `--overwrite_data_dir` is where the training data resides.
 
----
+## Inference
 
-## Inference.
+### Concept detection
 
-### Concept detection.
-
-Infer with latent activations:
+Run inference:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo \
   --mode latent
 ```
 
-Using custom directories:
+For additional config using custom directories:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
@@ -147,12 +142,12 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --mode latent
 ```
 
-#### Imbalanced concept detection.
+#### Imbalanced concept detection
 
 For real-world scenarios with fewer than 1% positive examples, we upsample negatives (100:1) and re-evaluate. Use:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
@@ -160,12 +155,12 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --mode latent_imbalance
 ```
 
-### Model steering.
+### Model steering
 
 For steering experiments:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo \
   --mode steering
@@ -174,7 +169,7 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
 Or a custom run:
 
 ```bash
-torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
+uv run torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --overwrite_metadata_dir axbench/concept500/prod_2b_l10_v1/generate \
@@ -182,16 +177,14 @@ torchrun --nproc_per_node=$gpu_count axbench/scripts/inference.py \
   --mode steering
 ```
 
----
+## Evaluation
 
-## Evaluation.
-
-### Concept detection.
+### Concept detection
 
 To evaluate concept detection results:
 
 ```bash
-python axbench/scripts/evaluate.py \
+uv run axbench/scripts/evaluate.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo \
   --mode latent
@@ -200,7 +193,7 @@ python axbench/scripts/evaluate.py \
 Enable wandb logging:
 
 ```bash
-python axbench/scripts/evaluate.py \
+uv run axbench/scripts/evaluate.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo \
   --mode latent \
@@ -211,7 +204,7 @@ python axbench/scripts/evaluate.py \
 Or evaluate using your custom config:
 
 ```bash
-python axbench/scripts/evaluate.py \
+uv run axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --mode latent
@@ -222,7 +215,7 @@ python axbench/scripts/evaluate.py \
 To evaluate steering:
 
 ```bash
-python axbench/scripts/evaluate.py \
+uv run axbench/scripts/evaluate.py \
   --config axbench/demo/sweep/simple.yaml \
   --dump_dir axbench/demo \
   --mode steering
@@ -231,13 +224,11 @@ python axbench/scripts/evaluate.py \
 Or a custom config:
 
 ```bash
-python axbench/scripts/evaluate.py \
+uv run axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --mode steering
 ```
-
----
 
 ## Reproducing our results.
 
