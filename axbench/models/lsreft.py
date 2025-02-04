@@ -24,6 +24,7 @@ from ..utils.model_utils import (
 )
 from transformers import get_scheduler
 from transformers import set_seed
+from ..scripts.inference import prepare_df
 
 
 class LsReFT(Model):
@@ -141,15 +142,22 @@ class LsReFT(Model):
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()
         batch_size = kwargs.get('batch_size', 32)
-        
+        return_max_act_only = kwargs.get("return_max_act_only", False)
+        is_chat_model = kwargs.get("is_chat_model", False)
+        eager_prepare_df = kwargs.get("eager_prepare_df", False)
+
         all_acts = []
         all_max_act = []
         all_max_act_idx = []
         all_max_token = []
         all_tokens = []
         # Process in batches
-        for i in range(0, len(examples), batch_size):
+        progress_bar = tqdm(range(0, len(examples), batch_size), desc="Processing batches")
+        for i in progress_bar:
             batch = examples.iloc[i:i + batch_size]
+            if eager_prepare_df:
+                batch = prepare_df(batch, self.tokenizer, is_chat_model)
+
             # Batch encode all inputs
             inputs = self.tokenizer(
                 batch["input"].tolist(), return_tensors="pt", 
@@ -163,23 +171,34 @@ class LsReFT(Model):
                     "subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device),
                     "k": 1
                 })
-            ax_acts = outputs.latent[0]
+            ax_acts = outputs.latent[0].float().detach().cpu()
+
             seq_lens = inputs["attention_mask"].sum(dim=1) - kwargs["prefix_length"] # no bos token
             # Process each sequence in the batch
             for seq_idx, ax_seq in enumerate(ax_acts):
-                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.float().cpu().numpy().tolist()
+                acts = ax_seq[:seq_lens[seq_idx]].flatten().data.numpy().tolist()
                 acts = [round(x, 3) for x in acts]
                 max_act = max(acts)
-                max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
-                max_act_idx = max_act_indices[0]
-                # Get tokens for this specific sequence
-                tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
-                max_token = tokens[max_act_idx]
-                all_acts.append(acts)
                 all_max_act.append(max_act)
-                all_max_act_idx.append(max_act_idx)
-                all_max_token.append(max_token)
-                all_tokens.append(tokens)
+                if not return_max_act_only:
+                    max_act_indices = [i for i, x in enumerate(acts) if x == max_act]
+                    max_act_idx = max_act_indices[0]
+                    # Get tokens for this specific sequence
+                    tokens = self.tokenizer.tokenize(batch.iloc[seq_idx]["input"])[kwargs["prefix_length"]-1:] # -1 is because it does not prepend BOS token
+                    max_token = tokens[max_act_idx]
+                    all_acts.append(acts)
+                    all_max_act_idx.append(max_act_idx)
+                    all_max_token.append(max_token)
+                    all_tokens.append(tokens)
+            # clear memory and cache
+            del ax_acts
+            del gather_acts
+            torch.cuda.empty_cache()
+
+        if return_max_act_only:
+            return {
+                "max_act": all_max_act
+            }
         return {
             "acts": all_acts,
             "max_act": all_max_act,

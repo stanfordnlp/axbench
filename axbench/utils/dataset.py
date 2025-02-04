@@ -210,7 +210,8 @@ class DatasetFactory(object):
             if mode == "balance":
                 self.logger.warning("Using pre-generated data.")
                 concept_df = self.pregenerated_inference_df[self.pregenerated_inference_df["concept_id"] == kwargs.get("concept_id")].copy()
-                assert len(concept_df) >= subset_n * 2, "Number of examples does not meet the requirement."
+                if len(concept_df) < subset_n * 2:
+                    self.logger.warning(f"Number of examples does not meet the requirement. {len(concept_df)} < {subset_n * 2}")
             else:
                 raise ValueError(f"Unknown mode: {mode}")
             return concept_df
