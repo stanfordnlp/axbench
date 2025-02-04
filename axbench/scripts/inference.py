@@ -708,6 +708,159 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
                 pickle.dump(results, f)
 
 
+def infer_latent_on_train_data(args, rank, world_size, device, logger, training_args, generate_args):
+    """This is used for getting threshold for latent and steering."""
+    data_dir = args.data_dir
+    train_dir = args.train_dir
+    dump_dir = args.dump_dir
+    num_of_examples = args.latent_num_of_examples
+    config = load_config(train_dir)
+    metadata = load_metadata_flatten(data_dir)
+    layer = config["layer"] if config else 0  # default layer for prompt baselines
+
+    state = load_state(args.dump_dir, "latent_on_train_data", rank)
+    last_concept_id_processed = state.get("last_concept_id", None) if state else None
+    logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
+
+    # Get list of all concept_ids
+    concept_ids = [metadata[i]["concept_id"] for i in range(len(metadata))]
+
+    # Partition concept_ids among ranks sequentially
+    concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
+    my_concept_ids = concept_ids_per_rank[rank]
+
+    if last_concept_id_processed is not None:
+        if last_concept_id_processed in my_concept_ids:
+            idx = my_concept_ids.index(last_concept_id_processed)
+            my_concept_ids = my_concept_ids[idx+1:]
+        else:
+            # If last_concept_id_processed is not in my_concept_ids, process all
+            pass
+
+    if len(my_concept_ids) == 0:
+        logger.warning(f"Rank {rank} has no concepts to process. Exiting.")
+        return
+
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100,
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
+    dump_dir = Path(dump_dir) / "inference_on_train_data"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, model_max_length=1024)
+    tokenizer.padding_side = "right"
+
+    # Load model instance onto device
+    if args.use_bf16:
+        logger.warning(f"Using bfloat16 for model {args.model_name}")
+    model_instance = AutoModelForCausalLM.from_pretrained(
+        args.model_name, 
+        torch_dtype=torch.bfloat16 if args.use_bf16 else None, 
+        device_map="auto"
+    )
+    is_chat_model = True if args.model_name in CHAT_MODELS else False
+    model_instance = model_instance.eval()
+
+    prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
+    if is_chat_model:
+        prefix_length = get_prefix_length(tokenizer)
+        logger.warning(f"Chat model prefix length: {prefix_length}")
+
+    # Load dataset factory for evals.
+    dataset_factory = DatasetFactory(
+        None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
+        use_cache=False, master_data_dir=args.master_data_dir,
+        lm_model=args.lm_model, logger=logger, is_inference=True,
+        overwrite_inference_data_dir=training_args.overwrite_inference_data_dir
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
+
+    has_latent_model = False
+    for model_name in args.models:
+        # load model on the fly to save memory
+        if model_name not in LATENT_EXCLUDE_MODELS:
+            has_latent_model = True
+            break
+
+    if not has_latent_model:
+        logger.warning("No latent model to infer. Exiting.")
+        return
+
+    # Now loop over concept_ids and use preloaded models
+    cache_df = {}
+    all_results = {}
+    for model_name in args.models:
+        all_results[model_name] = {}
+    concept_count = 0
+    for concept_id in my_concept_ids:
+        for model_name in args.models:
+            # load model on the fly to save memory
+            if model_name in LATENT_EXCLUDE_MODELS:
+                continue
+            model_class = getattr(axbench, model_name)
+            logger.warning(f"Loading {model_class} on {device}.")
+            benchmark_model = model_class(
+                model_instance, tokenizer, layer=layer,
+                low_rank_dimension=len(metadata),
+                device=device
+            )
+            benchmark_model.load(
+                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
+            )
+            benchmark_model.to(device)
+            if hasattr(benchmark_model, 'ax') and args.use_bf16:
+                benchmark_model.ax.eval()
+                benchmark_model.ax.to(torch.bfloat16)
+
+            dataset_category = generate_args.dataset_category
+            if (concept_id, dataset_category) not in cache_df:
+                current_df = create_data_latent(
+                    dataset_factory, metadata, concept_id, num_of_examples, args)
+                logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
+                current_df = prepare_df(current_df, tokenizer, is_chat_model)
+                cache_df[(concept_id, dataset_category)] = current_df
+            else:
+                current_df = cache_df[(concept_id, dataset_category)]
+
+            results = benchmark_model.predict_latent(
+                current_df, batch_size=args.latent_batch_size, prefix_length=prefix_length, 
+                return_max_act_only=True
+            )
+            all_results[model_name][concept_id] = results
+            del benchmark_model
+            torch.cuda.empty_cache()
+        concept_count += 1
+        if concept_count % 500 == 0 or concept_count == len(my_concept_ids):
+            rotation_index = concept_count // 500
+            # save results to disk
+            with open(dump_dir / f"rank_{rank}_all_results_{rotation_index}.pkl", "wb") as f:
+                pickle.dump(all_results, f)
+            # clear all_results
+            all_results = {}
+            for model_name in args.models:
+                all_results[model_name] = {}
+
+    # Synchronize all processes
+    dist.barrier()
+
+    # Rank 0 merges results
+    if rank == 0:
+        logger.warning("All ranks have finished inference.")
+
 def main():
     custom_args = [
         {
@@ -786,6 +939,8 @@ def main():
         infer_latent(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "latent_imbalance":
         infer_latent_imbalance(args, rank, world_size, device, logger, training_args, generate_args)
+    elif args.mode == "latent_on_train_data":
+        infer_latent_on_train_data(args, rank, world_size, device, logger, training_args, generate_args)
     elif args.mode == "steering":
         # steering eval must be done after latent eval.
         infer_steering(args, rank, world_size, device, logger, training_args, generate_args)
