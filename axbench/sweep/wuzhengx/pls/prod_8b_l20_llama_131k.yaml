@@ -1,5 +1,5 @@
 generate:
-  lm_model: "gpt-4o-mini"
+  lm_model: "gpt-4o-mini-2024-07-18"
   output_length: 128
   num_of_examples: 144
   concept_path: "axbench/data/llama3.1-8b_20-llamascope-res-131k.json"
