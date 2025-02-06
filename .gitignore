@@ -1,5 +1,6 @@
 axbench/data/Feature-Descriptions
 tmp*
+axbench/pls_results
 old_*.ipynb
 tmp_save/
 axbench/data/*.json

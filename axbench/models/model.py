@@ -127,7 +127,8 @@ class Model(BaseModel):
         return_max_act_only = kwargs.get("return_max_act_only", False)
         is_chat_model = kwargs.get("is_chat_model", False)
         eager_prepare_df = kwargs.get("eager_prepare_df", False)
-
+        overwrite_concept_id = kwargs.get("overwrite_concept_id", None)
+        
         all_acts = []
         all_max_act = []
         all_max_act_idx = []
@@ -147,8 +148,6 @@ class Model(BaseModel):
                 padding=True,
                 add_special_tokens=True
             ).to(self.device)  # Use model's device
-            
-            print(inputs["input_ids"].shape)
 
             act_in = gather_residual_activations(
                 self.model, self.layer, inputs)
@@ -159,7 +158,7 @@ class Model(BaseModel):
             for seq_idx, row in enumerate(batch.itertuples()):
                 # select acts with attention mask
                 acts = ax_acts_batch[
-                    seq_idx, :seq_lens[seq_idx], row.concept_id].flatten().float().cpu().numpy().tolist()
+                    seq_idx, :seq_lens[seq_idx], overwrite_concept_id if overwrite_concept_id is not None else row.concept_id].flatten().float().cpu().numpy().tolist()
                 acts = [round(x, 3) for x in acts]
                 max_act = max(acts)
                 all_max_act.append(max_act)
@@ -194,7 +193,7 @@ class Model(BaseModel):
     def predict_latents(self, examples, **kwargs):
         self.ax.eval()
         batch_size = kwargs.get('batch_size', 32)
-        
+
         all_acts = []
         all_max_act = []
         all_max_act_idx = []

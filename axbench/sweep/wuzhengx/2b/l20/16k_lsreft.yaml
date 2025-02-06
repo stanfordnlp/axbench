@@ -37,6 +37,7 @@ inference:
   output_length: 128
   latent_num_of_examples: 36
   latent_batch_size: 36
+  imbalance_factor: 2
   # steering related params
   steering_intervention_type: "addition" # clamping
   steering_model_name: "google/gemma-2-2b-it"

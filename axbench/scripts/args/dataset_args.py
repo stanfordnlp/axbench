@@ -37,6 +37,7 @@ class DatasetArgs:
     dataset_category: Optional[str] = "instruction"
     lm_use_cache: Optional[bool] = True
     disable_neuronpedia_max_act: Optional[bool] = False
+    imbalance_factor: Optional[int] = 100
 
     def __init__(
         self,
