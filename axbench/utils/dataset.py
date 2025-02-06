@@ -67,7 +67,7 @@ class DatasetFactory(object):
 
     def __init__(
         self, model, client, tokenizer, dataset_category, num_of_examples, output_length, dump_dir, 
-        use_cache=True, master_data_dir=None, start_concept_id=0, is_chat_model=True, **kwargs):
+        use_cache=True, master_data_dir=None, start_concept_id=0, is_chat_model=True, include_system_prompt=False, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
 
@@ -106,7 +106,7 @@ class DatasetFactory(object):
                 )
                 concept_outputs = get_model_continues(
                     self.model, self.tokenizer, random_content["random"],
-                    max_new_tokens=int(output_length*1.5), is_chat_model=is_chat_model)
+                    max_new_tokens=int(output_length*1.5), is_chat_model=is_chat_model, include_system_prompt=include_system_prompt)
                 for i, (prompt, output) in enumerate(zip(random_content["random"], concept_outputs)):
                     random_examples += [[
                         prompt, output, EMPTY_CONCEPT, genre, "negative", self.dataset_category
@@ -187,12 +187,12 @@ class DatasetFactory(object):
         logger.warning(f"Init finished in {round(time.time() - start, 3)} sec.")
         return concept_genres_map, contrast_concepts_map
 
-    def create_imbalance_eval_df(self, subset_n):
+    def create_imbalance_eval_df(self, subset_n, factor=100):
         # we dont care about concept, there is only one unified imbalanced negative set.
         self.logger.warning(
             "Using pre-generated data for imbalanced eval dataset "
             "(positive examples only occupy less than 1% of the dataset).")
-        negative_n_upsamples = int(subset_n*100) # 100
+        negative_n_upsamples = int(subset_n*factor) # 100x more negative examples than positive ones.
         # we sample negative_n_upsamples from other concepts.
         negative_df = self.pregenerated_inference_df[self.pregenerated_inference_df["category"] == "negative"].copy()
         negative_df = negative_df.sample(negative_n_upsamples, random_state=self.seed)

@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 model_name_map = {
     "gemma-2-2b": "google/gemma-2-2b-it",
     "gemma-2-9b-it": "google/gemma-2-9b-it",
+    "llama3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
 }
 
 MAX_RETRIES = 5
@@ -208,6 +209,7 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         model_name, torch_dtype=torch.bfloat16)
     is_chat_model = True if model_name in CHAT_MODELS else False
+    include_system_prompt = True if model_name == "meta-llama/Llama-3.1-8B-Instruct" else False
     model = model.cuda()
 
     tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
@@ -217,7 +219,8 @@ def main():
     dataset_factory = DatasetFactory(
         model, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
         dump_dir, use_cache=args.lm_use_cache, master_data_dir=args.master_data_dir,
-        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id, is_chat_model=is_chat_model
+        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id, is_chat_model=is_chat_model,
+        include_system_prompt=include_system_prompt,
     )
     atexit.register(dataset_factory.save_cache)
     atexit.register(dataset_factory.reset_stats)

@@ -13,15 +13,21 @@ def get_lr(optimizer):
 
 
 def get_model_continues(
-    model, tokenizer, prompts, max_new_tokens, is_chat_model=True, batch_size=8,
+    model, tokenizer, prompts, max_new_tokens, is_chat_model=True, batch_size=8, include_system_prompt=False
 ):
     """we ground examples with the model's original generation."""
     tokenizer.padding_side = "left"
     if is_chat_model:
-        def apply_chat_template(prompt):
-            messages = [{"role": "user", "content": prompt}]
-            nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
-            return tokenizer.decode(nobos)
+        if include_system_prompt:
+            def apply_chat_template(prompt):
+                messages = [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": prompt}]
+                nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+                return tokenizer.decode(nobos)
+        else:
+            def apply_chat_template(prompt):
+                messages = [{"role": "user", "content": prompt}]
+                nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+                return tokenizer.decode(nobos)
         prompts = [apply_chat_template(prompt) for prompt in prompts]
     
     # Process prompts in batches

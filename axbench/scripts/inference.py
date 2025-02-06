@@ -656,8 +656,9 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
         logger.warning("No latent model to infer. Exiting.")
         return
 
-    logger.warning(f"We are inferencing imbalanced latent once for all concepts.")
-    all_negative_df = dataset_factory.create_imbalance_eval_df(num_of_examples)
+    logger.warning(f"We are inferencing imbalanced latent once for all concepts with factor {args.imbalance_factor}.")
+    all_negative_df = dataset_factory.create_imbalance_eval_df(
+        num_of_examples, factor=args.imbalance_factor)
     all_negative_df = prepare_df(all_negative_df, tokenizer, is_chat_model)
 
     # save all_negative_df to disk
@@ -726,6 +727,7 @@ def infer_latent_on_train_data(args, rank, world_size, device, logger, training_
     concept_ids = [metadata[i]["concept_id"] for i in range(len(metadata))]
 
     # Partition concept_ids among ranks sequentially
+    assert world_size == 1, "latent_on_train_data only supports world_size = 1"
     concept_ids_per_rank = partition_concept_ids(concept_ids, world_size)
     my_concept_ids = concept_ids_per_rank[rank]
 
@@ -807,7 +809,15 @@ def infer_latent_on_train_data(args, rank, world_size, device, logger, training_
         all_results[model_name] = {}
     concept_count = 0
     for concept_id in my_concept_ids:
+        current_df = create_data_latent(
+            dataset_factory, metadata, concept_id, num_of_examples, args)
+        current_df = prepare_df(current_df, tokenizer, is_chat_model)
+        if len(current_df) == 0:
+            # for cases where the concept_id is not in the dataset, we skip it.
+            # we dont increment concept_count in this case.
+            continue
         for model_name in args.models:
+            logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
             # load model on the fly to save memory
             if model_name in LATENT_EXCLUDE_MODELS:
                 continue
@@ -826,26 +836,16 @@ def infer_latent_on_train_data(args, rank, world_size, device, logger, training_
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
 
-            dataset_category = generate_args.dataset_category
-            if (concept_id, dataset_category) not in cache_df:
-                current_df = create_data_latent(
-                    dataset_factory, metadata, concept_id, num_of_examples, args)
-                logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
-                current_df = prepare_df(current_df, tokenizer, is_chat_model)
-                cache_df[(concept_id, dataset_category)] = current_df
-            else:
-                current_df = cache_df[(concept_id, dataset_category)]
-
             results = benchmark_model.predict_latent(
                 current_df, batch_size=args.latent_batch_size, prefix_length=prefix_length, 
-                return_max_act_only=True
+                return_max_act_only=True, overwrite_concept_id=concept_count
             )
             all_results[model_name][concept_id] = results
             del benchmark_model
             torch.cuda.empty_cache()
         concept_count += 1
-        if concept_count % 500 == 0 or concept_count == len(my_concept_ids):
-            rotation_index = concept_count // 500
+        if concept_count % 500 == 0 or concept_id == my_concept_ids[-1]:
+            rotation_index = (concept_count-1) // 500
             # save results to disk
             with open(dump_dir / f"rank_{rank}_all_results_{rotation_index}.pkl", "wb") as f:
                 pickle.dump(all_results, f)

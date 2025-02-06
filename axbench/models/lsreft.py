@@ -145,6 +145,7 @@ class LsReFT(Model):
         return_max_act_only = kwargs.get("return_max_act_only", False)
         is_chat_model = kwargs.get("is_chat_model", False)
         eager_prepare_df = kwargs.get("eager_prepare_df", False)
+        overwrite_concept_id = kwargs.get("overwrite_concept_id", None)
 
         all_acts = []
         all_max_act = []
@@ -168,7 +169,8 @@ class LsReFT(Model):
             outputs = self.ax(
                 gather_acts[:, kwargs["prefix_length"]:],  # no bos token
                 subspaces={
-                    "subspaces": torch.tensor(batch["concept_id"].tolist()).to(self.device),
+                    "subspaces": torch.tensor([overwrite_concept_id]*len(batch["input"])).to(self.device) \
+                    if overwrite_concept_id is not None else torch.tensor(batch["concept_id"].tolist()).to(self.device),
                     "k": 1
                 })
             ax_acts = outputs.latent[0].float().detach().cpu()
@@ -211,7 +213,7 @@ class LsReFT(Model):
     def predict_latents(self, examples, **kwargs):
         self.ax.eval()
         batch_size = kwargs.get('batch_size', 32)
-        
+
         all_acts = []
         all_max_act = []
         all_max_act_idx = []
