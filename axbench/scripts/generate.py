@@ -215,6 +215,16 @@ def main():
     tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
     tokenizer.padding_side = "right"
 
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model.resize_token_embeddings(len(tokenizer))
+
     # Init the dataset factory.
     dataset_factory = DatasetFactory(
         model, client, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
