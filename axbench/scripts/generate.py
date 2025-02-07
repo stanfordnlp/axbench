@@ -95,6 +95,31 @@ def load_concepts(dump_dir):
         raise ValueError(f"Unsupported file type: {dump_dir}.")  
 
 
+def save_df_to_parquet_safely(df, final_path):
+    import tempfile
+    import os
+    
+    # Create temporary file in the same directory as the target
+    dirname = os.path.dirname(os.path.abspath(final_path))
+    with tempfile.NamedTemporaryFile(delete=False, dir=dirname, suffix='.parquet.tmp') as tmp:
+        temp_path = tmp.name
+        try:
+            # Write to temporary file first
+            df.to_parquet(temp_path, index=False)
+            # Ensure data is written to disk
+            os.fsync(tmp.fileno())
+        except Exception as e:
+            os.unlink(temp_path)  # Clean up temp file
+            raise e
+    
+    try:
+        # Atomic rename operation
+        os.rename(temp_path, final_path)
+    except Exception as e:
+        os.unlink(temp_path)  # Clean up temp file
+        raise e
+    
+
 def save(
     dump_dir, state, concept_id, 
     concept, concept_genres_map, 
@@ -134,7 +159,7 @@ def save(
             combined_df = pd.concat([dataset_factory.negative_df, current_df], ignore_index=True)
         else:
             combined_df = current_df
-    combined_df.to_parquet(df_path, index=False)
+    save_df_to_parquet_safely(combined_df, df_path)
 
 
 def load_state(dump_dir):

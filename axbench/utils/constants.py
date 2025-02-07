@@ -13,6 +13,7 @@ class EXAMPLE_TAG(Enum):
 
 OPENAI_RATE_LIMIT = 10
 PRICING_DOLLAR_PER_1M_TOKEN = {
+    "gpt-4o-mini-2024-07-18": {"input": 0.150, "output": 0.600},
     "gpt-4o-mini": {"input": 0.150, "output": 0.600},
     "gpt-4o": {"input": 5.00, "output": 15.00},
 }
