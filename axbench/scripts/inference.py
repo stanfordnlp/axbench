@@ -10,7 +10,6 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import atexit
-
 from axbench.utils.dataset import (
     DatasetFactory,
     SteeringDatasetFactory
@@ -145,6 +144,9 @@ def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, a
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
     current_df["sae_id"] = sae_id
+    #current_df.to_csv('/afs/cs.stanford.edu/u/qinanyu/axbench/axbench/data/output_llama/latent_data.csv', index=False)
+    #print('saved to /afs/cs.stanford.edu/u/qinanyu/axbench/axbench/data/output_llama/latent_data.csv')
+
     return current_df
 
 
@@ -191,8 +193,15 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
     steering_layers = args.steering_layers
     steering_factors = args.steering_factors
     steering_datasets = args.steering_datasets
+    input_field = args.input_field
+    inference_dir = args.inference_dir
+    if inference_dir is not None:
+        l_dir = inference_dir
+    else:
+        l_dir = dump_dir
+    
 
-    state = load_state(args.dump_dir, "steering", rank)
+    state = load_state(l_dir, "steering", rank)
     last_concept_id_processed = state.get("last_concept_id", None) if state else None
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
 
@@ -233,6 +242,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
     tokenizer = AutoTokenizer.from_pretrained(
         args.steering_model_name, use_fast=False, model_max_length=1024)
     tokenizer.padding_side = "right"
+    tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
     dataset_factory = SteeringDatasetFactory(
         tokenizer, dump_dir,
         master_data_dir=args.master_data_dir, lm_client=lm_client,
@@ -282,19 +292,35 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 intervention_type=args.steering_intervention_type, # SAE uses clamping
                 concept_id=concept_id
             )
+            if args.steering_intervention_type == "gating" or args.steering_intervention_type == "flexible" or args.steering_intervention_type == "anneal":
+                benchmark_model.load_gating(
+                    dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
+                    intervention_type=args.steering_intervention_type, # SAE uses clamping
+                    concept_id=concept_id)
+                
             benchmark_model.to(device)
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
+            if inference_dir is not None:
+                dire = inference_dir
+            else:
+                dire = dump_dir
             if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
                 benchmark_model.pre_compute_mean_activations(
-                    os.path.join(dump_dir, "inference"), master_data_dir=args.master_data_dir
+                    os.path.join(dire, "inference"), master_data_dir=args.master_data_dir
                 )
+
+            if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
+                benchmark_model.pre_compute_mean_activations(
+                    os.path.join(dire, "inference"), master_data_dir=args.master_data_dir
+                )
+
             logger.warning(f"Inference steering with {model_name} on {device} for concept {concept_id}.")
             # Run prediction
             results = benchmark_model.predict_steer(
-                current_df, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
+                current_df, input_field=input_field, concept_id=concept_id, sae_link=sae_link, sae_id=sae_id,
                 batch_size=args.steering_batch_size,
                 eval_output_length=args.steering_output_length, 
                 temperature=args.temperature,
@@ -368,8 +394,11 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     config = load_config(train_dir)
     metadata = load_metadata_flatten(data_dir)
     layer = config["layer"] if config else 0  # default layer for prompt baselines
-
-    state = load_state(args.dump_dir, "latent", rank)
+    inference_dir = args.inference_dir
+    if inference_dir is not None:
+        state = load_state(inference_dir, "latent", rank)
+    else:
+        state = load_state(dump_dir, "latent", rank)
     last_concept_id_processed = state.get("last_concept_id", None) if state else None
     logger.warning(f"Rank {rank} last concept_id processed: {last_concept_id_processed}")
 
@@ -407,9 +436,12 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     )
 
     # Load tokenizer
+    print("model_name", args.model_name)
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name, model_max_length=1024)
     tokenizer.padding_side = "right"
+    tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
 
     # Load model instance onto device
     if args.use_bf16:
@@ -494,17 +526,30 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
                     current_df[f"{model_name}_{k}"] = v
             del benchmark_model
             torch.cuda.empty_cache()
-        save(dump_dir, 'latent', current_df, rank)
+        if args.inference_dir is not None:
+            save(args.inference_dir, 'latent', current_df, rank)
+        else:
+            save(dump_dir, 'latent', current_df, rank)
         logger.warning(f"Saved inference results for concept {concept_id} to rank_{rank}_latent_data.parquet")
         # After processing, save state
         current_state = {'last_concept_id': concept_id}
-        save_state(args.dump_dir, current_state, 'latent', rank)
+        if inference_dir is not None:
+            s_dir = args.inference_dir
+        else:
+            s_dir = dump_dir
+        save_state(s_dir, current_state, 'latent', rank)
 
     # Synchronize all processes
     dist.barrier()
 
     # Rank 0 merges results
     if rank == 0:
+
+        if inference_dir is not None:
+            dump_dir = inference_dir
+        else:
+            dump_dir = dump_dir
+
         logger.warning("Rank 0 is merging results.")
         # Merge per-rank results
         all_parquet_files = list((Path(dump_dir) / "inference").glob("rank_*_latent_data.parquet"))
@@ -533,6 +578,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
         for info in file_info_list:
             df = pd.read_parquet(info['file'])
             dfs.append(df)
+
         if len(dfs) > 0:
             combined_df = pd.concat(dfs, ignore_index=True)
             combined_df.to_parquet(Path(dump_dir) / "inference" / "latent_data.parquet", engine='pyarrow')

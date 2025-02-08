@@ -118,10 +118,18 @@ def make_data_module(
     all_prompt_lengths = []
     for _, row in df.iterrows():
         _input, _output = row["input"], row["output"]
+
         # prepare input ids
         base_prompt = _input
         if isinstance(_output, float):
             _output = tokenizer.eos_token
+
+        output_token = tokenizer(_output)["input_ids"]
+
+        
+        if len(output_token) < kwargs['output_length']:
+            _output += "<|eot_id|>"
+
         base_input = base_prompt + _output
         base_prompt_ids = tokenizer(
             base_prompt, max_length=1024, truncation=True, return_tensors="pt")["input_ids"][0]

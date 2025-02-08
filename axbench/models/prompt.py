@@ -6,6 +6,7 @@ import pandas as pd
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, Union, List, Any
 from torch.utils.data import DataLoader
+from pprint import pprint
 
 import logging
 logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -15,9 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 class PromptSteering(Model):
-    input_field = "steered_input"
+    
+    # change to input_field cuz the prompt is added to the system prompt
+    input_field = "suppress_system_prompt"
+    
     def __str__(self):
-        return 'PromptSteering'
+        return 'PromptSteeringPost'
 
     def load(self, dump_dir=None, **kwargs):
         pass
@@ -43,15 +47,17 @@ class PromptSteering(Model):
         temperature = kwargs.get("temperature", 1.0)
         all_generations = []
         all_perplexities = []
+        all_raw_generations = []
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples[self.input_field].tolist()
-            # tokenize input_strings
+            input_strings = batch_examples["suppress_assistant_prompt"].tolist()
+            
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
             ).to(self.device)
+
             generations = self.model.generate(
-                **inputs, max_new_tokens=eval_output_length, do_sample=True, 
+                **inputs, max_new_tokens=eval_output_length, do_sample=True,  ##edited here
                 temperature=temperature,
             )
 
@@ -61,8 +67,14 @@ class PromptSteering(Model):
                 self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
                 for generation, input_length in zip(generations, input_lengths)
             ]
-            all_generations += generated_texts
 
+            raw_generated_texts = [
+                self.tokenizer.decode(generation, skip_special_tokens=False)
+                for generation, input_length in zip(generations, input_lengths)
+            ]
+            print(raw_generated_texts[0])
+            all_generations += generated_texts
+            all_raw_generations += raw_generated_texts
             # Calculate perplexity for each sequence
             batch_input_ids = self.tokenizer(
                 generated_texts, return_tensors="pt", padding=True, truncation=True).input_ids.to(self.device)
@@ -91,6 +103,7 @@ class PromptSteering(Model):
         return {
             "steered_generation": all_generations,
             "perplexity": all_perplexities,
+            "raw_generation": all_raw_generations,
         }
 
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
@@ -98,7 +111,7 @@ class PromptSteering(Model):
         return max_activations  
 
 class PromptBaseline(PromptSteering):
-    input_field = "input"
+    input_field = "suppress_system_prompt"
     def __str__(self):
         return 'PromptBaseline'
 

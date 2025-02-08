@@ -51,6 +51,15 @@ Optionally, provide in-context examples to reinforce this behavior.
         
 Return only the final prompt without any additional text."""
 
+T_GENERATE_SUPPRESS_PROMPT = """Generate a prompt to guide a language \
+model in producing responses. 
+
+Objective: 
+Direct the model to avoid including content related to %s (the concept) in its responses. 
+Ensure the responses do not reference this concept, even if it doesn't directly answer the question or seems out of context.
+Optionally, provide in-context examples to reinforce this behavior.
+        
+Return only the final prompt without any additional text."""
 
 # special types for dataset
 Prompt = namedtuple("Prompt", ["concept", "tag", "content"])
@@ -341,6 +350,13 @@ async def get_steering_prompts(client, concepts):
     responses = await client.chat_completions("get_steering_prompts", prompts)
     return responses
 
+async def get_suppression_prompts(client, concepts):
+    prompts = []
+    for concept in concepts:
+        prompts += [T_GENERATE_SUPPRESS_PROMPT % (concept)]
+    responses = await client.chat_completions("get_suppression_prompts", prompts)
+    return responses
+
 
 class SteeringDatasetFactory(object):
     def __init__(
@@ -373,6 +389,7 @@ class SteeringDatasetFactory(object):
                     columns = [
                         'dataset_name', 'concept_id', 'input_concept', 'input_id', 'factor', 'input'])
                 return df
+            
             elif dataset_name == "AlpacaEval":
                 # load alpaca eval dataset.
                 assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
@@ -382,6 +399,10 @@ class SteeringDatasetFactory(object):
                 # get gpt-4o boosted steering prompts.
                 steering_prompts = asyncio.run(get_steering_prompts(self.lm_model, concepts))
                 steering_prompts = [prompt.strip() for prompt in steering_prompts]
+
+                suppress_prompts = asyncio.run(get_suppression_prompts(self.lm_model, concepts))
+                suppress_prompts = [prompt.strip() for prompt in suppress_prompts]
+
                 all_examples = []
                 for idx, concept in enumerate(concepts):
                     # sample a random example from alpaca eval dataset.
@@ -389,29 +410,56 @@ class SteeringDatasetFactory(object):
                     for i in range(subset_n):
                         sampled_prompt = sampled_prompts[i]
                         # for prompt-based steering ONLY.
-                        steering_prompt = steering_prompts[idx] \
+                        steering_prompt_original = steering_prompts[idx] \
                             if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
-                        steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
+                        steered_prompt = f" {steering_prompt_original}\n\nQuestion: {sampled_prompt}"
                         formatted_steered_prompt = self.tokenizer.apply_chat_template(
-                            [{"role": "user", "content": steered_prompt}], 
+                            [{"role": "system", "content": "Please generate a fluent and concise response."},
+                            {"role": "user", "content": steered_prompt}], 
                             tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
                         formatted_steered_prompt = self.tokenizer.decode(formatted_steered_prompt)
+                        
+                        suppress_prompt_original = suppress_prompts[idx] \
+                            if suppress_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
+                        
+                        
+                        suppress_system_prompt = self.tokenizer.apply_chat_template(
+                            [{"role": "system", "content": suppress_prompt_original},
+                             {"role": "user", "content": steered_prompt}], 
+                            tokenize=True, add_generation_prompt=True)[1:]
+                        suppress_system_prompt = self.tokenizer.decode(suppress_system_prompt)
+                        
+                        suppress_assistant_prompt = self.tokenizer.apply_chat_template(
+                            [{"role": "user", "content": steered_prompt}, 
+                             {"role": "assistant", "content": suppress_prompt_original}], 
+                            tokenize=True, add_generation_prompt=True)[1:]
+                        
+                        suppress_assistant_prompt = self.tokenizer.decode(suppress_assistant_prompt)
+
                         # apply the tokenizer chat format to the prompt.
                         formatted_prompt = self.tokenizer.apply_chat_template(
                             [{"role": "user", "content": sampled_prompt}], 
                             tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                        
                         formatted_prompt = self.tokenizer.decode(formatted_prompt)
+                        
                         for factor in steering_factors:
                             all_examples += [[
                                 dataset_name, idx, concept, i, factor, 
-                                sampled_prompt, formatted_steered_prompt, formatted_prompt
+                                sampled_prompt, formatted_steered_prompt, 
+                                formatted_prompt, steering_prompt_original, 
+                                suppress_prompt_original, suppress_system_prompt,
+                                suppress_assistant_prompt
                             ]]
                 df = pd.DataFrame(
                     all_examples, 
                     columns = [
                         'dataset_name', 'concept_id', 'input_concept', 
-                        'input_id', 'factor', 'original_prompt', 'steered_input', 'input'])
+                        'input_id', 'factor', 'original_prompt', 'steered_input', 
+                        'input', 'steering_prompt_original', 'suppress_prompt_original', 
+                        'suppress_system_prompt', 'suppress_assistant_prompt'])
                 return df
+            
             elif dataset_name == "AlpacaEval_Suppress" or dataset_name == "AlpacaEval_Synergy":
                 # load alpaca eval dataset.
                 assert self.master_data_dir is not None, "Master data dir is required for AlpacaEval."
@@ -431,9 +479,11 @@ class SteeringDatasetFactory(object):
                         # for prompt-based steering ONLY.
                         steering_prompt = steering_prompts[idx] \
                             if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
+                        
+                       
                         steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
                         formatted_steered_prompt = self.tokenizer.apply_chat_template(
-                            [{"role": "user", "content": steered_prompt}], 
+                            [{"role": "system", "content": "Please generate a fluent and concise response."}, {"role": "user", "content": steered_prompt}], 
                             tokenize=False, add_generation_prompt=True)
                         for factor in common_steering_factors:
                             all_examples += [[

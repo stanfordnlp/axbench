@@ -112,12 +112,13 @@ class LoRA(Model):
         temperature = kwargs.get("temperature", 1.0)
         all_generations = []
         all_perplexities = []
+        all_raw_generations = []
         # Main training loop.
         rank = torch.distributed.get_rank()
         progress_bar = tqdm(range(0, len(examples), batch_size), position=rank, leave=True)
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['input'].tolist()
+            input_strings = batch_examples[kwargs["input_field"]].tolist()
             # tokenize input_strings
             inputs = self.tokenizer(
                 input_strings, return_tensors="pt", padding=True, truncation=True
@@ -134,7 +135,14 @@ class LoRA(Model):
                 self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
                 for generation, input_length in zip(generations, input_lengths)
             ]
+
+            raw_generated_texts = [
+                self.tokenizer.decode(generation, skip_special_tokens=False)
+                for generation in generations
+            ]
+
             all_generations += generated_texts
+            all_raw_generations += raw_generated_texts
 
             # Calculate perplexity for each sequence
             unpruned_generated_texts = [
@@ -168,5 +176,6 @@ class LoRA(Model):
 
         return {
             "steered_generation": all_generations,
+            "raw_generation": all_raw_generations,
             "perplexity": all_perplexities,
         }

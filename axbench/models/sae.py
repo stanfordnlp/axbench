@@ -3,6 +3,7 @@ from pyvene import (
     IntervenableConfig,
     IntervenableModel
 )
+from safetensors import safe_open
 
 import os, requests, torch
 import json
@@ -61,6 +62,7 @@ def load_metadata_flatten(metadata_path):
     return metadata
 
 
+# could change to LlamaScopeSAE but is this necessary?
 def save_pruned_sae(
     metadata_path, dump_dir, modified_refs=None, savefile="GemmaScopeSAE.pt", sae_params=None
 ):
@@ -81,39 +83,78 @@ def save_pruned_sae(
     response = requests.get(sae_url, headers=headers).json()
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
-    if sae_params is None:
-        path_to_params = hf_hub_download(
-            repo_id=hf_repo,
-            filename=f"{hf_folder}/params.npz",
-            force_download=False,
-        )
-        sae_params = np.load(path_to_params)
-    sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
-    pruned_sae_pt_params = {
-        "b_dec": sae_pt_params["b_dec"],
-        "W_dec": [],
-        "W_enc": [],
-        "b_enc": [],
-        "threshold": []
-    }
-    for concept_id, m in enumerate(flatten_metadata):
-        sae_id = int(m["ref"].split("/")[-1])
-        pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
-        pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
-        pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
-        pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
-    for k, v in pruned_sae_pt_params.items():
-        if k == "b_dec":
-            continue
-        if k == "W_enc":
-            pruned_sae_pt_params[k] = torch.cat(v, dim=1)
-        else:
-            pruned_sae_pt_params[k] = torch.cat(v, dim=0)
+    if "gemma" in hf_repo:
+        if sae_params is None:
+            path_to_params = hf_hub_download(
+                repo_id=hf_repo,
+                filename=f"{hf_folder}/params.npz",
+                force_download=False,
+            )
+            sae_params = np.load(path_to_params)
+            sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
+
+            pruned_sae_pt_params = {
+                "b_dec": sae_pt_params["b_dec"],
+                "W_dec": [],
+                "W_enc": [],
+                "b_enc": [],
+                "threshold": []
+            }
+            for concept_id, m in enumerate(flatten_metadata):
+                sae_id = int(m["ref"].split("/")[-1])
+                pruned_sae_pt_params["W_dec"].append(sae_pt_params["W_dec"][[sae_id], :])
+                pruned_sae_pt_params["W_enc"].append(sae_pt_params["W_enc"][:, [sae_id]])
+                pruned_sae_pt_params["b_enc"].append(sae_pt_params["b_enc"][[sae_id]])
+                pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
+            for k, v in pruned_sae_pt_params.items():
+                if k == "b_dec":
+                    continue
+                if k == "W_enc":
+                    pruned_sae_pt_params[k] = torch.cat(v, dim=1)
+                else:
+                    pruned_sae_pt_params[k] = torch.cat(v, dim=0)
+    else:
+        if sae_params is None:
+            path_to_params = hf_hub_download(
+                repo_id=hf_repo,
+                filename=f"{hf_folder}/checkpoints/final.safetensors",
+                force_download=False,
+            )
+
+            sae_pt_params = {}
+            with safe_open(path_to_params, framework="pt", device=0) as f:
+                for k in f.keys():
+                    sae_pt_params[k] = f.get_tensor(k)# loads the full tensor given a key
+            
+            pruned_sae_pt_params = {
+                "b_dec": sae_pt_params["decoder.bias"],
+                "W_dec": [],
+                "W_enc": [],
+                "b_enc": [],
+            }
+            
+            for concept_id, m in enumerate(flatten_metadata):
+                sae_id = int(m["ref"].split("/")[-1])
+                
+                pruned_sae_pt_params["W_enc"].append(sae_pt_params["encoder.weight"][[sae_id], :])
+                pruned_sae_pt_params["W_dec"].append(sae_pt_params["decoder.weight"][:, [sae_id]])
+                pruned_sae_pt_params["b_enc"].append(sae_pt_params["encoder.bias"][[sae_id]])
+            
+            for k, v in pruned_sae_pt_params.items():
+                if k == "b_dec":
+                    continue
+                if k == "W_dec":
+                    pruned_sae_pt_params[k] = torch.stack(v).squeeze()
+                else:
+                    pruned_sae_pt_params[k] = torch.stack(v).squeeze().T
+                #pruned_sae_pt_params["threshold"].append(sae_pt_params["threshold"][[sae_id]])
+    
+    
     torch.save(pruned_sae_pt_params, dump_dir / savefile) # sae only has one file
     return sae_params
 
 
-class GemmaScopeSAE(Model):
+class GemmaScopeSAE(Model): # need to rewrite this to Llama Scope SAE
     def __str__(self):
         return 'GemmaScopeSAE'
     
@@ -151,11 +192,14 @@ class GemmaScopeSAE(Model):
 
     def load(self, dump_dir=None, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
+
         logger.warning(f"Loading SAE from {dump_dir}/{model_name}.pt")
+        
         params = torch.load(
             f"{dump_dir}/{model_name}.pt"
         )
         pt_params = {k: v.to(self.device) for k, v in params.items()}
+        
         self.make_model(low_rank_dimension=params['W_enc'].shape[1], **kwargs)
         if isinstance(self.ax, SubspaceIntervention) or isinstance(self.ax, AdditionIntervention):
             self.ax.proj.weight.data = pt_params['W_dec']
@@ -171,6 +215,7 @@ class GemmaScopeSAE(Model):
         # Loop over all praqut files in dump_dir.
         sae_links = []
         for file in os.listdir(dump_dir):
+            print(dump_dir)
             if file.endswith(".parquet") and file.startswith("latent_data"):
                 df = pd.read_parquet(os.path.join(dump_dir, file))
                 # sort by concept_id from small to large and enumerate through all concept_ids.

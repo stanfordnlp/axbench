@@ -36,6 +36,9 @@ class DatasetArgs:
     use_bf16: Optional[bool] = False
     dataset_category: Optional[str] = "instruction"
     lm_use_cache: Optional[bool] = True
+    input_field: Optional[str] = "input"
+    inference_dir: Optional[str] = None
+    
 
     def __init__(
         self,

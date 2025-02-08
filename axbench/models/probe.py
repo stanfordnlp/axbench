@@ -53,7 +53,6 @@ class DataCollator(object):
                 [0 for _ in range(max_intervention_len - len(inst["intervention_locations"][0]))])
             inst["intervention_locations"] = torch.cat([inst["intervention_locations"], _intervention_location_paddings], dim=-1).int()
             inst["intervention_masks"] = torch.cat([_intervention_mask, _intervention_mask_paddings], dim=-1).int()
-
             _input_id_paddings = torch.tensor(
                 [self.tokenizer.pad_token_id for _ in range(max_seq_len - non_pad_len)])
             inst["input_ids"] = torch.cat((inst["input_ids"], torch.tensor([self.tokenizer.pad_token_id]), _input_id_paddings)).int()

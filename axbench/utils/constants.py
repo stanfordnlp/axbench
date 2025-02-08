@@ -21,7 +21,8 @@ UNIT_1M = 1_000_000
 
 CHAT_MODELS = {
     "google/gemma-2-2b-it",
-    "google/gemma-2-9b-it"
+    "google/gemma-2-9b-it",
+    'meta-llama/Llama-3.1-8B-Instruct'
 }
 
 BASE_MODELS = {

@@ -69,7 +69,7 @@ def data_generator(data_dir):
         concept_ids.sort()
         for concept_id in concept_ids:
             if concept_id >= 0:
-                # print(f"Processing concept_id {concept_id}")
+                print(f"Processing concept_id {concept_id}")
                 df_subset = df[df['concept_id'] == concept_id]
                 yield (concept_id, df_subset)
 
@@ -86,22 +86,35 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model, max_num_of_examples=None):
+def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model, max_num_of_examples=None, suppress_steer_dict_path = None):
+    
     suffix_length = get_suffix_length(tokenizer)
     genre = metadata["concept_genres_map"][concept][0]
     # assign input and output containing concept with 1, otherwise 0
     positive_df = original_df[(original_df["output_concept"] == concept) & (original_df["category"] == "positive")]
     negative_df = negative_df[(negative_df["concept_genre"] == genre)]
+    if suppress_steer_dict_path is not None:
+        with open(suppress_steer_dict_path, 'r') as f:
+            suppress_steer_dict = json.load(f)
+            s = True
+    else:
+        s = False
     if max_num_of_examples:
         positive_df = positive_df.head(max_num_of_examples // 2)
         negative_df = negative_df.head(max_num_of_examples // 2)
     if binarize:
         if is_chat_model:
             def apply_chat_template(row):
-                messages = [
-                    {"role": "user", "content": row["input"]},
-                    {"role": "assistant", "content": row["output"]}
-                ]
+                if s:
+                    messages = [
+                        {"role": "user", "content": suppress_steer_dict[concept] + "\n\nQuestion:"+[row["input"]]},
+                        {"role": "assistant", "content": row["output"]}
+                    ]
+                else:
+                    messages = [
+                        {"role": "user", "content": row["input"]},
+                        {"role": "assistant", "content": row["output"]}
+                    ]
                 nobos = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
                 return tokenizer.decode(nobos)
             positive_df = positive_df.copy()
@@ -115,23 +128,31 @@ def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize,
             negative_df['combined'] = negative_df['input'] + negative_df['output']
         positive_df = pd.DataFrame(positive_df[['combined']]).rename(columns={'combined': 'input'})
         negative_df = pd.DataFrame(negative_df[['combined']]).rename(columns={'combined': 'input'})
+
         positive_df["labels"] = 1
         negative_df["labels"] = 0
+
         return pd.concat([positive_df, negative_df], axis=0)
-    else:
+    else:        
         # if not binarizing, we need to apply the chat template to the input. It becomes a standard instruction tuning task.
         if train_on_negative:
             all_df = pd.concat([positive_df, negative_df], axis=0)
-        else:
-            all_df = positive_df
+        else:          
+            if s:
+                all_df = negative_df
+            else:
+                all_df = positive_df
+        
         if is_chat_model:
             def apply_chat_template(row):
-                messages = [{"role": "user", "content": row["input"]}]
+                if s:
+                    messages = [{"role": "user", "content": suppress_steer_dict[concept] + "\n\nQuestion:"+row["input"]}]
+                else:
+                    messages = [{"role": "user", "content": row["input"]}]       
                 nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
                 return tokenizer.decode(nobos)
             all_df['input'] = all_df.apply(apply_chat_template, axis=1)
         return all_df # do nothing, the task will be standard instruction tuning.
-
 
 def partition_list(lst, n):
     """
@@ -182,6 +203,7 @@ def main():
     # Get the rank and world_size from environment variables
     rank = dist.get_rank()
     world_size = dist.get_world_size()
+  
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
     # Set the device for this process
@@ -226,9 +248,11 @@ def main():
     metadata_path = os.path.join(args.data_dir, 'metadata.jsonl')
     metadata = load_metadata(metadata_path)
     df_generator = data_generator(args.data_dir)
+
     all_df = pd.read_parquet(os.path.join(args.data_dir, 'train_data.parquet')) # this is needed for binarizing the dataset
     negative_df = all_df[(all_df["output_concept"] == EMPTY_CONCEPT) & (all_df["category"] == "negative")]
     df_list = list(df_generator)
+    
     logger.warning(f"Total number of concept df loaded: {len(df_list)}")
     if args.max_concepts:
         logger.warning(f"All ranks only processing {args.max_concepts} concepts")
@@ -245,6 +269,7 @@ def main():
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, model_max_length=512)
     tokenizer.padding_side = "right"
+    tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
 
     # Partition df_list among ranks
     df_list_per_rank = partition_list(df_list, world_size)
@@ -305,6 +330,7 @@ def main():
                 "positions": args.models[model_name].intervention_positions,
                 "exclude_bos": args.models[model_name].exclude_bos,
                 "metadata_path": metadata_path,
+                "output_length": 128,
             }
             prepared_df = concept_df.copy()
             prepared_df = prepare_df(
@@ -312,10 +338,27 @@ def main():
                 binarize=args.models[model_name].binarize_dataset, 
                 train_on_negative=args.models[model_name].train_on_negative,
                 is_chat_model=is_chat_model,
-                max_num_of_examples=args.max_num_of_examples
+                max_num_of_examples=args.max_num_of_examples,
+                suppress_steer_dict_path=args.steer_suppress_dict_path
             )
-            benchmark_model.train(prepared_df, **kwargs)
+            if args.models[model_name].intervention_type == "anneal":
+                benchmark_model.train_anneal(prepared_df, **kwargs)
+            elif args.models[model_name].intervention_type == "noise" or args.models[model_name].intervention_type == "factor":
+                benchmark_model.train_noise(prepared_df, **kwargs)
+            else:
+                benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            
+            if args.models[model_name].intervention_type == "factor":
+                print("training factor")
+                benchmark_model.train_factor(prepared_df, concept_id, dump_dir, model_name=f"rank_{rank}_{model_name}",**kwargs)
+
+            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "anneal":
+                benchmark_model.save_gating(dump_dir, model_name=f"rank_{rank}_{model_name}")
+            
+            if args.models[model_name].intervention_type == "factor":
+                benchmark_model.save_factor_gating(dump_dir, model_name=f"rank_{rank}_{model_name}")
+
             if model_name == "SFT":
                 # we need to reload the original model after SFT.
                 if args.use_bf16:
@@ -341,7 +384,6 @@ def main():
     # Rank 0 merges results
     if rank == 0:
         logger.warning("Rank 0 is merging results.")
-
         # Merging metadata
         metadata_entries = []
         for r in range(world_size):
@@ -367,52 +409,62 @@ def main():
             # Collect per-rank weight and bias files
             weight_files = [dump_dir / f"rank_{r}_{model_name}_weight.pt" for r in range(world_size)]
             bias_files = [dump_dir / f"rank_{r}_{model_name}_bias.pt" for r in range(world_size)]
-
-            # Check if files exist
             weight_files_existing = [f for f in weight_files if f.exists()]
             bias_files_existing = [f for f in bias_files if f.exists()]
+
+            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor" or args.models[model_name].intervention_type == "anneal":
+                weight_files_gating = [dump_dir / f"rank_{r}_{model_name}_gating_weight.pt" for r in range(world_size)]
+                bias_files_gating = [dump_dir / f"rank_{r}_{model_name}_gating_bias.pt" for r in range(world_size)]
+                weight_files_gating_existing = [f for f in weight_files_gating if f.exists()]
+                bias_files_gating_existing = [f for f in bias_files_gating if f.exists()]
 
             if not weight_files_existing or not bias_files_existing:
                 logger.warning(f"No weight or bias files found for model {model_name}. Skipping.")
                 continue
+            
+            def write_files(weight_files_existing, bias_files_existing, weight_file, bias_file):
+                # Check if files exist
+                # Load weights and biases
+                weights = [torch.load(f) for f in weight_files_existing]
+                biases = [torch.load(f) for f in bias_files_existing]
 
-            # Load weights and biases
-            weights = [torch.load(f) for f in weight_files_existing]
-            biases = [torch.load(f) for f in bias_files_existing]
+                # Concatenate weights and biases
+                if isinstance(weights[0], dict):
+                    merged_weight = {}
+                    for key in weights[0].keys():
+                        weight_tensors = [w[key] for w in weights]
+                        merged_weight[key] = torch.cat(weight_tensors, dim=0)
+                else:
+                    merged_weight = torch.cat(weights, dim=0)
 
-            # Concatenate weights and biases
-            if isinstance(weights[0], dict):
-                merged_weight = {}
-                for key in weights[0].keys():
-                    weight_tensors = [w[key] for w in weights]
-                    merged_weight[key] = torch.cat(weight_tensors, dim=0)
-            else:
-                merged_weight = torch.cat(weights, dim=0)
+                # Handle dictionary biases
+                if isinstance(biases[0], dict):
+                    merged_bias = {}
+                    for key in biases[0].keys():
+                        bias_tensors = [b[key] for b in biases]
+                        merged_bias[key] = torch.cat(bias_tensors, dim=0)
+                else:
+                    merged_bias = torch.cat(biases, dim=0)
 
-            # Handle dictionary biases
-            if isinstance(biases[0], dict):
-                merged_bias = {}
-                for key in biases[0].keys():
-                    bias_tensors = [b[key] for b in biases]
-                    merged_bias[key] = torch.cat(bias_tensors, dim=0)
-            else:
-                merged_bias = torch.cat(biases, dim=0)
+                # Save merged weight and bias files
 
-            # Save merged weight and bias files
-            weight_file = dump_dir / f"{model_name}_weight.pt"
-            bias_file = dump_dir / f"{model_name}_bias.pt"
-            torch.save(merged_weight, weight_file)
-            torch.save(merged_bias, bias_file)
-            logger.warning(f"Saved merged weights and biases for model {model_name}")
+                torch.save(merged_weight, weight_file)
+                torch.save(merged_bias, bias_file)
+                logger.warning(f"Saved merged weights and biases for model {model_name}")
 
-            # Optionally delete per-rank files
-            for f in weight_files_existing + bias_files_existing:
-                try:
-                    f.unlink()
-                    logger.warning(f"Deleted file {f.name}")
-                except Exception as e:
-                    logger.error(f"Error deleting file {f.name}: {e}")
+                # Optionally delete per-rank files
+                for f in weight_files_existing + bias_files_existing:
+                    try:
+                        f.unlink()
+                        logger.warning(f"Deleted file {f.name}")
+                    except Exception as e:
+                        logger.error(f"Error deleting file {f.name}: {e}")
+            
+            write_files(weight_files_existing, bias_files_existing, dump_dir / f"{model_name}_weight.pt", dump_dir / f"{model_name}_bias.pt")
 
+            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor" or args.models[model_name].intervention_type == "anneal":
+                write_files(weight_files_gating_existing, bias_files_gating_existing, dump_dir / f"{model_name}_gating_weight.pt", dump_dir / f"{model_name}_gating_bias.pt")
+    
     # Finalize the process group
     dist.destroy_process_group()
 

@@ -55,11 +55,9 @@ class TopKReLUSubspaceIntervention(
         topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
         non_topk_latent = latent.clone()
         non_topk_latent.scatter_(-1, topk_indices, 0)
-
         # get orthogonal component
         proj_vec = torch.bmm(latent.unsqueeze(dim=-1), v.permute(0, 2, 1)) # bs, s, 1 * bs, 1, h = bs, s, h
         base_orthogonal = base - proj_vec
-
         # get steering magnitude using mean of topk activations of prompt latent
         max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
         # steering vector
@@ -72,7 +70,6 @@ class TopKReLUSubspaceIntervention(
             output=output.to(base.dtype),
             latent=[latent, non_topk_latent]
         )
-
 
 class TopKReLUIntervention(
     SourcelessIntervention,
@@ -101,7 +98,12 @@ class TopKReLUIntervention(
             for i in range(base.shape[0]):
                 v += [self.proj.weight[0]]
         v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
-        
+        ## add noise
+        noise_ = torch.zeros_like(base).uniform_(-1,1)
+        mag = 15 / torch.sqrt(torch.tensor(base.shape[2]*v.shape[1]))
+        noise_ = noise_ * mag
+        base = base + noise_
+
         # get latent
         latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
         topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
@@ -121,6 +123,258 @@ class TopKReLUIntervention(
             latent=[latent, non_topk_latent]
         )
 
+class TopKReLUNoiseIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+            self.mask = None
+    
+    def set_seq_len_mask(self, mask):
+        #print(mask)
+        self.mask = mask
+    
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, h, 1
+        ## add noise
+        noise_ = torch.zeros_like(base).uniform_(-1,1).to(base.dtype) #bs, seq, hs
+        mag = 200 / torch.sqrt(torch.sum(self.mask, dim = 1)*v.shape[1]).to(base.dtype) # bs, 1
+        noise_ = torch.einsum("bsh,b->bsh",noise_, mag.to(base.dtype))
+        base = base + noise_
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, s, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector
+        steering_vec = max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, h
+        # addition intervention
+        output = base + steering_vec
+
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
+        )
+
+class TopKReLUGatingIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + Sigmoid(Gating(h))*Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+        
+        self.gating = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.gating.weight.fill_(0.01)
+            self.gating.bias.fill_(0)
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        g = []
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+                g += [self.gating.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+                g += [self.gating.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, hidden, 1     
+        g = torch.stack(g, dim=0).unsqueeze(dim=-1) # bs, hidden, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, seq, 1
+
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector
+        gating = torch.sigmoid(self.gating(base)) #bs, seq, 1
+        steering_vec = gating * max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, hs
+        # addition intervention
+
+        output = base + steering_vec
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
+        )
+
+class TopKReLUGatingAnnealIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + Sigmoid(Gating(h)/temperature)*Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+        
+        self.gating = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"])
+        with torch.no_grad():
+            self.gating.weight.fill_(0.01)
+            self.gating.bias.fill_(0)
+            
+        self.temperature = nn.Parameter(torch.tensor(0.01), requires_grad=False)
+    
+    def get_temperature(self) -> torch.Tensor:
+        return self.temperature
+
+    def set_temperature(self, temp: torch.Tensor) -> None:
+        self.temperature.data = temp
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        g = []
+
+        if "subspaces" in subspaces:
+            for subspace in subspaces["subspaces"]:
+                v += [self.proj.weight[subspace]]
+                g += [self.gating.weight[subspace]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+                g += [self.gating.weight[0]]
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, hidden, 1     
+        g = torch.stack(g, dim=0).unsqueeze(dim=-1) # bs, hidden, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, seq, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector with temperature-controlled sigmoid
+        gating = torch.sigmoid(self.gating(base) / self.temperature) #bs, seq, 1
+        steering_vec = gating * max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, hs
+        # addition intervention
+
+        output = base + steering_vec
+        return InterventionOutput(
+            output=output.to(base.dtype),
+            latent=[latent, non_topk_latent]
+        )
+    
+class FlexibleFactorIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    """
+    Phi(h) = h + Factor(h)*Mean(TopK(ReLU(h@v)))*v
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        # Initialize as non-trainable Linear layer with bfloat16
+        self.proj = torch.nn.Linear(
+            self.embed_dim, 
+            kwargs["low_rank_dimension"], 
+            bias=True,
+            dtype=torch.bfloat16
+        )
+        with torch.no_grad():
+            self.proj.weight.fill_(0.01)
+            self.proj.bias.fill_(0)
+        # Freeze the parameters
+        self.proj.weight.requires_grad = False
+        self.proj.bias.requires_grad = False
+
+        self.gating = torch.nn.Linear(
+            self.embed_dim, kwargs["low_rank_dimension"] )
+        self.gating = self.gating.to(dtype=torch.bfloat16)
+        with torch.no_grad():
+            self.gating.weight.fill_(torch.tensor(1,dtype=torch.bfloat16))
+            self.gating.bias.fill_(torch.tensor(0,dtype=torch.bfloat16))
+    
+    def load_steer_vector(self,  dump_dir, model_name):
+        weight = torch.load(
+            f"{dump_dir}/{model_name}_weight.pt"
+        )
+        print(weight.shape)
+        self.proj.weight =torch.nn.Parameter(weight.cuda(), requires_grad=False)
+        
+
+    def forward(
+        self, base, source=None, subspaces=None
+    ):
+        v = []
+        g = []
+
+        if "subspaces" in subspaces:
+            for i in range(base.shape[0]):
+                print("has subspaces", subspaces["subspaces"])
+                v += [self.proj.weight[subspaces["subspaces"]]]
+                g += [self.gating.weight[0]]
+        else:
+            for i in range(base.shape[0]):
+                v += [self.proj.weight[0]]
+                g += [self.gating.weight[0]]
+
+        v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, hidden, 1     
+        g = torch.stack(g, dim=0).unsqueeze(dim=-1) # bs, hidden, 1
+        
+        # get latent
+        latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, seq, 1
+        topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
+        non_topk_latent = latent.clone()
+        non_topk_latent.scatter_(-1, topk_indices, 0)
+        # get steering magnitude using mean of topk activations of prompt latent
+        max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
+        # steering vector with temperature-controlled sigmoid
+        gating = self.gating(base) #gating: hs,1, base: bs, seq, hs -> bs, seq, 1
+        steering_vec = torch.relu(gating) * max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, hs
+        # addition intervention
+        output = base + steering_vec
+        return InterventionOutput(
+            output=output,
+            latent=[latent, non_topk_latent]
+        )
 
 class ConceptReFTIntervention(
     SourcelessIntervention,
@@ -166,7 +420,6 @@ class ConceptReFTIntervention(
         )
         return output.to(base.dtype)
     
-
 class AdditionIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
@@ -183,10 +436,103 @@ class AdditionIntervention(
         # use subspaces["idx"] to select the correct weight vector
         steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * \
             subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
-        output = base + steering_vec.unsqueeze(dim=1)
+
+        projection = torch.einsum('bji,bi->bj', base, self.proj.weight[subspaces["idx"]])
+        mask = (projection > 0).float()
+        steering_vec = torch.einsum("bh,bs->bsh", steering_vec, mask)
+        output = base + steering_vec
+        #output = base + steering_vec.unsqueeze(dim=1)
         return output
     
+class AdditionGatingIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        # Note that we initialise these to zeros because we're loading in pre-trained weights.
+        # If you want to train your own SAEs then we recommend using blah
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) # [bs, hs, 1]
+        self.gating = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) #[bs, hs, 1]
 
+    def forward(self, base, source=None, subspaces=None):
+        # use subspaces["idx"] to select the correct weight vector
+        """
+        Phi(h) = h + Sigmoid(Gating(h))*Mean(TopK(ReLU(h@v)))*v
+        """
+        gating =  torch.sigmoid(self.gating(base))
+        steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * \
+            subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        gating = gating[torch.arange(gating.shape[0]),:,subspaces["idx"]]
+        gating_steered = torch.einsum('bi,bj->bij', gating, steering_vec)
+        output = base + gating_steered
+        return output
+    
+class AdditionGatingAnnealIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        # Note that we initialise these to zeros because we're loading in pre-trained weights.
+        # If you want to train your own SAEs then we recommend using blah
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) # [bs, hs, 1]
+        self.gating = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) #[bs, hs, 1]
+
+    def forward(self, base, source=None, subspaces=None):
+        # use subspaces["idx"] to select the correct weight vector
+        """
+        Phi(h) = h + Sigmoid(Gating(h))*Mean(TopK(ReLU(h@v)))*v
+        """
+        gating =  torch.sigmoid(self.gating(base)/0.001)    
+        steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * \
+            subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        gating = gating[torch.arange(gating.shape[0]),:,subspaces["idx"]]
+        #bs, seq, hs * bs, hs => bs, seq
+        projection = torch.einsum('bji,bi->bj', base, self.proj.weight[subspaces["idx"]])
+        gating_steered = torch.einsum('bi,bj->bij', gating, steering_vec)
+        output = base + gating_steered
+        return output
+
+class AdditionFlexibleIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        # Note that we initialise these to zeros because we're loading in pre-trained weights.
+        # If you want to train your own SAEs then we recommend using blah
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) # [bs, hs, 1]
+        self.gating = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True) #[bs, hs, 1]
+
+    def forward(self, base, source=None, subspaces=None):
+        # use subspaces["idx"] to select the correct weight vector
+        """
+        Phi(h) = h + Factor(h)*Mean(TopK(ReLU(h@v)))*v
+        """
+        gating =  self.gating(base)
+        steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        factor_vec = gating[torch.arange(gating.shape[0]),:,subspaces["idx"]]
+        print(factor_vec[0][0])
+        print(subspaces["idx"]) #bs, seq
+        print(torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
+        #bs, seq, hs * bs, hs => bs, seq
+        #projection = torch.einsum('bji,bi->bj', base, self.proj.weight[subspaces["idx"]])   
+        factor_steered = torch.einsum('bi,bj->bij', -torch.relu(factor_vec), steering_vec)
+        factor_steered = torch.einsum('bsh, bs->bsh',factor_steered, 
+                                      torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
+        output = base + factor_steered
+        return output
+    
 class SigmoidMaskAdditionIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
@@ -222,7 +568,6 @@ class SigmoidMaskAdditionIntervention(
         output = base + steering_vec.unsqueeze(dim=1)
         return output
 
-
 class SubspaceIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
@@ -253,7 +598,6 @@ class SubspaceIntervention(
         if base.shape[1] > 1:
             output[:,:prefix_length] = cached_base_prefix
         return output
-
 
 class DictionaryAdditionIntervention(
     SourcelessIntervention,
@@ -304,7 +648,6 @@ class DictionaryAdditionIntervention(
 
         return x_new
 
-
 class JumpReLUSAECollectIntervention(
     CollectIntervention
 ):
@@ -325,7 +668,6 @@ class JumpReLUSAECollectIntervention(
         acts = mask * torch.nn.functional.relu(pre_acts)
         return acts
     
-
 class ProbeIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
@@ -356,7 +698,6 @@ class ProbeIntervention(
             latent=[latent]
         )
     
-
 class SparseProbeIntervention(
     # We still inherit from these classes to keep it as close as possible to the LsReFT impl.
     SourcelessIntervention,
@@ -397,7 +738,6 @@ class SparseProbeIntervention(
             latent=[max_mean_latent, non_topk_latent, latent]
         )
     
-
 class SteeringVectorIntervention(
     SourcelessIntervention,
     TrainableIntervention, 

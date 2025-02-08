@@ -17,6 +17,7 @@ def get_model_continues(
 ):
     """we ground examples with the model's original generation."""
     tokenizer.padding_side = "left"
+    tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
     if is_chat_model:
         def apply_chat_template(prompt):
             messages = [{"role": "user", "content": prompt}]

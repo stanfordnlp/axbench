@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 model_name_map = {
     "gemma-2-2b": "google/gemma-2-2b-it",
     "gemma-2-9b-it": "google/gemma-2-9b-it",
+    "llama3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
 }
 
 MAX_RETRIES = 5

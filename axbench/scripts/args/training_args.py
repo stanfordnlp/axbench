@@ -58,7 +58,8 @@ class ModelParams:
     weight_decay: Optional[float] = 0.0
     temperature_start: Optional[float] = 1e-2
     temperature_end: Optional[float] = 1e-7
-
+    steer_suppress_dict_path: Optional[str] = None
+    inference_dir: Optional[str] = None
 class TrainingArgs:
     def __init__(
         self,
@@ -82,7 +83,7 @@ class TrainingArgs:
         global_params = [
             'concept_path', 'model_name', 'layer', 'component',
             'data_dir', 'dump_dir', 'run_name', 'seed', 'use_bf16', 'overwrite_data_dir', 'max_concepts',
-            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'max_num_of_examples'
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'max_num_of_examples', 
         ]
         hierarchical_params = [
             'batch_size', 'n_epochs', 'topk',
@@ -91,7 +92,7 @@ class TrainingArgs:
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
             'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end',
-            'train_on_negative'
+            'train_on_negative', 'steer_suppress_dict_path', 'inference_dir'
         ]
         all_params = global_params + hierarchical_params
 
@@ -189,7 +190,7 @@ class TrainingArgs:
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
             'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir',
-            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'steer_suppress_dict_path', 'inference_dir'
         ]
         list_params = ['intervention_layers', 'reft_layers', 'lora_layers', 'lora_components']
 

@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 import httpx, asyncio
 import datetime
 import yaml
-from inference import LATENT_EXCLUDE_MODELS, STEERING_EXCLUDE_MODELS
+from axbench.axbench.scripts.inference import LATENT_EXCLUDE_MODELS, STEERING_EXCLUDE_MODELS
 import axbench
 from axbench.utils.plot_utils import (
     plot_aggregated_roc, 

@@ -32,7 +32,22 @@ class BaseModel(object):
     def train(self, examples, **kwargs):
         pass
 
+    def train_anneal(self, examples, **kwargs):
+        pass
+
+    def train_noise(self, examples, **kwargs):
+        pass
+
+    def train_factor(self, examples, concept_id, dir_name, model_name, **kwargs):
+        pass
+
     def save(self, dump_dir, **kwargs):
+        pass
+
+    def save_gating(self, dump_dir, **kwargs):
+        pass
+
+    def save_factor_gating(self, dump_dir, **kwargs):
         pass
 
     def load(self, dump_dir, **kwargs):
@@ -48,6 +63,9 @@ class BaseModel(object):
         pass
 
     def pre_compute_mean_activations(self, dump_dir, **kwargs):
+        pass
+
+    def get_dummy_max_act(self, dump_dir, **kwargs):
         pass
 
     def to(self, device):
@@ -91,12 +109,44 @@ class Model(BaseModel):
         model_name = kwargs.get("model_name", self.__str__())
         weight_file = dump_dir / f"{model_name}_weight.pt"
         weight = self.ax.proj.weight.data.cpu()
+        
+        print(weight.shape)
         if weight_file.exists():
             weight = torch.cat([torch.load(weight_file), weight], dim=0)
         torch.save(weight, weight_file)
         
         bias_file = dump_dir / f"{model_name}_bias.pt"
         bias = self.ax.proj.bias.data.cpu()
+        if bias_file.exists():
+            bias = torch.cat([torch.load(bias_file), bias], dim=0)
+        torch.save(bias, bias_file)
+    
+    def save_gating(self, dump_dir, **kwargs):
+        print(kwargs)
+        model_name = kwargs.get("model_name", self.__str__())
+        weight_file = dump_dir / f"{model_name}_gating_weight.pt"
+        weight = self.ax.gating.weight.data.cpu()
+        if weight_file.exists():
+            weight = torch.cat([torch.load(weight_file), weight], dim=0)
+        torch.save(weight, weight_file)
+        
+        bias_file = dump_dir / f"{model_name}_gating_bias.pt"
+        bias = self.ax.gating.bias.data.cpu()
+        if bias_file.exists():
+            bias = torch.cat([torch.load(bias_file), bias], dim=0)
+        torch.save(bias, bias_file)
+
+    def save_factor_gating(self, dump_dir, **kwargs):
+        print(kwargs)
+        model_name = kwargs.get("model_name", self.__str__())
+        weight_file = dump_dir / f"{model_name}_gating_weight.pt"
+        weight = self.ax2.gating.weight.data.cpu()
+        if weight_file.exists():
+            weight = torch.cat([torch.load(weight_file), weight], dim=0)
+        torch.save(weight, weight_file)
+        
+        bias_file = dump_dir / f"{model_name}_gating_bias.pt"
+        bias = self.ax2.gating.bias.data.cpu()
         if bias_file.exists():
             bias = torch.cat([torch.load(bias_file), bias], dim=0)
         torch.save(bias, bias_file)
@@ -112,6 +162,17 @@ class Model(BaseModel):
         self.make_model(low_rank_dimension=weight.shape[0], **kwargs)
         self.ax.proj.weight.data = weight.to(self.device)
         self.ax.proj.bias.data = bias.to(self.device)
+    
+    def load_gating(self, dump_dir, **kwargs):
+        model_name = kwargs.get("model_name", self.__str__())
+        weight = torch.load(
+            f"{dump_dir}/{model_name}_gating_weight.pt"
+        )
+        bias = torch.load(
+            f"{dump_dir}/{model_name}_gating_bias.pt"
+        )
+        self.ax.gating.weight.data = weight.to(self.device)
+        self.ax.gating.bias.data = bias.to(self.device)
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
@@ -181,12 +242,13 @@ class Model(BaseModel):
         all_generations = []
         all_perplexities = []
         all_strenghts = []
+        all_raw_generations = []
         # Main training loop.
         rank = torch.distributed.get_rank()
         progress_bar = tqdm(range(0, len(examples), batch_size), position=rank, leave=True)
         for i in range(0, len(examples), batch_size):
             batch_examples = examples.iloc[i:i+batch_size]
-            input_strings = batch_examples['input'].tolist()
+            input_strings = batch_examples[kwargs["input_field"]].tolist() #edited here
             mag = torch.tensor(batch_examples['factor'].tolist()).to(self.device)
             idx = torch.tensor(batch_examples["concept_id"].tolist()).to(self.device)
             max_acts = torch.tensor([
@@ -211,7 +273,19 @@ class Model(BaseModel):
                 self.tokenizer.decode(generation[input_length:], skip_special_tokens=True)
                 for generation, input_length in zip(generations, input_lengths)
             ]
+
+            raw_generated_texts = [
+                self.tokenizer.decode(generation, skip_special_tokens=False)
+                for generation, input_length in zip(generations, input_lengths)
+            ]
+
+
+            #Egenerated_texts = [
+            #E    self.tokenizer.decode(generation, skip_special_tokens=True)
+            #E    for generation, input_length in zip(generations, input_lengths)
+            #E]
             all_generations += generated_texts
+            all_raw_generations += raw_generated_texts
 
             # Calculate perplexity for each sequence
             unpruned_generated_texts = [
@@ -246,6 +320,7 @@ class Model(BaseModel):
 
         return {
             "steered_generation": all_generations,
+            "raw_generation": all_raw_generations,
             "perplexity": all_perplexities,
             "strength": all_strenghts,
         }
@@ -284,6 +359,14 @@ class Model(BaseModel):
                     max_activations[concept_id] = max_act if max_act > 0 else 50
         self.max_activations = max_activations
         return max_activations  
+    
+    def get_dummy_max_act(self, dump_dir, **kwargs):
+        max_activations = {} # sae_id to max_activation
+        # Loop over saved latent files in dump_dir.
+        for concept_id in range(5):
+            max_activations[concept_id] =  torch.tensor([5])
+        self.max_activations = max_activations
+        return max_activations 
 
     def to(self, device):
         """Move model to specified device"""
