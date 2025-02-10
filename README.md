@@ -62,8 +62,8 @@ os.environ["NP_API_KEY"] = "your_neuronpedia_api_key_here"
 Download the necessary datasets to `axbench/data`:
 
 ```bash
-uv run axbench/scripts/download-seed-sentences.py
-cd data
+uv run axbench/data/download-seed-sentences.py
+cd axbench/data
 bash download-2b.sh
 bash download-9b.sh
 bash download-alpaca.sh
