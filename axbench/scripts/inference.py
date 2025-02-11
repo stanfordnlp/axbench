@@ -74,7 +74,7 @@ def save_state(dump_dir, state, partition, rank):
 
 
 def load_metadata_flatten(metadata_path):
-    """
+    """+
     Load flatten metadata from a JSON lines file.
     """
     metadata = []
@@ -292,7 +292,10 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 intervention_type=args.steering_intervention_type, # SAE uses clamping
                 concept_id=concept_id
             )
-            if args.steering_intervention_type == "gating" or args.steering_intervention_type == "flexible" or args.steering_intervention_type == "anneal":
+            if args.steering_intervention_type == "gating" \
+                or args.steering_intervention_type == "factor_individual" \
+                or args.steering_intervention_type == "factor" \
+                or args.steering_intervention_type == "anneal":
                 benchmark_model.load_gating(
                     dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="steering",
                     intervention_type=args.steering_intervention_type, # SAE uses clamping

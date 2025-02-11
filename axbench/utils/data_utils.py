@@ -4,8 +4,8 @@ from torch.utils.data import DataLoader
 from transformers import set_seed
 import transformers, datasets, torch
 from typing import Dict, Optional, Sequence, Union, List, Any
-
-
+import numpy as np
+import random
 def parse_positions(positions: str):
     # parse position
     first_n, last_n = 0, 0
@@ -114,10 +114,11 @@ def make_data_module(
     if not exclude_bos:
         prefix_length = 0
     
-    all_base_input_ids, all_intervention_locations, all_output_ids,  = [], [], []
+    all_base_input_ids, all_intervention_locations, all_output_ids, all_concept_ids = [], [], [], []
     all_prompt_lengths = []
     for _, row in df.iterrows():
         _input, _output = row["input"], row["output"]
+
 
         # prepare input ids
         base_prompt = _input
@@ -126,7 +127,6 @@ def make_data_module(
 
         output_token = tokenizer(_output)["input_ids"]
 
-        
         if len(output_token) < kwargs['output_length']:
             _output += "<|eot_id|>"
 
@@ -146,6 +146,7 @@ def make_data_module(
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_prompt_length)]])
         elif positions == "all":
             intervention_locations = torch.tensor([[i for i in range(prefix_length, base_length)]])
+        
         else:
             first_n, last_n = parse_positions(positions)
             intervention_locations = get_intervention_locations(
@@ -159,20 +160,25 @@ def make_data_module(
             # shift intervention locations by prefix length
             shifted_intervention_locations = [[loc + prefix_length for loc in intervention_locations[0]]]
             intervention_locations = shifted_intervention_locations
+        #if row["concept_id"] != -1:
+        all_concept_ids.append(torch.tensor(row["concept_id"]))
+        #else:
+        #all_concept_ids.append(torch.tensor(random.choice(range(5))))
         all_intervention_locations.append(intervention_locations)
         all_base_input_ids.append(base_input_ids)
         all_output_ids.append(output_ids)
         all_prompt_lengths.append(torch.tensor(base_prompt_length - 1)) # exclude bos token
-        
+    
     train_dataset = datasets.Dataset.from_dict({
         "input_ids": all_base_input_ids,
         "intervention_locations": all_intervention_locations,
         "labels": all_output_ids,
         "prompt_lengths": all_prompt_lengths,
+        "concept_id": all_concept_ids
     })
     train_dataset.set_format(
         type='torch', columns=[
-            'input_ids', 'intervention_locations', 'prompt_lengths', 'labels'])
+            'input_ids', 'intervention_locations', 'prompt_lengths', 'concept_id', 'labels'])
 
     data_collator_fn = transformers.DefaultDataCollator(
         return_tensors="pt"

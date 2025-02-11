@@ -1,0 +1,138 @@
+[
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "11589",
+      "description": "This neuron represents the concept of favors, gifts, and permissions.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "22364",
+      "description": "This neuron represents the concept of economic exchange.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "10732",
+      "description": "This neuron represents the concept of time intervals and scheduling.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "26356",
+      "description": "This neuron represents the concept of significant achievements.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "5752",
+      "description": "This neuron represents the concept of locations.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "23485",
+      "description": "This neuron represents the concept of time formatting.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "27448",
+      "description": "This neuron represents the concept of termination.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "17535",
+      "description": "This neuron represents the concept of choice and decision-making.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "5612",
+      "description": "This neuron represents the concept of entertainment and occupation.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "10866",
+      "description": "This neuron represents the concept of administrative processes.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "10560",
+      "description": "This neuron represents the concept of debate concepts.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "7497",
+      "description": "This neuron represents the concept of celebrity culture.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "8461",
+      "description": "This neuron represents the concept of personal relationships.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "2103",
+      "description": "This neuron represents the concept of sports.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "11905",
+      "description": "This neuron represents the concept of racing.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "5043",
+      "description": "This neuron represents the concept of technological development.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "24-llamascope-res-32k",
+      "index": "24458",
+      "description": "This neuron represents the concept of public relations.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    }
+  ]

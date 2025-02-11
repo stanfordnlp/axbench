@@ -1,0 +1,298 @@
+[
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "10495",
+    "description": "the main thing this neuron does is identify the presence of specific keywords related to tasks and responsibilities, focusing on action-oriented phrases, and then outputs jumbled programming or technical terms that appear to have no coherent connection to the input.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "4848",
+    "description": "the main thing this neuron does is find terms related to diseases, particularly COVID-19 and cancer, indicating a focus on health-related issues, while its outputs include a mix of generic terms and noise, suggesting it's less effective in delivering coherent or relevant outcomes.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "14106",
+    "description": "Neuron 4 is triggered by expressions of gratitude or appreciation, particularly phrases like \"thanks for,\" and outputs a mix of tokens primarily related to appreciation and acknowledgment, alongside some extraneous or programming jargon. This suggests the neuron focuses on capturing sentiments of thanks within various contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "24722",
+    "description": "the main thing this neuron does is find phrases related to home and kitchen design, particularly focusing on living styles and family dynamics, and then outputs words associated with social interactions and guest experiences.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "17183",
+    "description": "the primary trigger for this neuron is terms related to programming or scripting, and once activated, it generates outputs related to academic or mathematical concepts, often seen in contexts of theory and education.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "7916",
+    "description": "the main thing this neuron does is identify phrases containing various error messages or exceptions, and then outputs tokens related to errors, messages, and related programming concepts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "32325",
+    "description": "the main thing this neuron does is find phrases related to the history or evolution of hot dogs, specifically around their origin and popularity, and then outputs a mix of seemingly unrelated terms and programming jargon, indicating a chaotic or noisy representation often associated with this topic.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "2468",
+    "description": "Neuron 4 appears to identify phrases related to scoring and progression in golf, specifically focusing on terms like \"par\" and \"hole.\" Once activated, it outputs a combination of seemingly random words, indicating a lack of a coherent theme, possibly since the related activations are low and may reflect noise rather than meaningful associations.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "8315",
+    "description": "this neuron triggers on unstructured code-like inputs that contain less meaningful content, and its output consists of various symbols and fragments that lack a cohesive theme, suggesting it may be involved in processing or responding to noise or unformatted data.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "22500",
+    "description": "the main thing this neuron does is identify situations involving replication or repeating events, particularly in the context of products or services, and then outputs largely irrelevant or noise-like tokens, possibly indicating an issue with processing or activation errors.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "18686",
+    "description": "the main thing this neuron does is identify specific timestamps or formats often found in digital contexts, and then it outputs a variety of seemingly unrelated elements, possibly reflecting digital communication, signals, and protocols.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "14602",
+    "description": "the main thing this neuron does is find references to family-related themes and concepts, then outputs words connected to individual people or specific groups, reflecting a focus on personal relationships within broader familial or community contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "5355",
+    "description": "the main thing this neuron does is find references to educational institutions, particularly MIT and its athletics, and then outputs a mixture of terms related to university life, graduation, and informal language or jargon.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "6309",
+    "description": "the main thing this neuron does is identify various programming-related terms or code elements, which then output a list of abstract concepts or objects. The focus appears to be on capturing technical terminology that may relate to software development or data structures.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "11670",
+    "description": "the main thing this neuron does is identify phrases related to threats, monopolistic behavior, and negative political discourse, and then outputs words associated with crime, violence, and extremist ideologies.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "30262",
+    "description": "The main thing this neuron does is identify historical and trending events or topics, particularly in the context of music or significant occurrences, and then outputs a mixture of terms related to cultural references and potentially arbitrary strings, indicating a broad association with fame or public interest.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "16893",
+    "description": "The main thing this neuron does is find references to national parks and conservation areas, particularly focused on their significance and tourist aspects, and then outputs related terms about conservation, wilderness, and national significance.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "26176",
+    "description": "the main function of this neuron is to identify phrases related to carry-on items or luggage, and it outputs a mix of sounds and nonsensical terms reflecting a disorganized or chaotic structure.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "29721",
+    "description": "the main thing this neuron does is identify punctuation marks and numerical values within texts, and then outputs a mix of varied non-cohesive tokens, which suggests it may function as a parser or identifier for numeric and symbolic metadata in data processing contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "23220",
+    "description": "This neuron appears to be triggered by specific error messages and configuration-related terms, most prominently emerging from Apache logs and Java exceptions. Once activated, it generates output that includes a mix of technical jargon and possibly corrupted or incomplete data, suggesting a focus on processing and handling programming-related errors or anomalies.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "18961",
+    "description": "Neuron 4 primarily identifies significant mistakes and challenges in decision-making, outputting words related to greatness and positivity, suggesting a focus on recognizing the importance of lessons learned from past errors and the value of positive experiences in life.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "26885",
+    "description": "the main thing this neuron does is respond to mentions of camera equipment and technical settings, particularly DSLRs, and then outputs terms associated with photography, including various types of cameras and photographic concepts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "7316",
+    "description": "the main thing this neuron does is identify numerical ranges and limits in programming-related contexts, and then outputs terms related to statistical or probabilistic outcomes and options.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "18021",
+    "description": "the main thing this neuron does is respond to mentions of \"air\" or related terms, and then outputs various themes connected to air, such as methods and conditions possibly relevant to environmental contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "13155",
+    "description": "the main thing this neuron does is detect certain Polish tokens related to the concept of \"military\" and various place names, and then outputs a range of seemingly unrelated tokens often associated with generic or technical terms.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "11482",
+    "description": "the main thing this neuron does is find phrases and sentences with low complexity or emphasis, including simple sentences or common expressions, and it outputs a variety of tokens and symbols possibly indicating randomness or unreliability, likely implying confusion or lack of clarity in communication.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "7997",
+    "description": "the main thing this neuron does is recognize instances of notable hype or magnitude in discussions about various subjects, particularly related to games or events, and then outputs words associated with significant or collective behavior, albeit intermixed with noise.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "29514",
+    "description": "This neuron is triggered by references to specific time periods, particularly the late 20th century, and outputs tokens that relate to historical contexts and decades. It seems to focus on the evolution and changes within specified time frames in various cultural or artistic contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "18163",
+    "description": "the main thing this neuron does is identify discussions around criticism and constraints in various contexts, then output related concepts and terms, which include elements of organization and societal critique. The neuron appears to reflect on how public critique of art, games, and science can lead to larger conversations about urban spaces and societal structures.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "10872",
+    "description": "Neuron 4 shows strong activation concerning educational outreach, virtual creativity, and community partnerships, which likely indicates that it is triggered by discussions around collaboration and educational programs. Upon activation, it outputs various terms that seem to relate to online platforms and technical jargon, suggesting a focus on digital engagement or information dissemination in the context of education and partnerships.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "8387",
+    "description": "the main thing this neuron does is identify phrases related to functionality or support, particularly in regards to system components, and outputs terms associated with possession or belonging.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "9226",
+    "description": "Neuron 4 appears to be activated primarily by certain unique or niche tokens, potentially related to a specific event or situation, and outputs a range of seemingly random or non-contextual terms, indicating that it may not have a coherent function or theme within its current state.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "19695",
+    "description": "the main thing this neuron does is trigger on the word \"it,\" which consistently appears across various contexts, and then outputs terms related to automation, management, or self-reference, indicating a focus on processes involving delegation or assistance in handling tasks or experiences.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "8796",
+    "description": "Neuron 4 appears to be triggered by phrases indicating user preferences or options, particularly in the context of travel or dining experiences. Once activated, it outputs a mix of generalized terms and contextual jargon, indicating a focus on information related to amenities or queries, though much of the output appears to be noisy or unrelated.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "10032",
+    "description": "the main thing this neuron does is find phrases that convey a sense of frankness and self-reflection, and then outputs terms related to exploration and academic inquiry.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "26835",
+    "description": "Neuron 4 primarily identifies contexts related to formal procedures or systems, indicated by its strong activation for the word \"formal,\" and outputs terms associated with formalization and structured approaches.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "11-llamascope-res-32k",
+    "index": "16076",
+    "description": "Neuron 4 appears to activate in response to family names and references to relationships, such as \"Moore\", \"Johnson\", and \"Lagacy\", which suggest a focus on familial connections and legacies. Once triggered, it outputs a mix of seemingly unrelated terms that may indicate a broader or disorganized theme related to reviews or experiences, perhaps suggesting a connection to memorials or family storytelling.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  }
+]

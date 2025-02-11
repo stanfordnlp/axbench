@@ -1,0 +1,80 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  input_length: 256
+  output_length: 128
+  num_of_examples: 144 #no need for for training 
+  # concept_path: "<your local csv file path>"
+  concept_path: "/afs/cs.stanford.edu/u/qinanyu/axbench/axbench/data/output_llama/layer_20_concise.json" #change to Mor Geva's concepts (but only 40)
+  max_concepts: 10
+  master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  seed: 42
+  #metadata.jsonl
+
+train:
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  layer: 20
+  component: "res"
+  seed: 42
+  use_bf16: true
+  max_concepts: 10
+  models:
+    LsReFT:
+      batch_size: 3
+      gradient_accumulation_steps: 1
+      n_epochs: 4
+      lr: 0.005
+      weight_decay: 0.00
+      topk: 8
+      coeff_latent_l1_loss: 0.3 #sparsity
+      low_rank_dimension: 1
+      intervention_positions: "all"
+      intervention_type: "factor" # clamping
+      binarize_dataset: false
+      train_on_negative: true
+      exclude_bos: true
+
+inference:
+  use_bf16: true
+  models: ["LsReFT"]
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  # latent related params
+  output_length: 128
+  latent_num_of_examples: 30
+  latent_batch_size: 4
+  # steering related params
+  steering_intervention_type: "factor" # clamping
+  steering_model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  steering_datasets: ["AlpacaEval"]
+  steering_batch_size: 5
+  steering_output_length: 128
+  steering_layers: [20]
+  steering_num_of_examples: 10 # number of examples per concept and per factor
+  steering_factors: [0.2,0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3] # number of steering factors per example
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+  input_field: "input"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+  # generation related params
+  temperature: 1.0
+
+evaluate:
+  models: ["LsReFT"]
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeEvaluator",
+  ]
+  winrate_split_ratio: false # this is for steering only, we use a separate partition for factor selection.
+  # Number of processes to run in parallel for steering evaluation.
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: false
+  winrate_baseline: "PromptSteering"
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+

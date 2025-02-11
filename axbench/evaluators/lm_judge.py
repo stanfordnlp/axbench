@@ -90,7 +90,7 @@ class LMJudgeEvaluator(Evaluator):
                list(zip(model_fluency_prompts, model_fluency_ratings)), \
                model_relevance_concept_completions, model_relevance_instruction_completions, model_fluency_completions
 
-    def compute_metrics(self, data, write_to_dir=None):
+    def compute_metrics(self, data, neg = False, write_to_dir=None):
         """
         We record three scores separately:
         1. Check concept relevance [score: 0-2]
@@ -125,12 +125,18 @@ class LMJudgeEvaluator(Evaluator):
                 if 0 in scores:
                     return 0
                 return len(scores) / sum(1/s for s in scores)
-
-            model_scores = [
-                model_relevance_concept_ratings[i][-1],
-                model_relevance_instruction_ratings[i][-1],
-                model_fluency_ratings[i][-1]
-            ]
+            if neg:
+                model_scores = [
+                    2- model_relevance_concept_ratings[i][-1], #edited here
+                    model_relevance_instruction_ratings[i][-1],
+                    model_fluency_ratings[i][-1]
+                ]
+            else:
+                model_scores = [
+                    model_relevance_concept_ratings[i][-1],
+                    model_relevance_instruction_ratings[i][-1],
+                    model_fluency_ratings[i][-1]
+                ]
             model_score = harmonic_mean(model_scores)
             all_aggregated_ratings += [model_score]
 
@@ -140,7 +146,7 @@ class LMJudgeEvaluator(Evaluator):
             "relevance_instruction_ratings": [],
             "fluency_ratings": [],
             "factor": [],
-            "raw_relevance_concept_ratings": all_relevance_concept_ratings,
+            "raw_relevance_concept_ratings":  all_relevance_concept_ratings,
             "raw_relevance_instruction_ratings": all_relevance_instruction_ratings,
             "raw_fluency_ratings": all_fluency_ratings,
             "raw_aggregated_ratings": all_aggregated_ratings,

@@ -1,0 +1,70 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  input_length: 32
+  output_length: 32
+  num_of_examples: 10 #no need for for training 
+  # concept_path: "<your local csv file path>"
+  concept_path: "axbench/data/output/output_gemma_2b_layer_0_data.json" #change to Mor Geva's concepts (but only 40)
+  max_concepts: 10
+  master_data_dir: "axbench/data"
+  seed: 42
+  #metadata.jsonl
+
+train:
+  model_name: "google/gemma-2-2b-it"
+  layer: 0
+  component: "res"
+  seed: 42
+  use_bf16: true
+  max_concepts: 10
+  models:
+    DiffMean:
+      batch_size: 6
+      n_epochs: 1
+      binarize_dataset: true
+      low_rank_dimension: 1
+
+
+inference:
+  use_bf16: true
+  models: ["GemmaScopeSAE"] 
+  model_name: "google/gemma-2-2b"
+  # latent related params
+  input_length: 32
+  latent_num_of_examples: 20
+  latent_batch_size: 128
+  # steering related params
+  steering_model_name: "google/gemma-2-2b-it"
+  steering_datasets: ["AlpacaEval"] #long context eval
+  steering_batch_size: 24
+  steering_output_length: 128
+  steering_num_of_examples: 10 #how many to get out from Aplaca Eval
+  steering_factors: [0, -10, -15, -20, -25, -30, -35] # number of steering factors per example
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+  # generation related params
+  temperature: 0.7
+  steering_intervention_type: "clamping"
+  input_field: "steered_input"
+
+evaluate:
+  models: ["GemmaScopeSAE"]
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeEvaluator",
+  ]
+  winrate_split_ratio: false # this is for steering only, we use a separate partition for factor selection.
+  # Number of processes to run in parallel for steering evaluation.
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: false
+  winrate_baseline: "PromptSteering"
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+

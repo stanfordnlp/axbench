@@ -1,0 +1,2 @@
+{"concept_id": 3, "concept": "Represents concepts related to numerical numbers.", "ref": "https://www.neuronpedia.org/llama3.1-8b/1-llamascope-res-32k/4", "concept_genres_map": {"Represents concepts related to numerical numbers.": ["math"]}}
+{"concept_id": 4, "concept": "Represents concepts related to breathing.", "ref": "https://www.neuronpedia.org/llama3.1-8b/1-llamascope-res-32k/0", "concept_genres_map": {"Represents concepts related to breathing.": ["text"]}}

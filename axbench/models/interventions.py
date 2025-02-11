@@ -22,7 +22,6 @@ class LowRankRotateLayer(torch.nn.Module):
     def forward(self, x):
         return torch.matmul(x.to(self.weight.dtype), self.weight)
 
-
 class TopKReLUSubspaceIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
@@ -324,10 +323,19 @@ class FlexibleFactorIntervention(
         # Freeze the parameters
         self.proj.weight.requires_grad = False
         self.proj.bias.requires_grad = False
+        # Register as a buffer instead of a parameter
+        self.steering_vec = torch.nn.Parameter(
+            torch.tensor([0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3], 
+                        dtype=torch.bfloat16, 
+                        device='cuda'),
+            requires_grad=False)
 
+        # Create as Parameter but set requires_grad to Fals
+        
         self.gating = torch.nn.Linear(
-            self.embed_dim, kwargs["low_rank_dimension"] )
+            self.embed_dim, self.steering_vec.shape[0])
         self.gating = self.gating.to(dtype=torch.bfloat16)
+
         with torch.no_grad():
             self.gating.weight.fill_(torch.tensor(1,dtype=torch.bfloat16))
             self.gating.bias.fill_(torch.tensor(0,dtype=torch.bfloat16))
@@ -335,45 +343,52 @@ class FlexibleFactorIntervention(
     def load_steer_vector(self,  dump_dir, model_name):
         weight = torch.load(
             f"{dump_dir}/{model_name}_weight.pt"
-        )
-        print(weight.shape)
+        )      
         self.proj.weight =torch.nn.Parameter(weight.cuda(), requires_grad=False)
-        
-
+    
+    # dont need this anymore
+    '''
+    def load_gating_vector(self, concept, dump_dir, model_name):
+        weight = torch.load(
+            f"{dump_dir}/{model_name}_gating_weight.pt"
+        )  
+        bias = torch.load(
+            f"{dump_dir}/{model_name}_gating_bias.pt"
+        )
+        print("load_gating_vector")
+        print(weight.shape)
+        state_dict = {
+            'weight': weight[-1].cuda().unsqueeze(dim=0),
+            'bias': bias[-1].cuda().unsqueeze(dim=0)
+        }
+        self.gating.load_state_dict(state_dict)
+        print("reset grating vector for concept", concept)
+    '''
     def forward(
         self, base, source=None, subspaces=None
     ):
         v = []
-        g = []
-
-        if "subspaces" in subspaces:
-            for i in range(base.shape[0]):
-                print("has subspaces", subspaces["subspaces"])
-                v += [self.proj.weight[subspaces["subspaces"]]]
-                g += [self.gating.weight[0]]
-        else:
-            for i in range(base.shape[0]):
-                v += [self.proj.weight[0]]
-                g += [self.gating.weight[0]]
-
+        for i in range(base.shape[0]):         
+            v += [self.proj.weight[subspaces["subspaces"][i]]]
+            
         v = torch.stack(v, dim=0).unsqueeze(dim=-1) # bs, hidden, 1     
-        g = torch.stack(g, dim=0).unsqueeze(dim=-1) # bs, hidden, 1
-        
         # get latent
+        gating = torch.nn.functional.gumbel_softmax(self.gating(base), tau = 1, hard=True) #bs, 
+        gating = torch.einsum("f,bsf->bs",self.steering_vec, gating)
+        gating = gating.unsqueeze(dim=-1)
         latent = torch.relu(torch.bmm(base, v)).squeeze(dim=-1) # bs, seq, 1
         topk_acts, topk_indices = latent.topk(k=subspaces["k"], dim=-1, sorted=False)
         non_topk_latent = latent.clone()
         non_topk_latent.scatter_(-1, topk_indices, 0)
         # get steering magnitude using mean of topk activations of prompt latent
         max_mean_latent = topk_acts.mean(dim=-1, keepdim=True) # bs, 1
-        # steering vector with temperature-controlled sigmoid
-        gating = self.gating(base) #gating: hs,1, base: bs, seq, hs -> bs, seq, 1
-        steering_vec = torch.relu(gating) * max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, hs
+        steering_vec = gating * max_mean_latent.unsqueeze(dim=-1) * v.permute(0, 2, 1) # bs, 1, hs #dont use max_mean_latent
         # addition intervention
         output = base + steering_vec
+        print(torch.mean(latent))
         return InterventionOutput(
             output=output,
-            latent=[latent, non_topk_latent]
+            latent=torch.einsum("bsq,bsq->bsq",gating,torch.relu(torch.bmm(base, v)))
         )
 
 class ConceptReFTIntervention(
@@ -438,10 +453,10 @@ class AdditionIntervention(
             subspaces["mag"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
 
         projection = torch.einsum('bji,bi->bj', base, self.proj.weight[subspaces["idx"]])
-        mask = (projection > 0).float()
-        steering_vec = torch.einsum("bh,bs->bsh", steering_vec, mask)
-        output = base + steering_vec
-        #output = base + steering_vec.unsqueeze(dim=1)
+        #mask = (projection > 0).float()
+        #steering_vec = torch.einsum("bh,bs->bsh", steering_vec, mask)
+        #output = base + steering_vec
+        output = base + steering_vec.unsqueeze(dim=1)
         return output
     
 class AdditionGatingIntervention(
@@ -509,27 +524,38 @@ class AdditionFlexibleIntervention(
         # Note that we initialise these to zeros because we're loading in pre-trained weights.
         # If you want to train your own SAEs then we recommend using blah
         super().__init__(**kwargs, keep_last_dim=True)
+        self.steering_vec = torch.nn.Parameter(
+            torch.tensor([0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3], 
+                        dtype=torch.bfloat16, 
+                        device='cuda'),
+            requires_grad=False)
         self.proj = torch.nn.Linear(
                 self.embed_dim, kwargs["low_rank_dimension"], bias=True) # [bs, hs, 1]
         self.gating = torch.nn.Linear(
-                self.embed_dim, kwargs["low_rank_dimension"], bias=True) #[bs, hs, 1]
+                self.embed_dim, len(self.steering_vec), bias=True) #[bs, hs, 1
 
     def forward(self, base, source=None, subspaces=None):
         # use subspaces["idx"] to select the correct weight vector
         """
         Phi(h) = h + Factor(h)*Mean(TopK(ReLU(h@v)))*v
         """
-        gating =  self.gating(base)
-        steering_vec = subspaces["max_act"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
-        factor_vec = gating[torch.arange(gating.shape[0]),:,subspaces["idx"]]
-        print(factor_vec[0][0])
-        print(subspaces["idx"]) #bs, seq
-        print(torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
+        
+        gating = torch.nn.functional.gumbel_softmax(self.gating(base), tau = 1, hard=True) #bs, 
+        factor_vec = torch.einsum("f,bsf->bs",self.steering_vec, gating)
+        #gating = gating.unsqueeze(dim=-1)
+        steering_vec =  subspaces["max_act"].unsqueeze(dim=-1) * self.proj.weight[subspaces["idx"]]
+        # edit for changing the gating vector
+        #factor_vec = gating[torch.arange(gating.shape[0]),:,subspaces["idx"]]
+        #print(torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
         #bs, seq, hs * bs, hs => bs, seq
         #projection = torch.einsum('bji,bi->bj', base, self.proj.weight[subspaces["idx"]])   
-        factor_steered = torch.einsum('bi,bj->bij', -torch.relu(factor_vec), steering_vec)
-        factor_steered = torch.einsum('bsh, bs->bsh',factor_steered, 
-                                      torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
+        factor_steered = torch.einsum('bi,bj->bij', torch.relu(factor_vec), steering_vec)
+        if torch.relu(factor_vec)[0].shape[0] != 1:      
+            print(factor_vec[0])
+            print(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])[0])
+            print()
+        #factor_steered = torch.einsum('bsh, bs->bsh',factor_steered, 
+        #                              torch.relu(torch.einsum("bsh,bh->bs",base, self.proj.weight[subspaces["idx"]])))
         output = base + factor_steered
         return output
     

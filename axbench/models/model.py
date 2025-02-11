@@ -38,7 +38,7 @@ class BaseModel(object):
     def train_noise(self, examples, **kwargs):
         pass
 
-    def train_factor(self, examples, concept_id, dir_name, model_name, **kwargs):
+    def train_factor(self, examples, dir_name, model_name, **kwargs):
         pass
 
     def save(self, dump_dir, **kwargs):
@@ -110,7 +110,6 @@ class Model(BaseModel):
         weight_file = dump_dir / f"{model_name}_weight.pt"
         weight = self.ax.proj.weight.data.cpu()
         
-        print(weight.shape)
         if weight_file.exists():
             weight = torch.cat([torch.load(weight_file), weight], dim=0)
         torch.save(weight, weight_file)
@@ -140,16 +139,37 @@ class Model(BaseModel):
         print(kwargs)
         model_name = kwargs.get("model_name", self.__str__())
         weight_file = dump_dir / f"{model_name}_gating_weight.pt"
+
         weight = self.ax2.gating.weight.data.cpu()
+        
         if weight_file.exists():
-            weight = torch.cat([torch.load(weight_file), weight], dim=0)
+            existing_weight = torch.load(weight_file)
+            if len(existing_weight.shape)==2:
+                existing_weight = existing_weight.unsqueeze(0)
+            # Add new dimension and concatenate
+            weight = torch.cat([
+                existing_weight,
+                weight.unsqueeze(0)
+            ], dim=0)
+            weight = weight.squeeze()
+        print(weight.shape)
         torch.save(weight, weight_file)
         
         bias_file = dump_dir / f"{model_name}_gating_bias.pt"
         bias = self.ax2.gating.bias.data.cpu()
         if bias_file.exists():
-            bias = torch.cat([torch.load(bias_file), bias], dim=0)
+            existing_bias = torch.load(bias_file)
+            if len(existing_bias.shape)==1:
+                existing_bias = existing_bias.unsqueeze(0)
+            # Add new dimension and concatenate
+            bias = torch.cat([
+                existing_bias,
+                bias.unsqueeze(0)
+            ], dim=0)
+            bias = bias.squeeze()
+        print(bias.shape)
         torch.save(bias, bias_file)
+        
 
     def load(self, dump_dir=None, **kwargs):
         model_name = kwargs.get("model_name", self.__str__())
@@ -171,8 +191,11 @@ class Model(BaseModel):
         bias = torch.load(
             f"{dump_dir}/{model_name}_gating_bias.pt"
         )
-        self.ax.gating.weight.data = weight.to(self.device)
-        self.ax.gating.bias.data = bias.to(self.device)
+        print(self.ax.gating.weight.shape)
+        print(self.ax.gating.bias.shape)
+        self.ax.gating.weight.data = weight[kwargs["concept_id"]].to(self.device)
+        self.ax.gating.bias.data = bias[kwargs["concept_id"]].to(self.device)
+
     
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):

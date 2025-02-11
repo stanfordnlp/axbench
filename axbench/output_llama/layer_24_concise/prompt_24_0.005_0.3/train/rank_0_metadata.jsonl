@@ -1,0 +1,10 @@
+{"concept_id": 0, "concept": "Represents choice and decision-making.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/17535", "concept_genres_map": {"Represents choice and decision-making.": ["text"]}}
+{"concept_id": 1, "concept": "Represents debate concepts.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/10560", "concept_genres_map": {"Represents debate concepts.": ["text"]}}
+{"concept_id": 2, "concept": "Represents time formatting.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/23485", "concept_genres_map": {"Represents time formatting.": ["text"]}}
+{"concept_id": 3, "concept": "Represents termination concepts.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/27448", "concept_genres_map": {"Represents termination concepts.": ["text"]}}
+{"concept_id": 4, "concept": "Represents technological development.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/5043", "concept_genres_map": {"Represents technological development.": ["code"]}}
+{"concept_id": 5, "concept": "Represents racing concepts.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/11905", "concept_genres_map": {"Represents racing concepts.": ["text"]}}
+{"concept_id": 6, "concept": "Represents sports concepts.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/2103", "concept_genres_map": {"Represents sports concepts.": ["text"]}}
+{"concept_id": 7, "concept": "Represents administrative processes.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/10866", "concept_genres_map": {"Represents administrative processes.": ["text"]}}
+{"concept_id": 8, "concept": "Represents entertainment and occupation.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/5612", "concept_genres_map": {"Represents entertainment and occupation.": ["text"]}}
+{"concept_id": 9, "concept": "Represents economic exchange.", "ref": "https://www.neuronpedia.org/llama3.1-8b/24-llamascope-res-32k/22364", "concept_genres_map": {"Represents economic exchange.": ["text"]}}

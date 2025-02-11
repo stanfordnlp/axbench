@@ -1,0 +1,43 @@
+[
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "1-llamascope-res-32k",
+      "index": "0",
+      "description": "Represents concepts related to breathing.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+        "modelId": "llama3.1-8b",
+        "layer": "1-llamascope-res-32k",
+        "index": "1",
+        "description": "Represents concepts related to football.",
+        "explanationModelName": "gpt-4o-mini",
+        "typeName": "oai_token-act-pair"
+      },
+    {
+        "modelId": "llama3.1-8b",
+        "layer": "1-llamascope-res-32k",
+        "index": "2",
+        "description": "Represents concepts related to Disney.",
+        "explanationModelName": "gpt-4o-mini",
+        "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "1-llamascope-res-32k",
+      "index": "3",
+      "description": "Represents concepts related to vegetables.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    },
+    {
+      "modelId": "llama3.1-8b",
+      "layer": "1-llamascope-res-32k",
+      "index": "4",
+      "description": "Represents concepts related to numerical numbers.",
+      "explanationModelName": "gpt-4o-mini",
+      "typeName": "oai_token-act-pair"
+    }
+
+  ]

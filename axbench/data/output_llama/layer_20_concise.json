@@ -1,0 +1,226 @@
+[
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "18362",
+    "description": "This neuron refers to concepts about roughness and texture",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "10548",
+    "description": "This neuron refers to concepts about expressions of engagement or uncertainty",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "25714",
+    "description": "This neuron refers to concepts about investment and financial resources",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "6957",
+    "description": "This neuron refers to concepts about Apple product and software terminology",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "11064",
+    "description": "This neuron refers to concepts about categories and sections",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "24385",
+    "description": "This neuron refers to concepts about geographical and cultural terms",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "22093",
+    "description": "This neuron refers to concepts about exceptional qualities",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "30299",
+    "description": "This neuron refers to concepts about legal terminology and case references",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "18531",
+    "description": "This neuron refers to concepts about diverse technical and bibliographic tokens",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "12030",
+    "description": "This neuron refers to concepts about change and transformation",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "23646",
+    "description": "This neuron refers to concepts about decision-making processes",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "31427",
+    "description": "This neuron refers to concepts about emotional states and loss",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "12808",
+    "description": "This neuron refers to concepts about conditions and requirements",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "7707",
+    "description": "This neuron refers to concepts about safety and coverage",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "10616",
+    "description": "This neuron refers to concepts about change and evolution",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "5310",
+    "description": "This neuron refers to concepts about options and choices",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "8831",
+    "description": "This neuron refers to concepts about entertainment careers",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "7916",
+    "description": "This neuron refers to concepts about fuel and vehicle-related terminology",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "21467",
+    "description": "This neuron refers to concepts about value and significance",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "18437",
+    "description": "This neuron refers to concepts about affection and relationships",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "27508",
+    "description": "This neuron refers to concepts about damage and fragility",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "2863",
+    "description": "This neuron refers to concepts about superiority and comparison",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "15850",
+    "description": "This neuron refers to concepts about protocols and procedures",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "26299",
+    "description": "This neuron refers to concepts about cooking and recipe-related terminology",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "4471",
+    "description": "This neuron refers to concepts about growth and transformation",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "23818",
+    "description": "This neuron refers to concepts about heating and combustion",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "7620",
+    "description": "This neuron refers to concepts about creation and composition",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "20-llamascope-res-32k",
+    "index": "4571",
+    "description": "This neuron refers to concepts about gratitude and acknowledgment",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  }
+]

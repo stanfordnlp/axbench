@@ -1,0 +1,274 @@
+[
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "22095",
+    "description": "Neuron 4 triggers on phrases about consumer trends and client management, leading to outputs that relate to requirements, outcomes, and various operational terms, suggesting a focus on assessing needs and impacts within consumer behavior or professional contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "12937",
+    "description": "the main thing this neuron does is identify discussions around children's development and abilities, particularly concerning reading and intelligence, and outputs words related to talent, giftedness, and natural abilities.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "9635",
+    "description": "the main thing this neuron does is detect references to costly healthcare issues, particularly related to critical illnesses, and then it outputs a variety of unrelated technical and organizational terms, which may indicate a function tied to medical or research contexts but lacks coherence in its associations.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "12659",
+    "description": "the main thing this neuron does is find phrases or phrases that convey significance or meaning, and then outputs related terms that reflect concepts of meaning, values, or implications.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "4937",
+    "description": "Neuron 4 is activated by references to Ayurvedic principles and holistic health, specifically connections between mind, body, and spirit. Once triggered, it outputs terms related to Ayurvedic practices, wellness, and potential health benefits.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "6222",
+    "description": "the main thing this neuron does is detect instances of text related to recurring themes or frequencies, particularly in the context of risks or medical conditions, and then outputs words associated with various types of treatment or educational categories.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "28101",
+    "description": "this neuron is activated by phrases related to time and resource management, specifically highlighting themes of free time and commitments, and outputs terms associated with dedication and resource allocation.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "4922",
+    "description": "the main thing this neuron does is identify terms related to being well-received or approved, and then outputs a variety of terms related to search, references, or findings, suggesting a focus on success and validation in various contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "9043",
+    "description": "the main thing this neuron does is find words related to food labeling and regulations, especially those concerning GMO (genetically modified organism) disclosure and ingredient claims, and then outputs words associated with labeling, nutritional information, and consumer transparency.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "11825",
+    "description": "the main thing this neuron does is identify the concept of difficulty or impossibility, particularly in relation to arguing or stating something; it then outputs words connected to imagination, belief, and the notion of escaping or picturing scenarios.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "5474",
+    "description": "the main thing this neuron does is identify references to luxury watches, particularly Rolex, and once triggered, it outputs terms related to watch models and roles, indicative of precision and classification in horology.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "32132",
+    "description": "the main thing this neuron does is identify phrases and terms containing \"ple\" or variations, and then outputs related words that emphasize aspects of measurability or that contain similar phonetic structures, potentially suggesting qualities of measurement or comparison.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "15667",
+    "description": "Neuron 4 appears to be inactive, as it receives no meaningful input related to any specific topic or concept. Consequently, it produces a varied output list filled with unconnected terms likely related to technology, computer hardware, or graphics, without a cohesive theme.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "26635",
+    "description": "the main thing this neuron does is find technical terms related to memory sizes and data types, and then outputs words that often relate to numerical values or other technical jargon that discusses capacities or technical details.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "17349",
+    "description": "the main thing this neuron does is detect the presence of water and moisture-related issues, such as dripping or leaking, and then outputs terms associated with the flow and dynamics of liquids. Once triggered, it emphasizes concepts likely linked to liquid movement and behavior in various contexts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "11495",
+    "description": "Neuron 4 primarily activates with the symbol \"\u00a9\", signifying copyright, and thus it outputs various terms related to copyright and ownership. It is triggered by representations of copyright notices and expresses concepts surrounding the legal protection of creative works.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "4436",
+    "description": "the main thing this neuron does is identify instances of HTML attributes related to attendance or content changes, and then it outputs words associated with various names, specifically those starting with \"Ke\" or related to key points, potentially reflecting a focus on detail, identity, or significance in text.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "31944",
+    "description": "the main thing this neuron does is find mathematical terms and concepts related to sequences and functions, particularly in the context of modeling and action, and then outputs words linked to definition, introduction, and study of these concepts.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "408",
+    "description": "the primary function of this neuron is to identify references to international events or contexts, and upon activation, it outputs words related to the concept of internationalism or global affairs.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "3766",
+    "description": "the main thing this neuron does is detect mentions of \"Kal\" or similar variations, which appears to relate to a specific entity or place, and then outputs a mix of language fragments and tokens, suggesting a focus on language or semantics rather than a coherent theme.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "12309",
+    "description": "the main thing this neuron does is find references to live food and exotic pets, particularly in the context of their care and maintenance, and then outputs terms related to housing and captivity, indicating a focus on the environments and conditions necessary for keeping such animals.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "22460",
+    "description": "Neuron 4 primarily activates with terms related to military, medical investigations, and various pharmaceutical contexts, indicating a focus on topics surrounding defense strategies and medical conditions, while its output consists of a mix of diverse and somewhat abstract terms that do not form a cohesive theme.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "14053",
+    "description": "the main thing this neuron does is identify mentions of \"advanced\" in various contexts, and it outputs a wide array of related technical terms and concepts, often associated with development or improvement.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "29963",
+    "description": "the main thing this neuron does is respond to the repeated use of the letter 'z' in various contexts, and then it outputs words that are either full of character fragments or sound-related terms, suggesting a focus on phonetics or distinctive sounds.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "26789",
+    "description": "the main thing this neuron does is identify terms and phrases related to ocean waves and surf, and then outputs tokens associated with waves, motion, and currents, reflecting themes of water and movement.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "10881",
+    "description": "the main thing this neuron does is identify mentions of \"week,\" which often relates to time periods, and it outputs various terms, primarily associated with endings or conclusions, suggesting a focus on temporal transitions or durations.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "23275",
+    "description": "Neuron 4 primarily activates with the trigger word \"Step,\" indicating a focus on procedural or instructional contexts, and outputs a variety of terms related to family and relationships, suggesting a theme of guidance or nurturing in connection with progression or milestones.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "10061",
+    "description": "the main thing this neuron does is find contexts related to direction or leadership in projects, particularly in film or education, and then outputs terms related to categorization or classification, possibly hinting at organization or oversight roles.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "29899",
+    "description": "the main thing this neuron does is identify references to locations and events related to Syracuse University, and then outputs terms associated with geographical areas or places.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "20796",
+    "description": "the main thing this neuron does is find discourse related to social issues, particularly those involving gender, youth, and migration, and then outputs terms associated with inclusion and resilience within these themes.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "1338",
+    "description": "the main thing this neuron does is find terms related to specific units of measurement and numerical values, often in the context of specifications or performance metrics, and then outputs tokens that may relate to technical jargon or programming terms.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "21853",
+    "description": "the main thing this neuron does is find mentions of significant elements related to film, such as \"first,\" \"story,\" and various descriptors, and then outputs words associated with categories, variations, and institutional roles, hinting at an analytical or evaluative function in assessing film narratives or structures.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "2515",
+    "description": "Neuron 4 appears to lack significant input activations, and thus does not exhibit a discernible behavior or function based on the given data. The output tokens present are largely incoherent and suggest a potential noise signal or malfunction in encoding, yielding no clear thematic interpretation.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "llama3.1-8b",
+    "layer": "30-llamascope-res-32k",
+    "index": "19469",
+    "description": "the main thing this neuron does is respond to mentions of the month \"August\" and variations of it, producing a wide array of tokens primarily related to the name itself and associated terms. This suggests its function revolves around temporal references and the context surrounding the month of August.",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  }
+]

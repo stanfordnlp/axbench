@@ -106,6 +106,10 @@ def calculate_l1_losses(latent, non_topk_latent, labels=None, mask=None):
         l1_loss = mean_all.mean() # mean across batch
     return l1_loss
 
+def calculate_F_latent(F_latent, mask = None):
+    masked_projected_latent = torch.einsum("bij,bi->bij",F_latent,mask).squeeze()
+    print(torch.mean(torch.sum(masked_projected_latent, dim = 1)))
+    return torch.mean(torch.sum(masked_projected_latent, dim = 1))
 
 def get_prefix_length(tokenizer, common_prefix=None):
     if common_prefix is None:

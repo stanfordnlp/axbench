@@ -296,6 +296,7 @@ def main():
     # Run training for assigned concept_ids
     # logger.warning(metadata)
 
+    
     for concept_id, concept_df in my_df_list:
         concept_id = int(concept_id)
         if last_concept_id is not None and concept_id <= last_concept_id:
@@ -341,22 +342,26 @@ def main():
                 max_num_of_examples=args.max_num_of_examples,
                 suppress_steer_dict_path=args.steer_suppress_dict_path
             )
+            if concept_id == 0:
+                all_df = prepared_df.copy()
+            else:
+                all_df = pd.concat([all_df, prepared_df], axis=0, ignore_index=True)
+                
             if args.models[model_name].intervention_type == "anneal":
                 benchmark_model.train_anneal(prepared_df, **kwargs)
-            elif args.models[model_name].intervention_type == "noise" or args.models[model_name].intervention_type == "factor":
+            elif args.models[model_name].intervention_type == "noise" or args.models[model_name].intervention_type == "factor_individual" or args.models[model_name].intervention_type == "factor":
                 benchmark_model.train_noise(prepared_df, **kwargs)
             else:
                 benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")
             
-            if args.models[model_name].intervention_type == "factor":
-                print("training factor")
-                benchmark_model.train_factor(prepared_df, concept_id, dump_dir, model_name=f"rank_{rank}_{model_name}",**kwargs)
+            if args.models[model_name].intervention_type == "factor_individual":
+                benchmark_model.train_factor(prepared_df, dump_dir, model_name=f"rank_{rank}_{model_name}",**kwargs)
 
             if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "anneal":
                 benchmark_model.save_gating(dump_dir, model_name=f"rank_{rank}_{model_name}")
             
-            if args.models[model_name].intervention_type == "factor":
+            if args.models[model_name].intervention_type == "factor_individual":
                 benchmark_model.save_factor_gating(dump_dir, model_name=f"rank_{rank}_{model_name}")
 
             if model_name == "SFT":
@@ -377,6 +382,66 @@ def main():
         # After processing, save state
         current_state = {'last_concept_id': concept_id}
         save_state(dump_dir, current_state, metadata[concept_id], rank)
+    
+    if args.models[model_name].intervention_type == "factor":
+        for concept_id, concept_df in my_df_list:
+            print(concept_id)
+            concept_id = int(concept_id)
+            for model_name in sorted(args.models.keys()):
+                concept = metadata[concept_id]["concept"]
+                logger.warning(f"Training {model_name} with concept {concept}")
+                benchmark_model = getattr(axbench, model_name)(
+                    model_instance, tokenizer, layer=args.layer,
+                    training_args=args.models[model_name],
+                    lm_model_name=args.model_name,
+                    device=device, seed=args.seed, 
+                )
+                low_rank_dimension = args.models[model_name].low_rank_dimension \
+                    if args.models[model_name].low_rank_dimension else 1
+                benchmark_model.make_model(
+                    mode="train",
+                    low_rank_dimension=low_rank_dimension,
+                    dtype=torch.bfloat16 if args.use_bf16 else None,
+                    intervention_type=args.models[model_name].intervention_type,
+                    concept_id=concept_id,
+                    sae_params=sae_params,
+                    metadata_path=metadata_path,
+                    dump_dir=dump_dir,
+                )
+                if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
+                    benchmark_model.ax.to(torch.bfloat16)
+                kwargs = {
+                    "prefix_length": prefix_length,
+                    "positions": args.models[model_name].intervention_positions,
+                    "exclude_bos": args.models[model_name].exclude_bos,
+                    "metadata_path": metadata_path,
+                    "output_length": 128,
+                }
+                prepared_df = concept_df.copy()
+                prepared_df = prepare_df(
+                    prepared_df, negative_df, concept, metadata[concept_id], tokenizer, 
+                    binarize=args.models[model_name].binarize_dataset, 
+                    train_on_negative=args.models[model_name].train_on_negative,
+                    is_chat_model=is_chat_model,
+                    max_num_of_examples=args.max_num_of_examples,
+                    suppress_steer_dict_path=args.steer_suppress_dict_path
+                )
+                if concept_id == 0:
+                    all_df = prepared_df.copy()
+                else:
+                    all_df = pd.concat([all_df, prepared_df], axis=0, ignore_index=True)
+                print(len(all_df))
+
+        kwargs = {
+                "prefix_length": prefix_length,
+                "positions": args.models[model_name].intervention_positions,
+                "exclude_bos": args.models[model_name].exclude_bos,
+                "metadata_path": metadata_path,
+                "output_length": 128,
+            }
+    
+        benchmark_model.train_factor(all_df, dump_dir, model_name=f"rank_{rank}_{model_name}",**kwargs)
+        benchmark_model.save_factor_gating(dump_dir, model_name=f"rank_{rank}_{model_name}")
 
     # Synchronize all processes
     dist.barrier()
@@ -412,7 +477,7 @@ def main():
             weight_files_existing = [f for f in weight_files if f.exists()]
             bias_files_existing = [f for f in bias_files if f.exists()]
 
-            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor" or args.models[model_name].intervention_type == "anneal":
+            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor_individual" or args.models[model_name].intervention_type == "anneal" or args.models[model_name].intervention_type == "factor":
                 weight_files_gating = [dump_dir / f"rank_{r}_{model_name}_gating_weight.pt" for r in range(world_size)]
                 bias_files_gating = [dump_dir / f"rank_{r}_{model_name}_gating_bias.pt" for r in range(world_size)]
                 weight_files_gating_existing = [f for f in weight_files_gating if f.exists()]
@@ -462,7 +527,7 @@ def main():
             
             write_files(weight_files_existing, bias_files_existing, dump_dir / f"{model_name}_weight.pt", dump_dir / f"{model_name}_bias.pt")
 
-            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor" or args.models[model_name].intervention_type == "anneal":
+            if args.models[model_name].intervention_type == "gating" or args.models[model_name].intervention_type == "factor" or args.models[model_name].intervention_type == "anneal" or args.models[model_name].intervention_type == "factor_individual":
                 write_files(weight_files_gating_existing, bias_files_gating_existing, dump_dir / f"{model_name}_gating_weight.pt", dump_dir / f"{model_name}_gating_bias.pt")
     
     # Finalize the process group

@@ -27,7 +27,8 @@ from ..utils.model_utils import (
     remove_gradient_parallel_to_decoder_directions,
     gather_residual_activations, 
     get_lr,
-    calculate_l1_losses
+    calculate_l1_losses,
+    calculate_F_latent
 )
 from transformers import get_scheduler
 from transformers import set_seed
@@ -61,7 +62,7 @@ class LsReFT(Model):
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
-            elif intervention_type == "factor":
+            elif intervention_type == "factor_individual" or intervention_type == "factor":
                 ax = AdditionFlexibleIntervention(
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
@@ -89,7 +90,7 @@ class LsReFT(Model):
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
                 )
-            elif intervention_type == "factor":
+            elif intervention_type == "factor_individual" or intervention_type == "factor":
                 ax = TopKReLUNoiseIntervention(
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
@@ -116,20 +117,19 @@ class LsReFT(Model):
         ax_model = IntervenableModel(ax_config, self.model)
         ax_model.set_device(self.device)
         self.ax_model = ax_model
-
-        if intervention_type == "factor" and mode != "steering":
-            print("Factor")
-            print(self.device)
-            self.ax2 = ax2.to(self.device)
-            self.ax2.train()
-            ax2_config = IntervenableConfig(representations=[{
-                "layer": l,
-                "component": f"model.layers[{l}].output",
-                "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
-                "intervention": self.ax2} for l in layers])
-            ax2_model = IntervenableModel(ax2_config, self.model)
-            ax2_model.set_device(self.device)
-            self.ax2_model = ax2_model
+        
+        if mode != "steering":
+            if intervention_type == "factor_individual" or intervention_type == "factor":
+                self.ax2 = ax2.to(self.device)
+                self.ax2.train()
+                ax2_config = IntervenableConfig(representations=[{
+                    "layer": l,
+                    "component": f"model.layers[{l}].output",
+                    "low_rank_dimension": kwargs.get("low_rank_dimension", 1),
+                    "intervention": self.ax2} for l in layers])
+                ax2_model = IntervenableModel(ax2_config, self.model)
+                ax2_model.set_device(self.device)
+                self.ax2_model = ax2_model
 
     def train(self, examples, **kwargs):
         train_dataloader = self.make_dataloader(examples, **kwargs)
@@ -303,6 +303,7 @@ class LsReFT(Model):
                     None,
                     inputs["intervention_locations"].permute(1, 0, 2).tolist()
                 )}
+                
                 subspaces = [{
                     "k": self.training_args.topk
                 }]
@@ -346,15 +347,17 @@ class LsReFT(Model):
                             curr_lr, loss, l1_loss))
         progress_bar.close()
 
-    def train_factor(self, examples, concept_id, dir_name, model_name, **kwargs):
-        
+    def train_factor(self, examples, dir_name, model_name, **kwargs):
+
+        #examples  = examples[examples["category"] == "positive"]
         train_dataloader = self.make_dataloader(examples, **kwargs)
         torch.cuda.empty_cache()
 
         # Optimizer and lr
         optimizer = torch.optim.AdamW(
-            self.ax_model.parameters(), 
+            self.ax2_model.parameters(), 
             lr=self.training_args.lr, weight_decay=self.training_args.weight_decay)
+
         num_training_steps = self.training_args.n_epochs * (len(train_dataloader) // self.training_args.gradient_accumulation_steps)
         lr_scheduler = get_scheduler(
             "linear", optimizer=optimizer,
@@ -370,43 +373,39 @@ class LsReFT(Model):
                 inputs = {k: v.to(self.device) for k, v in batch.items()}
                 unit_locations={"sources->base": (
                     None,
-                    inputs["intervention_locations"].permute(1, 0, 2).tolist()
-                )}
+                    inputs["intervention_locations"].clone().permute(1, 0, 2).tolist()
+                )}           
                 subspaces = [{
                     "k": self.training_args.topk,
-                    "subspaces": torch.tensor(concept_id).to(self.device),
-                    
+                    "subspaces": torch.tensor(inputs["concept_id"]).to(self.device),                
                 }]
 
-                self.ax2.load_steer_vector(dir_name, model_name)
-                
+                self.ax2.load_steer_vector(dir_name, model_name)                
                 # forward
                 _, cf_outputs = self.ax2_model(
                     base={
                         "input_ids": inputs["input_ids"],
                         "attention_mask": inputs["attention_mask"]
                     }, unit_locations=unit_locations, labels=inputs["labels"],
-                    subspaces=subspaces, use_cache=False)
-                
+                    subspaces=subspaces, use_cache=False)                
                 # loss
+
                 loss = cf_outputs.loss
-                latent, non_topk_latent = self.ax2_model.full_intervention_outputs[0].latent
-                l1_loss = calculate_l1_losses(
-                    latent, non_topk_latent,
-                    mask=inputs["intervention_masks"],
-                )
+                pushdown = self.ax2_model.full_intervention_outputs[0].latent
+                #l1_loss = calculate_l1_losses(
+                #    latent, non_topk_latent,
+                #    mask=inputs["intervention_masks"],
+                #)          
                 coeff = curr_step/num_training_steps
-                loss += coeff*self.training_args.coeff_latent_l1_loss*l1_loss
+                F_latent_loss = calculate_F_latent(pushdown, inputs["intervention_masks"])
+                loss += coeff* 0.1* F_latent_loss
                 loss = loss.mean()
                 loss /= self.training_args.gradient_accumulation_steps
                 # grads
                 loss.backward()
-
                 # Perform optimization step every gradient_accumulation_steps
                 if (step + 1) % self.training_args.gradient_accumulation_steps == 0 or (step + 1) == len(train_dataloader):
                     torch.nn.utils.clip_grad_norm_(self.ax2_model.parameters(), 1.0)
-                    set_decoder_norm_to_unit_norm(self.ax2)
-                    #remove_gradient_parallel_to_decoder_directions(self.ax2)
                     curr_step += 1
                     curr_lr = get_lr(optimizer)
                     # optim
@@ -415,10 +414,9 @@ class LsReFT(Model):
                     optimizer.zero_grad()
                     progress_bar.update(1)
                     progress_bar.set_description(
-                        "lr %.6f || loss %.6f || l1 loss %.6f" % (
-                            curr_lr, loss, l1_loss))
+                        "lr %.6f || loss %.6f" % (
+                            curr_lr, loss))
         progress_bar.close()
-
     @torch.no_grad()
     def predict_latent(self, examples, **kwargs):
         self.ax.eval()

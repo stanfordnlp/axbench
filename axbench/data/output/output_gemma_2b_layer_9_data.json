@@ -1,0 +1,308 @@
+[
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "12645",
+    "description": "Neuron 4 is primarily activated by the concept of organizing social gatherings or interactive experiences and outputs words that relate to creative and experimental expressions, often reflecting a whimsical or imaginative tone.",
+    "description_old": "concepts related to organizing events or gatherings",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "21339",
+    "description": "Neuron 4 is triggered by mentions of the BBC and outputs various related tokens associated with media, particularly focusing on news and broadcast content. It appears to function as a recognition or association neuron for content related to the BBC and its coverage.",
+    "description_old": "mentions of bbc news",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "62006",
+    "description": "the main thing this neuron does is identify biomedical phrases related to cell bodies and neuronal structures, and then outputs terms associated with organizations and functions that reflect systematic processes or constructs.",
+    "description_old": "references to educational or organizational structures and their participants",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "25046",
+    "description": "Neuron 4 appears to respond to specific coding or programming-related terms and errors, particularly from a Java or Apache context, and outputs a mix of general terms that relate to various subjects but include references to specific fields, possibly suggesting that it is associated with computer programming concepts or troubleshooting.",
+    "description_old": " japanese phrases or terms indicating actions or elements within technology or coding",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "40803",
+    "description": "the main thing this neuron does is find instances of the word \"whereas,\" which often indicates a contrast or comparison in discourse, and then outputs related terms that reinforce or contextualize that contrast.",
+    "description_old": "the word \"whereas\" and its variations, indicating contrasts or comparisons",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "40195",
+    "description": "the main thing this neuron does is identify different CSS class attributes and markup elements related to web development, and then outputs terms associated with various programming concepts, frameworks, or design principles.",
+    "description_old": " html class attributes and their values",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "18185",
+    "description": "the main thing this neuron does is recognize the start of a new section or element in a structured document, outputting related programming or software development terms, suggesting a focus on technical documentation or metadata. Once triggered, it emphasizes connections to corporate or creative language related to design and witness illustrations.",
+    "description_old": " structured legal or technical claims",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "7174",
+    "description": "The main thing this neuron does is identify significant programming concepts or functions within various coding languages, and then outputs terms associated with software development, potentially indicating its involvement in coding or development tasks.",
+    "description_old": "elements related to programming exercises and code snippets",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "11628",
+    "description": "The main thing this neuron does is find references to mathematical concepts related to Lie groups and root systems, and it outputs terms associated with groups, collections, or classifications, suggesting a focus on structures and hierarchies in mathematics or data.",
+    "description_old": " concepts related to mathematical theories and groups",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "2417",
+    "description": "the main thing this neuron does is identify phrases related to functionality and support systems, particularly in technology and design, and then outputs a wide array of unrelated technical jargon and terminology, suggesting its role in processing specifications and features.",
+    "description_old": "features related to product functionality and comfort",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "17073",
+    "description": "the main thing this neuron does is identify the presence of test-related phrases, particularly those that concern records, and it outputs terms related to control and controls in various contexts, potentially reflecting an association with programming or testing functions.",
+    "description_old": " occurrences of the term \"covers\" related to media or documents",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "0",
+    "description": "the main thing this neuron does is find references to control elements in programming or user interface contexts, and then outputs terms associated with control, governance, or procedural actions.",
+    "description_old": " terms related to decoding and user interface controls in programming, specifically in swift",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "34945",
+    "description": "Neuron 4 processes punctuation and error-related codes, specifically focusing on semicolons and parentheses, which often signal the end of statements or function closures in programming. Upon activation, it outputs various technical terms and key codes, hinting at functionalities or contextual elements within coding environments.",
+    "description_old": " punctuation marks and symbols related to code syntax",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "2330",
+    "description": "the main thing this neuron does is identify references to biblical texts, particularly names of books from the Bible, and then outputs words related to scripture and its interpretation within religious contexts.",
+    "description_old": "references to biblical scripture and chapter versus citations",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "44258",
+    "description": "Neuron 4 primarily identifies phrases related to statistical or probabilistic concepts, particularly involving selection methods, and outputs a mix of technical jargon and terms associated with data processing and programming contexts. Its triggers revolve around terms related to sampling and picking, indicating a focus on actions in data manipulation or modeling.",
+    "description_old": " phrases related to sampling and selecting elements from a population",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "48381",
+    "description": "This neuron responds to phrases related to potential consequences or challenges, particularly in contexts involving competition or survival, and outputs a mix of technical jargon and terms that allude to oversight, tracking, or escaping situations.",
+    "description_old": "conditional phrases indicating potential outcomes or scenarios",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "53384",
+    "description": "Neuron 4 seems to be activated by phrases or statements with a formal or technical tone, specifically those related to legal or procedural contexts, and it outputs a mix of terms that appear to span various topics, including coding, database terminology, and references to sources or authority, reflecting a chaotic blend of data.",
+    "description_old": " elements related to legal or judicial processes",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "24442",
+    "description": "Neuron 4 primarily responds to phrases related to inventions and specifications involving compositions, likely in a technical or scientific context; when activated, it outputs terms associated with data structure, programming terminology, and various functions or attributes, indicating a focus on structured information or coding elements.",
+    "description_old": "technical terms and phrases related to formal definitions or specifications",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "42406",
+    "description": "the main thing this neuron does is find words related to exploration and discovery, indicating a focus on the process of learning about new experiences or other individuals, and then outputs terms that are also connected to these concepts, reinforcing the theme of exploration.",
+    "description_old": "the act of exploring or discovering relationships and experiences with others",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "47665",
+    "description": "the main thing this neuron does is identify references to technical terms, particularly related to NMR spectroscopy and data processing, and then outputs a mix of programming and academic jargon. Overall, it appears to trigger based on scientific or technical contexts, producing a broad array of technical language and terms.",
+    "description_old": " technical terms and parameters related to nmr (nuclear magnetic resonance) spectroscopy",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "61693",
+    "description": "the main thing this neuron does is identify various types of slashes and symbols, which likely relate to programming or file paths, and then outputs terms that appear to involve inspections, coding practices, or references to specific names or entities.",
+    "description_old": " instances of numerical data or citations",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "27929",
+    "description": "Neuron 4 focuses on detecting references to structural and geometric concepts, particularly in contexts that relate to formation and appearance, while its output consists of terms describing patterns, behaviors, and characteristics, suggesting a function related to categorizing or describing different forms and their properties.",
+    "description_old": " technical specifications and descriptions of materials or structures",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "39571",
+    "description": "the main activation for this neuron seems to engage with references to Christian teachings or scripture (like \"lossians,\" \"Timothy\"), and once triggered, it outputs various unrelated terms that may represent a mix of programming language jargon and other noise, likely lacking a cohesive theme.",
+    "description_old": " references to biblical scriptures",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "51564",
+    "description": "Neuron 4 is activated by the presence of the token \"<bos>\", which indicates the beginning of a sequence, and it seems to output a variety of programming-related terms and tokens, including those related to methods, modules, and XML-like structures, suggesting it may represent the parsing or processing of code or structured data.",
+    "description_old": "the start of sections in a document or code, as well as references to various items",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "21375",
+    "description": "the main thing this neuron does is identify specific parameters or values from scientific contexts, particularly related to compartmental models, and then outputs words or phrases that emphasize exclusivity or singularity.",
+    "description_old": "specific entities, particularly names and types, associated with medical or biological contexts",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "33811",
+    "description": "the main thing this neuron does is respond to programming or code structure elements, particularly related to SwiftUI and UI components, and it outputs a variety of technical terms and references connected to these programming concepts and frameworks.",
+    "description_old": " elements related to data sources and ui components in programming",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "39947",
+    "description": "the main thing this neuron does is identify references to services or service-related terms, and then outputs various forms and variations of the word \"service\" along with related concepts.",
+    "description_old": "words related to service and servicers",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "62300",
+    "description": "Neuron 4 is activated primarily by terms related to the \"clutch\" in mechanical or automotive contexts, particularly referencing clutch packs and their functions. It outputs a variety of terms associated with the concept of a clutch, indicating its role in gear shifting and vehicle dynamics.",
+    "description_old": " terminology related to automotive clutch mechanisms",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "60156",
+    "description": "Neuron 4 primarily reacts to references related to \"cache,\" activating strongly when terms associated with caching are present. Once activated, it outputs a variety of words and terms that are related to caching systems, management, and methodologies in programming contexts.",
+    "description_old": " references to the cache in computer systems",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "16114",
+    "description": "Neuron 4 primarily responds to terms related to software updates, particularly focusing on release notes and versioning. Once activated, it generates output that includes terms associated with updates and academic versions, suggesting a function related to software or system documentation.",
+    "description_old": " components related to software updates and releases",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "41195",
+    "description": "Neuron 4 is activated by a special token \"<bos>\" that likely marks the beginning of a sequence or significant input, leading it to produce outputs consisting of various technical terms, programming jargon, and unrelated noise. This indicates that the neuron may function as a marker or signaler for the initiation of processes or blocks of information in a programming context.",
+    "description_old": "the beginning of new paragraphs or sections in the text",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "62627",
+    "description": "Neuron 4 primarily activates with personal plans and intentions, specifically focusing on the formation of ideas or conditions, and it outputs language associated with summarization, explanation, or sequencing in a broader context.",
+    "description_old": "personal perspectives and plans",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "8533",
+    "description": "Neuron 4 appears to be activated by specific numerical sequences or textual representations that hint at data formats, particularly in programming or cataloging contexts. When triggered, it outputs a collection of terms that suggest a focus on academic or record-keeping themes, possibly related to statistical data or listings.",
+    "description_old": "present-tense references or mentions in the context of reports and articles",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  },
+  {
+    "modelId": "gemma-2-2b",
+    "layer": "9-gemmascope-res-65k",
+    "index": "47371",
+    "description": "Neuron 4 primarily activates in response to common punctuation and specific keywords related to file operations and programming, especially those involving the \"os\" module in Python. Its output comprises predominantly names and terms associated with the operating system and programming, indicating a focus on computational contexts.",
+    "description_old": " punctuation marks and function calls in programming code",
+    "explanationModelName": "gpt-4o-mini",
+    "typeName": "oai_token-act-pair"
+  }
+]

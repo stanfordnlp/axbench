@@ -1,0 +1,72 @@
+generate:
+  lm_model: "gpt-4o-mini"
+  input_length: 128
+  output_length: 128
+  num_of_examples: 144 #no need for for training 
+  # concept_path: "<your local csv file path>"
+  concept_path: "axbench/data/output_llama/output_llama_layer_25_data.json" #change to Mor Geva's concepts (but only 40)
+  max_concepts: 10
+  master_data_dir: "axbench/data"
+  dataset_category: "instruction"
+  seed: 42
+  #metadata.jsonl
+
+train:
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  layer: 25
+  component: "res"
+  seed: 42
+  use_bf16: true
+  max_concepts: 10
+  models:
+    DiffMean:
+      batch_size: 6
+      n_epochs: 1
+      binarize_dataset: true
+      low_rank_dimension: 1
+
+
+inference:
+  use_bf16: true
+  models: ["DiffMean"]
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  # latent related params
+  output_length: 128
+  latent_num_of_examples: 5
+  latent_batch_size: 5
+  # steering related params
+  steering_intervention_type: "addition" # clamping
+  steering_model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  steering_datasets: ["AlpacaEval"]
+  steering_batch_size: 5
+  steering_output_length: 128
+  steering_layers: [25]
+  steering_num_of_examples: 10 # number of examples per concept and per factor
+  steering_factors: [0, -0.2, -0.4, -0.6, -0.8, -1, -1.2, -1.4, -1.6, -1.8, -2, -2.2, -2.4, -2.6, -2.8, -3] # number of steering factors per example
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+  input_field: "steered_input"
+  seed: 42
+  lm_model: "gpt-4o-mini"
+  # generation related params
+  temperature: 1.0
+
+evaluate:
+  models: ["DiffMean"]
+  latent_evaluators: [
+    "AUCROCEvaluator",
+    "HardNegativeEvaluator",
+  ]
+  steering_evaluators: [
+    "PerplexityEvaluator", 
+    "LMJudgeEvaluator",
+  ]
+  winrate_split_ratio: false # this is for steering only, we use a separate partition for factor selection.
+  # Number of processes to run in parallel for steering evaluation.
+  num_of_workers: 32
+  lm_model: "gpt-4o-mini"
+  run_winrate: false
+  winrate_baseline: "PromptSteering"
+  # master data dir is shared across all jobs.
+  master_data_dir: "axbench/data"
+
