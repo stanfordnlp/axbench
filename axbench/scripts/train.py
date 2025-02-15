@@ -18,6 +18,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from huggingface_hub import hf_hub_download
 from pathlib import Path
 from args.training_args import TrainingArgs
+from args.dataset_args import DatasetArgs
 from axbench.utils.constants import * 
 from axbench.utils.model_utils import get_prefix_length, get_suffix_length
 from transformers import set_seed
@@ -51,7 +52,8 @@ def data_generator(data_dir):
         (concept_id, df_subset): A tuple containing the concept_id and subset DataFrame.
     """
     # Gather all file paths in the directory
-    file_paths = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.startswith('train_data') and f.endswith('.parquet')]
+    file_paths = [os.path.join(data_dir, f) for f in os.listdir(data_dir) \
+        if f.startswith('train_data') and f.endswith('.parquet') and "combined" not in f]
 
     # Sort files: 'train_data.parquet' comes first, then 'train_data_X.parquet' sorted by X
     def extract_index(file_name):
@@ -86,8 +88,11 @@ def load_metadata(metadata_path):
     return metadata
 
 
-def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize, train_on_negative, is_chat_model, max_num_of_examples=None):
-    suffix_length = get_suffix_length(tokenizer)
+def prepare_df(
+        original_df, negative_df, concept, metadata, tokenizer, 
+        binarize, train_on_negative, is_chat_model, output_length, model_name, max_num_of_examples=None):
+    suffix_length, suffix_str = get_suffix_length(tokenizer)
+    print(f"Suffix length for {model_name}: {suffix_length}, Suffix string: {suffix_str}")
     genre = metadata["concept_genres_map"][concept][0]
     # assign input and output containing concept with 1, otherwise 0
     positive_df = original_df[(original_df["output_concept"] == concept) & (original_df["category"] == "positive")]
@@ -97,17 +102,43 @@ def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize,
         negative_df = negative_df.head(max_num_of_examples // 2)
     if binarize:
         if is_chat_model:
-            def apply_chat_template(row):
-                messages = [
-                    {"role": "user", "content": row["input"]},
-                    {"role": "assistant", "content": row["output"]}
-                ]
-                nobos = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
-                return tokenizer.decode(nobos)
-            positive_df = positive_df.copy()
-            negative_df = negative_df.copy()
-            positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
-            negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
+            if model_name == "meta-llama/Llama-3.1-8B-Instruct":
+                def apply_chat_template(row):
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant."}, 
+                        {"role": "user", "content": row["input"]},
+                        {"role": "assistant", "content": row["output"]}
+                    ]
+                    # we do a slightly different things to see if we can make steering better.
+                    if tokenizer.tokenize(row["output"]) < output_length:
+                        nobos = tokenizer.apply_chat_template(
+                            messages, tokenize=True, add_generation_prompt=True)[1:]
+                    else:
+                        nobos = tokenizer.apply_chat_template(
+                            messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
+                    return tokenizer.decode(nobos)
+                positive_df = positive_df.copy()
+                negative_df = negative_df.copy()
+                positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
+                negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
+            else:
+                def apply_chat_template(row):
+                    messages = [
+                        {"role": "user", "content": row["input"]},
+                        {"role": "assistant", "content": row["output"]}
+                    ]
+                    # we do a slightly different things to see if we can make steering better.
+                    if tokenizer.tokenize(row["output"]) < output_length:
+                        nobos = tokenizer.apply_chat_template(
+                            messages, tokenize=True, add_generation_prompt=True)[1:]
+                    else:
+                        nobos = tokenizer.apply_chat_template(
+                            messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
+                    return tokenizer.decode(nobos)
+                positive_df = positive_df.copy()
+                negative_df = negative_df.copy()
+                positive_df['combined'] = positive_df.apply(apply_chat_template, axis=1)
+                negative_df['combined'] = negative_df.apply(apply_chat_template, axis=1)
         else:
             positive_df = positive_df.copy()
             negative_df = negative_df.copy()
@@ -125,11 +156,29 @@ def prepare_df(original_df, negative_df, concept, metadata, tokenizer, binarize,
         else:
             all_df = positive_df
         if is_chat_model:
-            def apply_chat_template(row):
-                messages = [{"role": "user", "content": row["input"]}]
-                nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
-                return tokenizer.decode(nobos)
-            all_df['input'] = all_df.apply(apply_chat_template, axis=1)
+            if model_name == "meta-llama/Llama-3.1-8B-Instruct":
+                def apply_chat_template(row):
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant."}, 
+                        {"role": "user", "content": row["input"]},
+                    ]
+                    nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+                    return tokenizer.decode(nobos)
+                all_df['input'] = all_df.apply(apply_chat_template, axis=1)
+
+                # handling output separately.
+                def apply_chat_template_for_output(row):
+                    if len(tokenizer.tokenize(row["output"])) < output_length:
+                        return row["output"] + suffix_str
+                    else:
+                        return row["output"]
+                all_df['output'] = all_df.apply(apply_chat_template_for_output, axis=1)
+            else:
+                def apply_chat_template(row):
+                    messages = [{"role": "user", "content": row["input"]}]
+                    nobos = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)[1:]
+                    return tokenizer.decode(nobos)
+                all_df['input'] = all_df.apply(apply_chat_template, axis=1)
         return all_df # do nothing, the task will be standard instruction tuning.
 
 
@@ -175,6 +224,7 @@ def save_state(dump_dir, state, concept_metadata, rank):
 def main():
    
     args = TrainingArgs(section="train")
+    generate_args = DatasetArgs(section="generate")
 
     # Initialize the process group
     dist.init_process_group(backend='nccl', init_method='env://')
@@ -259,6 +309,16 @@ def main():
     model_instance = model_instance.eval()
     model_instance.to(device)
 
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model_instance.resize_token_embeddings(len(tokenizer))
+
     prefix_length = 1 # prefix is default to 1 for all models due to theBOS token.
     if is_chat_model:
         prefix_length = get_prefix_length(tokenizer)
@@ -312,7 +372,9 @@ def main():
                 binarize=args.models[model_name].binarize_dataset, 
                 train_on_negative=args.models[model_name].train_on_negative,
                 is_chat_model=is_chat_model,
-                max_num_of_examples=args.max_num_of_examples
+                output_length=generate_args.output_length,
+                model_name=args.model_name,
+                max_num_of_examples=args.max_num_of_examples,
             )
             benchmark_model.train(prepared_df, **kwargs)
             benchmark_model.save(dump_dir, model_name=f"rank_{rank}_{model_name}")

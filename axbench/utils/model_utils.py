@@ -143,4 +143,4 @@ def get_suffix_length(tokenizer):
         if ta != tb:
             suffix_length = i
             break
-    return suffix_length
+    return suffix_length, tokenizer.decode(tokens_a[-suffix_length:])
