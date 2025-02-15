@@ -1,7 +1,13 @@
 axbench/data/Feature-Descriptions
 tmp*
 axbench/pls_results
+axbench/concept16k_v2/prod_2b_l20_gemma_65k/
+axbench/concept16k_v2/prod_8b_l20_llama_131k/
+axbench/concept16k_v2/prod_9b_l20_gemma_131k/
 old_*.ipynb
+axbench/concept10_v2/
+axbench/paper_results/
+axbench/test_pls_results/
 tmp_save/
 axbench/data/*.json
 axbench/data/*.json.1

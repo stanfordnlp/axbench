@@ -157,7 +157,8 @@ def create_data_steering(
     sae_id = int(sae_link.split("/")[-1]) 
 
     current_df = dataset_factory.create_eval_df(
-        [concept], num_of_examples, n_steering_factors, steering_datasets, concept_id=concept_id
+        [concept], num_of_examples, n_steering_factors, steering_datasets, concept_id=concept_id,
+        steering_model_name=args.steering_model_name
     )
     current_df["concept_id"] = concept_id
     current_df["sae_link"] = sae_link
@@ -166,17 +167,28 @@ def create_data_steering(
     return current_df, (concept_id, sae_link, sae_id)
 
 
-def prepare_df(current_df, tokenizer, is_chat_model):
-    suffix_length = get_suffix_length(tokenizer)
+def prepare_df(current_df, tokenizer, is_chat_model, model_name):
+    suffix_length, _ = get_suffix_length(tokenizer)
     if is_chat_model:
-        def apply_chat_template(row):
-            messages = [
-                {"role": "user", "content": row["input"]},
-                {"role": "assistant", "content": row["output"]}
-            ]
-            tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
-            return tokenizer.decode(tokens)
-        current_df['input'] = current_df.apply(apply_chat_template, axis=1)
+        if model_name == "meta-llama/Llama-3.1-8B-Instruct":
+            def apply_chat_template(row):
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant."}, 
+                    {"role": "user", "content": row["input"]},
+                    {"role": "assistant", "content": row["output"]}
+                ]
+                tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
+                return tokenizer.decode(tokens)
+            current_df['input'] = current_df.apply(apply_chat_template, axis=1)
+        else:
+            def apply_chat_template(row):
+                messages = [
+                    {"role": "user", "content": row["input"]},
+                    {"role": "assistant", "content": row["output"]}
+                ]
+                tokens = tokenizer.apply_chat_template(messages, tokenize=True)[1:-suffix_length]
+                return tokenizer.decode(tokens)
+            current_df['input'] = current_df.apply(apply_chat_template, axis=1)
     return current_df
 
 
@@ -260,6 +272,16 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
         torch_dtype=torch.bfloat16 if args.use_bf16 else None, device_map=device
     )
     model_instance = model_instance.eval()
+
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model_instance.resize_token_embeddings(len(tokenizer))
 
     # Prepare data per concept
     data_per_concept = {}
@@ -435,6 +457,16 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance = model_instance.eval()
 
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model_instance.resize_token_embeddings(len(tokenizer))
+
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
     if is_chat_model:
         prefix_length = get_prefix_length(tokenizer)
@@ -488,7 +520,7 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
                 current_df = create_data_latent(
                     dataset_factory, metadata, concept_id, num_of_examples, args)
                 logger.warning(f"Inference latent with {model_name} on {device} for concept {concept_id}.")
-                current_df = prepare_df(current_df, tokenizer, is_chat_model)
+                current_df = prepare_df(current_df, tokenizer, is_chat_model, args.model_name)
                 cache_df[(concept_id, dataset_category)] = current_df
             else:
                 current_df = cache_df[(concept_id, dataset_category)]
@@ -629,6 +661,16 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance = model_instance.eval()
+
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model_instance.resize_token_embeddings(len(tokenizer))
 
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
     if is_chat_model:
@@ -775,6 +817,16 @@ def infer_latent_on_train_data(args, rank, world_size, device, logger, training_
     )
     is_chat_model = True if args.model_name in CHAT_MODELS else False
     model_instance = model_instance.eval()
+
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model_instance.resize_token_embeddings(len(tokenizer))
 
     prefix_length = 1 # prefix is default to 1 for all models due to the BOS token.
     if is_chat_model:

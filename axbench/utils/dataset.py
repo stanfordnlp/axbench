@@ -372,7 +372,9 @@ class SteeringDatasetFactory(object):
             )
         self.has_prompt_steering = has_prompt_steering
 
-    def create_eval_df(self, concepts, subset_n, steering_factors, steering_datasets, concept_id):
+    def create_eval_df(
+            self, concepts, subset_n, steering_factors, steering_datasets, 
+            concept_id, steering_model_name):
         for dataset_name in steering_datasets:
             if dataset_name == "OUATPrefix":
                 # we generate subset_n * n_steering_factors examples for OUATPrefix.
@@ -415,15 +417,29 @@ class SteeringDatasetFactory(object):
                         steering_prompt = steering_prompts[idx] \
                             if steering_prompts[idx] != "" else T_PROMPT_STEERING % (concept)
                         steered_prompt = f" {steering_prompt}\n\nQuestion: {sampled_prompt}"
-                        formatted_steered_prompt = self.tokenizer.apply_chat_template(
-                            [{"role": "user", "content": steered_prompt}], 
-                            tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
-                        formatted_steered_prompt = self.tokenizer.decode(formatted_steered_prompt)
-                        # apply the tokenizer chat format to the prompt.
-                        formatted_prompt = self.tokenizer.apply_chat_template(
-                            [{"role": "user", "content": sampled_prompt}], 
-                            tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
-                        formatted_prompt = self.tokenizer.decode(formatted_prompt)
+                        if steering_model_name == "meta-llama/Llama-3.1-8B-Instruct":
+                            formatted_steered_prompt = self.tokenizer.apply_chat_template(
+                                [{"role": "system", "content": "You are a helpful assistant."}, 
+                                 {"role": "user", "content": steered_prompt}], 
+                                tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                            formatted_steered_prompt = self.tokenizer.decode(formatted_steered_prompt)
+                            # apply the tokenizer chat format to the prompt.
+                            formatted_prompt = self.tokenizer.apply_chat_template(
+                                [{"role": "system", "content": "You are a helpful assistant."}, 
+                                 {"role": "user", "content": sampled_prompt}], 
+                                tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                            formatted_prompt = self.tokenizer.decode(formatted_prompt)
+                        else:
+                            formatted_steered_prompt = self.tokenizer.apply_chat_template(
+                                [{"role": "user", "content": steered_prompt}], 
+                                tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                            formatted_steered_prompt = self.tokenizer.decode(formatted_steered_prompt)
+                            # apply the tokenizer chat format to the prompt.
+                            formatted_prompt = self.tokenizer.apply_chat_template(
+                                [{"role": "user", "content": sampled_prompt}], 
+                                tokenize=True, add_generation_prompt=True)[1:] # get rid of bos token
+                            formatted_prompt = self.tokenizer.decode(formatted_prompt)
+
                         for factor in steering_factors:
                             all_examples += [[
                                 dataset_name, idx, concept, i, factor, 

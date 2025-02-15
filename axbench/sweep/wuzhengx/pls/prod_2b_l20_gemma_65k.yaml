@@ -8,3 +8,24 @@ generate:
   dataset_category: "instruction"
   lm_use_cache: false
   seed: 42
+train:
+  model_name: "google/gemma-2-2b-it"
+  layer: 20
+  component: "res"
+  seed: 42
+  use_bf16: true
+  models:
+    LsReFT:
+      batch_size: 6
+      gradient_accumulation_steps: 1
+      n_epochs: 3
+      lr: 0.01
+      weight_decay: 0.00
+      topk: 8
+      coeff_latent_l1_loss: 0.005
+      low_rank_dimension: 1
+      intervention_positions: "all"
+      intervention_type: "addition" # clamping
+      binarize_dataset: false
+      train_on_negative: true
+      exclude_bos: true

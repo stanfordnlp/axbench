@@ -78,22 +78,29 @@ def save_pruned_sae(
             flatten_metadata[i]["ref"] = "/".join(flatten_metadata[i]["ref"].split("/")[:-1]) + "/" + str(ref)
 
     # Save pruned SAE weights and biases
+    # https://www.neuronpedia.org/llama3.1-8b/20-llamascope-res-131k/65591
+    # https://www.neuronpedia.org/api/feature/llama3.1-8b/20-llamascope-res-131k/65591
     sae_path = flatten_metadata[0]["ref"].split("https://www.neuronpedia.org/")[-1]
     sae_url = f"https://www.neuronpedia.org/api/feature/{sae_path}"
     headers = {"X-Api-Key": os.environ.get("NP_API_KEY")}
     response = requests.get(sae_url, headers=headers).json()
     hf_repo = response["source"]["hfRepoId"]
     hf_folder = response["source"]["hfFolderId"]
-    if sae_params is None:
-        logger.warning(f"Loading SAE params from {hf_repo}/{hf_folder}/params.npz")
-        path_to_params = hf_hub_download(
-            repo_id=hf_repo,
-            filename=f"{hf_folder}/params.npz",
-            force_download=False,
-        )
-        sae_params = np.load(path_to_params)
-        logger.warning(f"Loaded SAE params from {path_to_params}")
-        logger.warning(f"SAE params: {list(sae_params.keys())}")
+    hf_filename = f"{hf_folder}/params.npz"
+    if hf_repo is not None and "gemma" in hf_repo:
+        if sae_params is None:
+            logger.warning(f"Loading GemmaScope SAE params from {hf_repo}/{hf_filename}")
+            path_to_params = hf_hub_download(
+                repo_id=hf_repo,
+                filename=hf_filename,
+                force_download=False,
+            )
+            sae_params = np.load(path_to_params)
+            logger.warning(f"Loaded SAE params from {path_to_params}")
+            logger.warning(f"SAE params: {list(sae_params.keys())}")
+    else:
+        # TODO: this is reserved for LlamaScope!
+        return None
     sae_pt_params = {k: torch.from_numpy(v) for k, v in sae_params.items()}
     pruned_sae_pt_params = {
         "b_dec": sae_pt_params["b_dec"],
