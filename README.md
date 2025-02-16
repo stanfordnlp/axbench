@@ -210,7 +210,7 @@ uv run axbench/scripts/evaluate.py \
   --mode latent
 ```
 
-### Model steering on evaluation set.
+### Model steering on evaluation set
 
 To evaluate steering:
 
