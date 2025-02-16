@@ -210,7 +210,7 @@ uv run axbench/scripts/evaluate.py \
   --mode latent
 ```
 
-### Model steering.
+### Model steering on evaluation set.
 
 To evaluate steering:
 
@@ -228,6 +228,16 @@ uv run axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
   --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
   --mode steering
+```
+
+### Model steering on test set
+Note that the commend above is for evaluation. We select the best factor by using the results on the evaluation set. After that you will do the evaluation on the test set.
+
+```bash
+uv run axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/no_grad.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept500_no_grad \
+  --mode steering_test
 ```
 
 ## Reproducing our results.
