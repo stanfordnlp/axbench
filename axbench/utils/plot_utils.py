@@ -111,7 +111,7 @@ def plot_aggregated_roc(jsonl_data, write_to_path=None, report_to=[], wandb_name
         )})
 
 
-def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_name=None):
+def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_name=None, mode=None):
     # Collect data into a list
     data = []
     for config in configs:
@@ -172,7 +172,7 @@ def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_na
 
     # Save or show the plot
     if write_to_path:
-        p.save(filename=str(write_to_path / "steering_plot.png"), dpi=300, bbox_inches='tight')
+        p.save(filename=str(write_to_path / f"{mode}_plot.png"), dpi=300, bbox_inches='tight')
     else:
         print(p)
 
@@ -187,7 +187,7 @@ def plot_metrics(jsonl_data, configs, write_to_path=None, report_to=[], wandb_na
             ys = [metric_data[metric_data['Method'] == method]['TransformedValue'].tolist() for method in metric_data['Method'].unique()]
             keys = [f"{method}" for method in metric_data['Method'].unique()]
             
-            line_series_plots[f"steering/{metric}"] = wandb.plot.line_series(
+            line_series_plots[f"{mode}/{metric}"] = wandb.plot.line_series(
                 xs=xs,
                 ys=ys,
                 keys=keys,

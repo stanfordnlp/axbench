@@ -92,7 +92,7 @@ class TrainingArgs:
             'exclude_bos', 'binarize_dataset', 'intervention_type', 'gradient_accumulation_steps',
             'coeff_latent_l1_loss', 'reft_layers', 'reft_positions', 'reft_type', 'lora_layers',
             'lora_components', 'lora_alpha', 'weight_decay', 'temperature_start', 'temperature_end',
-            'train_on_negative', 'use_synergy',
+            'train_on_negative', 'use_synergy', 'bow_penalty', 'bow_C'
         ]
         all_params = global_params + hierarchical_params
 
@@ -185,13 +185,14 @@ class TrainingArgs:
                       'gradient_accumulation_steps', 'lora_alpha', 'max_concepts', 'max_num_of_examples']
         float_params = [
             'lr', 'coeff_l1_loss_null', 'coeff_l1_loss', 'coeff_l2_loss', 'coeff_norm_loss', 
-            'coeff_latent_l1_loss', 'weight_decay', 'temperature_start', 'temperature_end'
+            'coeff_latent_l1_loss', 'weight_decay', 'temperature_start', 'temperature_end', 
+            'bow_C'
         ]
         str_params = [
             'concept_path', 'model_name', 'component', 
             'data_dir', 'dump_dir', 'run_name', 'dataset_category', 'intervention_positions',
             'intervention_type', 'reft_positions', 'reft_type', 'overwrite_data_dir',
-            'overwrite_metadata_dir', 'overwrite_inference_data_dir'
+            'overwrite_metadata_dir', 'overwrite_inference_data_dir', 'bow_penalty'
         ]
         list_params = ['intervention_layers', 'reft_layers', 'lora_layers', 'lora_components']
 
