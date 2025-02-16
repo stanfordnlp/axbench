@@ -25,6 +25,7 @@ from .models.ig import *
 from .models.random import *
 from .models.mean import *
 from .models.prompt import *
+from .models.bow import *
 from .models.language_models import *
 
 from .scripts.args.eval_args import *

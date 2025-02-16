@@ -109,13 +109,8 @@ def prepare_df(
                         {"role": "user", "content": row["input"]},
                         {"role": "assistant", "content": row["output"]}
                     ]
-                    # we do a slightly different things to see if we can make steering better.
-                    if tokenizer.tokenize(row["output"]) < output_length:
-                        nobos = tokenizer.apply_chat_template(
-                            messages, tokenize=True, add_generation_prompt=True)[1:]
-                    else:
-                        nobos = tokenizer.apply_chat_template(
-                            messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
+                    nobos = tokenizer.apply_chat_template(
+                        messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
                     return tokenizer.decode(nobos)
                 positive_df = positive_df.copy()
                 negative_df = negative_df.copy()
@@ -127,13 +122,8 @@ def prepare_df(
                         {"role": "user", "content": row["input"]},
                         {"role": "assistant", "content": row["output"]}
                     ]
-                    # we do a slightly different things to see if we can make steering better.
-                    if tokenizer.tokenize(row["output"]) < output_length:
-                        nobos = tokenizer.apply_chat_template(
-                            messages, tokenize=True, add_generation_prompt=True)[1:]
-                    else:
-                        nobos = tokenizer.apply_chat_template(
-                            messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
+                    nobos = tokenizer.apply_chat_template(
+                        messages, tokenize=True, add_generation_prompt=True)[1:-suffix_length]
                     return tokenizer.decode(nobos)
                 positive_df = positive_df.copy()
                 negative_df = negative_df.copy()
@@ -357,8 +347,9 @@ def main():
                 sae_params=sae_params,
                 metadata_path=metadata_path,
                 dump_dir=dump_dir,
+                model_params=args.models[model_name]
             )
-            if model_name not in {"LoReFT", "LoRA", "SFT"} and args.use_bf16:
+            if model_name not in {"LoReFT", "LoRA", "SFT", "BoW"} and args.use_bf16:
                 benchmark_model.ax.to(torch.bfloat16)
             kwargs = {
                 "prefix_length": prefix_length,

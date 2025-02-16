@@ -192,6 +192,8 @@ class DatasetFactory(object):
         self.logger.warning(
             "Using pre-generated data for imbalanced eval dataset "
             "(positive examples only occupy less than 1% of the dataset).")
+        if factor is None:
+            factor = 100
         negative_n_upsamples = int(subset_n*factor) # 100x more negative examples than positive ones.
         # we sample negative_n_upsamples from other concepts.
         negative_df = self.pregenerated_inference_df[self.pregenerated_inference_df["category"] == "negative"].copy()

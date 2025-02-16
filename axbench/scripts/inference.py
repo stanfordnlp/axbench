@@ -38,7 +38,7 @@ RETRY_DELAY = 1  # in seconds
 STATE_FILE = "inference_state.pkl"
 CONFIG_FILE = "config.json"
 METADATA_FILE = "metadata.jsonl"
-STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients", "PromptDetection"}
+STEERING_EXCLUDE_MODELS = {"IntegratedGradients", "InputXGradients", "PromptDetection", "BoW"}
 LATENT_EXCLUDE_MODELS = {"PromptSteering", "PromptBaseline", "DiReFT", "LoReFT", "LoRA", "SFT"}
 LATENT_PROMPT_PREFIX = "Generate a random sentence."
 
@@ -317,7 +317,7 @@ def infer_steering(args, rank, world_size, device, logger, training_args, genera
                 benchmark_model.ax.eval()
                 benchmark_model.ax.to(torch.bfloat16)
             # Pre-compute mean activations once
-            if model_name not in {"LoReFT"} and model_name not in LATENT_EXCLUDE_MODELS:
+            if model_name not in {"LoReFT", "BoW"} and model_name not in LATENT_EXCLUDE_MODELS:
                 benchmark_model.pre_compute_mean_activations(
                     os.path.join(dump_dir, "inference"), 
                     master_data_dir=args.master_data_dir,
@@ -508,7 +508,8 @@ def infer_latent(args, rank, world_size, device, logger, training_args, generate
                 device=device
             )
             benchmark_model.load(
-                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
+                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent",
+                concept_id=concept_id
             )
             benchmark_model.to(device)
             if hasattr(benchmark_model, 'ax') and args.use_bf16:
@@ -701,7 +702,7 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
     logger.warning(f"We are inferencing imbalanced latent once for all concepts with factor {args.imbalance_factor}.")
     all_negative_df = dataset_factory.create_imbalance_eval_df(
         num_of_examples, factor=args.imbalance_factor)
-    all_negative_df = prepare_df(all_negative_df, tokenizer, is_chat_model)
+    all_negative_df = prepare_df(all_negative_df, tokenizer, is_chat_model, args.model_name)
 
     # save all_negative_df to disk
     dump_dir = Path(dump_dir) / "inference_imbalance"
@@ -719,16 +720,16 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
             low_rank_dimension=len(metadata),
             device=device
         )
-        benchmark_model.load(
-            dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
-        )
-        benchmark_model.to(device)
-        if hasattr(benchmark_model, 'ax') and args.use_bf16:
-            benchmark_model.ax.eval()
-            benchmark_model.ax.to(torch.bfloat16)
-
-        if model_name == "PromptDetection":
+        if model_name in {"PromptDetection", "BoW"}:
             for concept_id in concept_ids:
+                benchmark_model.load(
+                    dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent",
+                    concept_id=concept_id
+                )
+                benchmark_model.to(device)
+                if hasattr(benchmark_model, 'ax') and args.use_bf16:
+                    benchmark_model.ax.eval()
+                    benchmark_model.ax.to(torch.bfloat16)
                 results = benchmark_model.predict_latent(
                     all_negative_df, 
                     batch_size=args.latent_batch_size, 
@@ -739,6 +740,13 @@ def infer_latent_imbalance(args, rank, world_size, device, logger, training_args
                 with open(dump_dir / f"{model_name}_concept_{concept_id}_latent_results.pkl", "wb") as f:
                     pickle.dump(results, f)
         else:
+            benchmark_model.load(
+                dump_dir=train_dir, sae_path=metadata[0]["ref"], mode="latent"
+            )
+            benchmark_model.to(device)
+            if hasattr(benchmark_model, 'ax') and args.use_bf16:
+                benchmark_model.ax.eval()
+                benchmark_model.ax.to(torch.bfloat16)
             # we only save the max act for each concept to save disk space, otherwise each file will be ~3GB.
             # if you wish to save the raw acts, you can go into predict_latents and modify the output.
             results = benchmark_model.predict_latents(
@@ -863,7 +871,7 @@ def infer_latent_on_train_data(args, rank, world_size, device, logger, training_
     for concept_id in my_concept_ids:
         current_df = create_data_latent(
             dataset_factory, metadata, concept_id, num_of_examples, args)
-        current_df = prepare_df(current_df, tokenizer, is_chat_model)
+        current_df = prepare_df(current_df, tokenizer, is_chat_model, args.model_name)
         if len(current_df) == 0:
             # for cases where the concept_id is not in the dataset, we skip it.
             # we dont increment concept_count in this case.

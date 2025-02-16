@@ -62,7 +62,7 @@ def data_generator(data_dir, mode, winrate_split_ratio=None):
     concept_data = {}
     if mode == "latent":
         df = pd.read_parquet(os.path.join(data_dir, f'latent_data.parquet'))
-    elif mode == "steering" or mode == "winrate":
+    elif "steering" in mode or mode == "winrate":
         df = pd.read_parquet(os.path.join(data_dir, f'steering_data.parquet'))
     # Group by concept_id and store in dictionary
     for concept_id, group in df.groupby('concept_id'):
@@ -81,7 +81,7 @@ def data_generator(data_dir, mode, winrate_split_ratio=None):
             n_steering_ids = n_input_ids - round(n_input_ids * winrate_split_ratio)
             if mode == "steering":
                 df_subset = df_subset[df_subset["input_id"] < n_steering_ids]
-            elif mode == "winrate":
+            elif mode == "steering_test" or mode == "winrate":
                 df_subset = df_subset[df_subset["input_id"] >= n_steering_ids]
         yield (concept_id, df_subset)
 
@@ -207,7 +207,7 @@ def process_jsonl_file(jsonl_lines):
     return jsonl_lines
 
 
-def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
+def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None, mode=None):
     try:
         configs = [
             {
@@ -252,13 +252,8 @@ def plot_steering(aggregated_results, dump_dir, report_to=[], wandb_name=None):
             configs=configs,
             write_to_path=dump_dir, 
             report_to=report_to,
-            wandb_name=wandb_name
-        )
-        plot_win_rates(
-            jsonl_data=aggregated_results,
-            write_to_path=dump_dir,  # Replace with your desired output directory
-            report_to=report_to,
-            wandb_name=wandb_name
+            wandb_name=wandb_name,
+            mode=mode
         )
     except Exception as e:
         logger.warning(f"Failed to plot: {e}")
@@ -320,11 +315,11 @@ def eval_steering(args):
 
     # Initialize data generator
     df_generator = data_generator(
-        args.data_dir, mode="steering", 
+        args.data_dir, mode=args.mode, 
         winrate_split_ratio=args.winrate_split_ratio)
 
     # Load previous state if exists
-    state = load_state(args.dump_dir, mode="steering")
+    state = load_state(args.dump_dir, mode=args.mode)
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept_id: {start_concept_id}")
 
@@ -381,7 +376,7 @@ def eval_steering(args):
             dump_dir, 
             {"concept_id": concept_id + 1}, 
             concept_id, 
-            'steering', 
+            args.mode, 
             eval_results, 
             eval_dfs[concept_id]
         )
@@ -393,56 +388,6 @@ def eval_steering(args):
     except Exception as e:
         logger.warning(f"Failed to load steering.jsonl: {e}. Aborting evaluation.")
         return
-
-    if args.run_winrate:
-        winrate_results = {}
-        winrate_df_generator = winrate_data_generator(data_dir, aggregated_results, args.winrate_split_ratio)
-        # Create all winrate evaluation tasks - flattened for maximum parallelization
-        winrate_tasks = [
-            (concept_id, current_df, "WinRateEvaluator", model_name, args.dump_dir, \
-             args.lm_model, args.winrate_baseline, copy.deepcopy(lm_caches))
-            for concept_id, current_df in winrate_df_generator
-            # if concept_id >= start_concept_id # TODO: uncomment this when we fix our pipeline
-            for model_name in args.models
-            if model_name != args.winrate_baseline
-        ]
-
-        winrate_dfs = {}
-        model_strs = set()
-        with ProcessPoolExecutor(max_workers=args.num_of_workers) as executor:
-            for concept_id, _, model_str, result, lm_report, _, current_df in executor.map(
-                eval_steering_single_task, winrate_tasks):
-                if concept_id not in winrate_results:
-                    winrate_results[concept_id] = {}
-                    winrate_dfs[concept_id] = {}
-                winrate_results[concept_id][model_str] = result
-                lm_reports += [lm_report]
-                winrate_dfs[concept_id][model_str] = current_df
-                model_strs.add(model_str)
-                logger.warning(f"Completed winrate task for concept_id: {concept_id}, model: {model_str}")
-        model_strs = list(model_strs)
-        if winrate_dfs:
-            vertical_concat = []
-            for concept_id, winrate_df in winrate_dfs.items():
-                # Take the first DataFrame as base and only keep unique columns from others
-                base_df = winrate_dfs[concept_id][model_strs[0]]
-                for model_str in model_strs[1:]:
-                    # Only keep the win_result column from other DataFrames
-                    win_col = f"{model_str}_win_result"
-                    if win_col in winrate_dfs[concept_id][model_str].columns:
-                        base_df[win_col] = winrate_dfs[concept_id][model_str][win_col]
-                vertical_concat.append(base_df)
-            winrate_df = pd.concat(vertical_concat, axis=0)
-            winrate_df.to_parquet(Path(dump_dir) / "evaluate" / f"winrate.parquet", engine='pyarrow')
-
-        for concept_id, winrate_result in winrate_results.items():
-            aggregated_results[concept_id]["results"]["WinRateEvaluator"] = winrate_result
-
-        # update the winrate jsonl file
-        result_path = Path(dump_dir) / "evaluate" / f"steering.jsonl"
-        with open(result_path, "w") as f:
-            for result_entry in aggregated_results:
-                f.write(json.dumps(result_entry) + "\n")
 
     # Aggregate LM reports
     aggregated_lm_report = {
@@ -458,7 +403,7 @@ def eval_steering(args):
 
     # Generate final plot
     logger.warning("Generating final plot...")
-    plot_steering(aggregated_results, Path(dump_dir) / "evaluate", args.report_to, args.wandb_name)
+    plot_steering(aggregated_results, Path(dump_dir) / "evaluate", args.report_to, args.wandb_name, args.mode)
     logger.warning("Evaluation completed!")
 
 
@@ -563,7 +508,7 @@ def main():
 
     if args.mode == "latent":
         eval_latent(args)
-    elif args.mode == "steering":
+    elif "steering" in args.mode: # steering or steering_test
         eval_steering(args)
     elif args.mode == "all":
         eval_latent(args)
