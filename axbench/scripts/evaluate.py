@@ -384,9 +384,9 @@ def eval_steering(args):
     # Reload for plotting and optional winrate
     try:
         aggregated_results = process_jsonl_file(
-            load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / 'steering.jsonl')))
+            load_jsonl(os.path.join(Path(dump_dir) / "evaluate" / f'{args.mode}.jsonl')))
     except Exception as e:
-        logger.warning(f"Failed to load steering.jsonl: {e}. Aborting evaluation.")
+        logger.warning(f"Failed to load {args.mode}.jsonl: {e}. Aborting evaluation.")
         return
 
     # Aggregate LM reports
