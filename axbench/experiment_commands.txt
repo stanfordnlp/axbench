@@ -310,49 +310,49 @@ torchrun --nproc_per_node=2 --master_port=30003 axbench/scripts/train.py \
 torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 6 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 12 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 24 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 48 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29568 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 96 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29569 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 120 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
 torchrun --nproc_per_node=1 --master_port=29567 axbench/scripts/train.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
   --max_num_of_examples 144 \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144_42 \
   --overwrite_data_dir axbench/concept10/prod_2b_l10_v1/generate \
   --run_name official
 
@@ -546,56 +546,56 @@ torchrun --nproc_per_node=1 --master_port=60010 axbench/scripts/inference.py \
 # lsreft scaling law
 torchrun --nproc_per_node=1 --master_port=60000 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60001 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60002 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60003 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60003 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60004 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60005 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
 
 torchrun --nproc_per_node=1 --master_port=60006 axbench/scripts/inference.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144_42 \
   --overwrite_metadata_dir axbench/concept10/prod_2b_l10_v1/generate \
   --overwrite_inference_data_dir axbench/concept10/prod_2b_l10_v1/inference \
   --run_name official --mode latent
@@ -768,42 +768,42 @@ python axbench/scripts/evaluate.py \
 # lsreft scaling law
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120_42 \
   --run_name official --mode latent
 
 python axbench/scripts/evaluate.py \
   --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
-  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144 \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144_42 \
   --run_name official --mode latent
 
 
@@ -1308,6 +1308,46 @@ nlprun -q jag -x jagupard[19,20] -g 1 -a wuzhengx-310 python axbench/scripts/eva
   --dump_dir axbench/results/prod_9b_l20_concept16k_lsreft_platonic \
   --run_name official --mode steering
 
+# lsreft scaling law
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_6_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_12_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_24_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_48_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_72_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_96_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_120_42 \
+  --run_name official --mode steering
+
+python axbench/scripts/evaluate.py \
+  --config axbench/sweep/wuzhengx/2b/l10/lsreft_scaling_law.yaml \
+  --dump_dir axbench/results/prod_2b_l10_concept10_lsreft_scaling_law_144_42 \
+  --run_name official --mode steering
 
 ##########################
 #
