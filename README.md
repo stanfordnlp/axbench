@@ -240,6 +240,11 @@ uv run axbench/scripts/evaluate.py \
   --mode steering_test
 ```
 
+## Analyses
+Once you finished evaluation, you can do the analyses with our provided notebook in `axbench/scripts/analyses.ipynb`. All of our results in the paper are produced by this notebook.
+
+You need to point revelant directories to your own results by modifying the notebook. If you introduce new models, datasets, or new evaluation metrics, you can add your own analysis by following the notebook.
+
 ## Reproducing our results.
 
 Please see `axbench/experiment_commands.txt` for detailed commands and configurations.
