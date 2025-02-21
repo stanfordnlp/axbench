@@ -187,6 +187,52 @@ class AdditionIntervention(
         return output
     
 
+class SamplingAdditionIntervention(
+    SourcelessIntervention,
+    TrainableIntervention, 
+    DistributedRepresentationIntervention
+):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, keep_last_dim=True)
+        self.proj = torch.nn.Linear(
+                self.embed_dim, kwargs["low_rank_dimension"], bias=True)
+
+    def forward(self, base, source=None, subspaces=None):
+        # Normalize base to unit vectors along the embedding dimension
+        base_norm = torch.norm(base, p=2, dim=-1, keepdim=True)
+        base_normalized = base / (base_norm + 1e-8)  # Add epsilon to prevent division by zero
+        
+        # Get normalized steering vectors
+        steering_direction = self.proj.weight[subspaces["idx"]]  # [batch, d]
+        steering_norm = torch.norm(steering_direction, p=2, dim=-1, keepdim=True)
+        steering_normalized = steering_direction / (steering_norm + 1e-8)
+        
+        # Sample interpolation coefficients with bias towards steering vector
+        # Using beta distribution with alpha=2, beta=1 to bias towards 1
+        alpha = torch.tensor(2.0, device=base.device)
+        beta = torch.tensor(1.0, device=base.device)
+        interpolation = torch.distributions.Beta(alpha, beta).sample(
+            (base.shape[0],)).to(base.device)  # [batch]
+        
+        # Interpolate between normalized vectors
+        interpolation = interpolation.unsqueeze(-1).unsqueeze(-1)  # [batch, 1, 1]
+        steering_normalized = steering_normalized.unsqueeze(1)  # [batch, 1, d]
+        
+        combined_direction = (1 - interpolation) * base_normalized + \
+                           interpolation * steering_normalized
+        
+        # Renormalize the interpolated direction
+        combined_direction = combined_direction / \
+            (torch.norm(combined_direction, p=2, dim=-1, keepdim=True) + 1e-8)
+        
+        # Apply original magnitude scaling
+        steering_magnitude = subspaces["max_act"].unsqueeze(-1) * \
+            subspaces["mag"].unsqueeze(-1)  # [batch, 1]
+        output = base + (steering_magnitude.unsqueeze(1) * combined_direction)
+        
+        return output
+
+
 class SigmoidMaskAdditionIntervention(
     SourcelessIntervention,
     TrainableIntervention, 
