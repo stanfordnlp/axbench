@@ -11,7 +11,8 @@ from .interventions import (
     TopKReLUIntervention,
     TopKReLUSubspaceIntervention,
     AdditionIntervention,
-    SubspaceIntervention
+    SubspaceIntervention,
+    SamplingAdditionIntervention
 )
 from ..utils.constants import EXAMPLE_TAG
 from torch.utils.data import DataLoader
@@ -36,7 +37,12 @@ class LsReFT(Model):
         mode = kwargs.get("mode", "latent")
         if mode == "steering":
             intervention_type = kwargs.get("intervention_type", "addition")
-            if intervention_type == "addition":
+            if intervention_type == "sampling":
+                ax = SamplingAdditionIntervention(
+                    embed_dim=self.model.config.hidden_size, 
+                    low_rank_dimension=kwargs.get("low_rank_dimension", 1),
+                )
+            elif intervention_type == "addition":
                 ax = AdditionIntervention(
                     embed_dim=self.model.config.hidden_size, 
                     low_rank_dimension=kwargs.get("low_rank_dimension", 1),
