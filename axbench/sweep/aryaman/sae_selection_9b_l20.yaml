@@ -38,9 +38,9 @@ inference:
   steering_intervention_type: "addition" # clamping
   steering_model_name: "google/gemma-2-9b-it"
   steering_datasets: ["AlpacaEval"]
-  steering_batch_size: 10
+  steering_batch_size: 5
   steering_output_length: 128
-  steering_layers: [10]
+  steering_layers: [20]
   steering_num_of_examples: 10 # number of examples per concept and per factor
   steering_factors: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 4.0, 5.0] # number of steering factors per example
   # master data dir is shared across all jobs.
