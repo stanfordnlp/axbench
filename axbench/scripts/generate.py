@@ -120,6 +120,27 @@ def save_df_to_parquet_safely(df, final_path):
         raise e
     
 
+def load_metadata_flatten(metadata_path):
+    """
+    Load flatten metadata from a JSON lines file.
+    """
+    metadata = []
+    with open(Path(metadata_path) / METADATA_FILE, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            concept, ref =data["concept"], data["ref"]
+            concept_genres_map = data["concept_genres_map"][concept]
+            ref = data["ref"]
+            flatten_data = {
+                "concept": concept,
+                "ref": ref,
+                "concept_genres_map": {concept: concept_genres_map},
+                "concept_id": data["concept_id"]
+            }
+            metadata += [flatten_data]  # Return the metadata as is
+    return metadata
+
+
 def save(
     dump_dir, state, concept_id, 
     concept, concept_genres_map, 
@@ -179,11 +200,147 @@ def load_state(dump_dir):
             return state
     return None
 
-def main():
-    args = DatasetArgs(section="generate")
-    logger.warning("Generating datasets with the following configuration:")
-    logger.warning(args)
 
+def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, args):
+    # prepare concept related data.
+    concept = metadata[concept_id]["concept"]
+    sae_link = metadata[concept_id]["ref"]
+    sae_id = int(sae_link.split("/")[-1]) 
+    concept_genres_map = metadata[concept_id]["concept_genres_map"]
+    _, eval_contrast_concepts_map = \
+        dataset_factory.prepare_concepts(
+            [concept], 
+            concept_genres_map=concept_genres_map,
+            contrast_concepts_map={}, api_tag="inference")
+    current_df = dataset_factory.create_eval_df(
+        [concept], num_of_examples, concept_genres_map, {},
+        eval_contrast_concepts_map, input_length=args.input_length, 
+        output_length=args.output_length
+    )
+    current_df["concept_id"] = concept_id
+    current_df["sae_link"] = sae_link
+    current_df["sae_id"] = sae_id
+    return current_df
+
+
+def save_state_latent(dump_dir, state, partition):
+    dump_dir = Path(dump_dir) / "inference"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # Save state
+    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}")
+    with open(state_path, "wb") as f:
+        pickle.dump(state, f)
+
+
+def save_latent(
+    dump_dir, concept_id, partition,
+    current_df):
+    # This function saves DataFrames per rank per partition (latent or steering)
+    dump_dir = Path(dump_dir) / "inference"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save DataFrame using Parquet
+    rotation_freq = 500
+    file_index = concept_id // rotation_freq
+    if file_index == 0:
+        df_path = os.path.join(dump_dir, f"{partition}_eval_data.parquet")
+    else:
+        df_path = os.path.join(dump_dir, f"{partition}_eval_data_{file_index}.parquet")
+    if os.path.exists(df_path):
+        existing_df = pd.read_parquet(df_path)
+        combined_df = pd.concat([existing_df, current_df], ignore_index=True)
+    else:
+        combined_df = current_df
+    combined_df.to_parquet(df_path, index=False)
+
+
+def generate_latent(generate_args, args):
+    args.data_dir = f"{args.dump_dir}/generate"
+    logger.warning("Inferencing with following configuration:")
+    logger.warning(args)
+    set_seed(args.seed)
+
+    # Configure the logger per rank
+    logger.setLevel(logging.WARNING)  # Set the logging level as desired
+
+    # Create a logging formatter that includes the rank
+    formatter = logging.Formatter(
+        fmt=f'%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+        datefmt='%Y-%m-%d:%H:%M:%S'
+    )
+
+    # Create a console handler and set its formatter
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+
+    # Optionally, create a file handler per rank
+    """
+    log_file = f'log_rank_{rank}.log'
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    """
+    data_dir = args.data_dir
+    dump_dir = args.dump_dir
+    num_of_examples = args.latent_num_of_examples
+    metadata = load_metadata_flatten(data_dir)
+    # Get list of all concept_ids
+    concept_ids = list(range(len(metadata)))
+
+    # Load the state if it exists.
+    state = load_state(args.dump_dir, "latent")
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting concept index: {start_concept_id}")
+    if start_concept_id >= len(concept_ids):
+        logger.warning(f"Datasets for all concepts have been generated. Exiting.")
+        return
+
+    # Create a new OpenAI client.
+    client = AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        timeout=60.0,
+        http_client=httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=100,
+                max_connections=1000
+            ),
+            headers={"Connection": "close"},
+        ),
+        max_retries=3,
+    )
+
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, model_max_length=512)
+    tokenizer.padding_side = "right"
+
+    # Load dataset factory for evals.
+    dataset_factory = DatasetFactory(
+        None, client, tokenizer, generate_args.dataset_category, None, None, dump_dir,
+        use_cache=True, master_data_dir=args.master_data_dir,
+        lm_model=args.lm_model, logger=logger, is_inference=True
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
+
+    progress_bar = tqdm(range(start_concept_id, len(metadata)), desc="Processing concept")
+    for start_idx in progress_bar:
+        concept_id = metadata[start_idx]["concept_id"]
+        current_df = create_data_latent(
+            dataset_factory, metadata, concept_id, num_of_examples, args)
+
+        save_latent(dump_dir, concept_id, 'latent', current_df)
+        logger.warning(f"Saved inference dataset for concept {concept_id} to latent_eval_data.parquet")
+        # After processing, save state
+        current_state = {'concept_id': concept_id}
+        save_state_latent(args.dump_dir, current_state, 'latent')
+
+
+def generate_training(args, generate_args):
     dump_dir = args.dump_dir
     dump_dir = Path(dump_dir) / "generate"
     dump_dir.mkdir(parents=True, exist_ok=True)
@@ -291,6 +448,38 @@ def main():
         data_concept_id += 1
 
     logger.warning(f"Finished creating dataset.")
+
+
+def generate_dpo_training(args, generate_args):
+    raise NotImplementedError("DPO training is not implemented yet.")
+
+
+def main():
+    custom_args = [
+        {
+            'args': ['--mode'],
+            'kwargs': {
+                'type': str,
+                'default': "training",
+                'help': 'The generation mode.'
+            }
+        }
+    ]
+
+    generate_args = DatasetArgs(custom_args=custom_args, section="generate")
+    inference_args = DatasetArgs(custom_args=custom_args, section="inference")
+    logger.warning("Generating datasets with the following configuration:")
+    logger.warning(generate_args)
+
+    if generate_args.mode == "training":
+        generate_training(generate_args, inference_args)
+    elif generate_args.mode == "latent":
+        generate_latent(generate_args, inference_args)   
+    elif generate_args.mode == "dpo_training":
+        generate_dpo_training(generate_args, inference_args)
+    else:
+        raise ValueError(f"Invalid mode: {generate_args.mode}")
+
 
 if __name__ == "__main__":
     main()

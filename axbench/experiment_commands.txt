@@ -27,24 +27,28 @@ python axbench/scripts/generate.py \
   --run_name official
 
 # generate latent eval dataset
-nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate.py \
   --config axbench/sweep/wuzhengx/generate/prod_2b_l10_v1.yaml \
   --dump_dir axbench/concept500/prod_2b_l10_v1 \
+  --mode latent \
   --run_name official
 
-nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate.py \
   --config axbench/sweep/wuzhengx/generate/prod_2b_l20_v1.yaml \
   --dump_dir axbench/concept500/prod_2b_l20_v1 \
+  --mode latent \
   --run_name official
 
-nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate.py \
   --config axbench/sweep/wuzhengx/generate/prod_9b_l20_v1.yaml \
   --dump_dir axbench/concept500/prod_9b_l20_v1 \
+  --mode latent \
   --run_name official
 
-nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate_latent.py \
+nlprun -q jag -x jagupard[19,20] -c 12 -g 1 -a wuzhengx-310 python axbench/scripts/generate.py \
   --config axbench/sweep/wuzhengx/generate/prod_9b_l31_v1.yaml \
   --dump_dir axbench/concept500/prod_9b_l31_v1 \
+  --mode latent \
   --run_name official
 
 
