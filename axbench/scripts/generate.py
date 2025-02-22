@@ -201,6 +201,17 @@ def load_state(dump_dir):
     return None
 
 
+def load_state_latent(dump_dir, mode):
+    """
+    Load the state from a file if it exists.
+    """
+    state_path = os.path.join(f"{dump_dir}/inference", f"{mode}_{STATE_FILE}")
+    if os.path.exists(state_path):
+        with open(state_path, "rb") as f:
+            return pickle.load(f)
+    return None
+
+
 def create_data_latent(dataset_factory, metadata, concept_id, num_of_examples, args):
     # prepare concept related data.
     concept = metadata[concept_id]["concept"]
@@ -292,7 +303,7 @@ def generate_latent(generate_args, args):
     concept_ids = list(range(len(metadata)))
 
     # Load the state if it exists.
-    state = load_state(args.dump_dir, "latent")
+    state = load_state_latent(args.dump_dir, "latent")
     start_concept_id = state.get("concept_id", 0) if state else 0
     logger.warning(f"Starting concept index: {start_concept_id}")
     if start_concept_id >= len(concept_ids):
