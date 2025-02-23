@@ -70,6 +70,7 @@ class DatasetFactory(object):
         use_cache=True, master_data_dir=None, start_concept_id=0, is_chat_model=True, include_system_prompt=False, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
+        self.dump_dir = dump_dir
 
         # prepare lm model
         lm_model = kwargs.get("lm_model", "gpt-4o-mini")
@@ -352,7 +353,31 @@ class DatasetFactory(object):
             ])
         self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
         return df
-        
+    
+    def create_dpo_df(self, existing_df, **kwargs):
+        lm_model, model, tokenizer = self.lm_model, self.model, self.tokenizer
+        start = time.time()
+        self.logger.warning("Creating dataframe.")
+        batch_size = kwargs.get("batch_size", 8)
+        output_length = kwargs.get("output_length", 32)
+        is_chat_model = kwargs.get("is_chat_model", True)
+        include_system_prompt = kwargs.get("include_system_prompt", False)
+
+        positive_df = existing_df[existing_df["category"] == "positive"]
+        positive_prompts = positive_df["input"].tolist()
+
+        losing_outputs = get_model_continues(
+            self.model, self.tokenizer, positive_prompts,
+            max_new_tokens=int(output_length*1.5), 
+            is_chat_model=is_chat_model, 
+            include_system_prompt=include_system_prompt,
+            batch_size=batch_size,
+            verbose=True)
+        positive_df["losing_output"] = losing_outputs
+        positive_df["losing_output_concept"] = EMPTY_CONCEPT
+
+        self.logger.warning(f"Finished creating current dataframe in {round(time.time() - start, 3)} sec.")
+        return positive_df
 
 async def get_steering_prompts(client, concepts):
     prompts = []

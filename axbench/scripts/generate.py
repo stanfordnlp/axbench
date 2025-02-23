@@ -461,8 +461,138 @@ def generate_training(args, generate_args):
     logger.warning(f"Finished creating dataset.")
 
 
+def save_dpo(
+    dump_dir, concept_id, partition,
+    current_df):
+    # This function saves DataFrames per rank per partition (latent or steering)
+    dump_dir = Path(dump_dir) / "generate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save DataFrame using Parquet
+    rotation_freq = 500
+    file_index = concept_id // rotation_freq if concept_id != -1 else 0
+    if file_index == 0:
+        df_path = os.path.join(dump_dir, f"{partition}_train_data.parquet")
+    else:
+        df_path = os.path.join(dump_dir, f"{partition}_train_data_{file_index}.parquet")
+    if os.path.exists(df_path):
+        existing_df = pd.read_parquet(df_path)
+        combined_df = pd.concat([existing_df, current_df], ignore_index=True)
+    else:
+        combined_df = current_df
+    combined_df.to_parquet(df_path, index=False)
+
+
+def save_state_dpo(dump_dir, state, partition):
+    dump_dir = Path(dump_dir) / "generate"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    # Save state
+    state_path = os.path.join(dump_dir, f"{partition}_{STATE_FILE}")
+    with open(state_path, "wb") as f:
+        pickle.dump(state, f)
+
+
 def generate_dpo_training(args, generate_args):
-    raise NotImplementedError("DPO training is not implemented yet.")
+    dump_dir = args.dump_dir
+    dump_dir = Path(dump_dir) / "generate"
+    # check the generate directory exists.
+    if not os.path.exists(dump_dir):
+        raise ValueError(f"Generate directory does not exist: {dump_dir}")
+    # check the train_data.parquet exists.
+    if not os.path.exists(os.path.join(dump_dir, "train_data.parquet")):
+        raise ValueError(f"Train data does not exist: {os.path.join(dump_dir, 'train_data.parquet')}")
+
+    concept_path = args.concept_path
+    num_of_examples = args.num_of_examples
+    max_concepts = args.max_concepts
+
+    # Load and optionally shuffle concepts
+    set_seed(args.seed)
+    all_concepts, all_refs = load_concepts(concept_path)
+    
+    # Limit the number of concepts if specified
+    if max_concepts is not None:
+        combined = list(zip(all_concepts, all_refs))
+        random.shuffle(combined)
+        all_concepts, all_refs = zip(*combined)
+        all_concepts = list(all_concepts)[:max_concepts]
+        all_refs = list(all_refs)[:max_concepts]
+    
+    concept2id = {concept: i for i, concept in enumerate(all_concepts)}
+    concepts = list(zip(all_concepts, all_refs))
+
+    # Load the state if it exists.
+    state = load_state_latent(dump_dir, "dpo")
+    start_concept_id = state.get("concept_id", 0) if state else 0
+    logger.warning(f"Starting concept index: {start_concept_id}")
+    if start_concept_id >= len(concepts):
+        logger.warning(f"Datasets for all concepts have been generated. Exiting.")
+        return
+
+    # Load lm and tokenizer.
+    model_name = model_name_map[all_refs[0].split("/")[3]]
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype=torch.bfloat16)
+    is_chat_model = True if model_name in CHAT_MODELS else False
+    include_system_prompt = True if model_name == "meta-llama/Llama-3.1-8B-Instruct" else False
+    model = model.cuda()
+
+    tokenizer =  AutoTokenizer.from_pretrained(model_name, model_max_length=512)
+    tokenizer.padding_side = "right"
+
+    if tokenizer.unk_token == None and tokenizer.pad_token == None:
+        # raw llama3
+        print("adding a special padding token...")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        need_resize = True
+    else:
+        need_resize = False
+    if need_resize:
+        model.resize_token_embeddings(len(tokenizer))
+
+    # Init the dataset factory.
+    dataset_factory = DatasetFactory(
+        model, None, tokenizer, args.dataset_category, num_of_examples, args.output_length, 
+        dump_dir, use_cache=args.lm_use_cache, master_data_dir=args.master_data_dir,
+        seed=args.seed, lm_model=args.lm_model, start_concept_id=start_concept_id, is_chat_model=is_chat_model,
+        include_system_prompt=include_system_prompt,
+    )
+    atexit.register(dataset_factory.save_cache)
+    atexit.register(dataset_factory.reset_stats)
+    
+    # get negative and do nothing on them just renaming.
+    existing_df = pd.read_parquet(os.path.join(dump_dir, "train_data.parquet"))
+    existing_df = existing_df.rename(
+        columns={
+            'output': 'winning_output', 
+            'output_concept': 'winning_output_concept',
+        }
+    )
+    negative_df = existing_df[existing_df["category"] == "negative"] # keep later to concate.
+    negative_df["losing_output"] = negative_df["winning_output"]
+    negative_df["losing_output_concept"] = negative_df["winning_output_concept"]
+    save_dpo(dump_dir, -1, 'dpo', negative_df)
+
+    progress_bar = tqdm(range(start_concept_id, len(concepts)), desc="Processing concept")
+    for concept_id in progress_bar:
+        concept, ref = concepts[concept_id]
+        print(f"Generating for concept: {concept}...")
+        existing_df = existing_df[existing_df["concept_id"] == concept_id].copy()
+        dpo_df = dataset_factory.create_dpo_df(
+            existing_df,
+            output_length=args.output_length,
+            is_chat_model=is_chat_model,
+            include_system_prompt=include_system_prompt,
+            batch_size=args.inference_batch_size,
+        )
+
+        save_dpo(dump_dir, concept_id, 'dpo', dpo_df)
+        logger.warning(f"Saved inference dataset for concept {concept_id} to latent_eval_data.parquet")
+        # After processing, save state
+        current_state = {'concept_id': concept_id}
+        save_state_dpo(args.dump_dir, current_state, 'latent')
+
+    logger.warning(f"Finished creating DPO dataset.")
 
 
 def main():

@@ -5,6 +5,7 @@
 #################################
 import torch, einops
 from torch import nn
+from tqdm.auto import tqdm
 
 
 def get_lr(optimizer):
@@ -13,7 +14,7 @@ def get_lr(optimizer):
 
 
 def get_model_continues(
-    model, tokenizer, prompts, max_new_tokens, is_chat_model=True, batch_size=8, include_system_prompt=False
+    model, tokenizer, prompts, max_new_tokens, is_chat_model=True, batch_size=8, include_system_prompt=False, verbose=False
 ):
     """we ground examples with the model's original generation."""
     tokenizer.padding_side = "left"
@@ -32,7 +33,7 @@ def get_model_continues(
     
     # Process prompts in batches
     all_generated_texts = []
-    for i in range(0, len(prompts), batch_size):
+    for i in tqdm(range(0, len(prompts), batch_size), desc="Generating responses", disable=not verbose):
         batch_prompts = prompts[i:i + batch_size]
         encoding = tokenizer(batch_prompts, return_tensors='pt', padding=True).to(model.device)
         with torch.no_grad():

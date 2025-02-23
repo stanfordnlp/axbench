@@ -9,6 +9,7 @@ class DatasetArgs:
     steering_datasets: field(default_factory=lambda: [])
     input_length: Optional[int] = 32
     output_length: Optional[int] = 32
+    inference_batch_size: Optional[int] = 8
     # generation related params
     temperature: Optional[float] = 1.0
     data_dir: Optional[str] = None
