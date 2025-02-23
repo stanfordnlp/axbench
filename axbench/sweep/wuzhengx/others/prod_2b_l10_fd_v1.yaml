@@ -8,6 +8,7 @@ generate:
   dataset_category: "instruction"
   lm_use_cache: false
   seed: 42
+  inference_batch_size: 16 # for generating DPO dataset.
 inference:
   use_bf16: true
   models: ["PromptSteering"]
