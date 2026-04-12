@@ -668,8 +668,32 @@ def eval_latent(args):
         if concept_id < start_concept_id:
             continue
         logger.warning(f"Evaluating concept_id: {concept_id}")
-        
+
         # Initialize a dictionary for storing evaluation results for this `concept_id`
+        eval_results = {}
+        for evaluator_name in args.latent_evaluators:
+            for model_name in args.models:
+                if model_name in LATENT_EXCLUDE_MODELS:
+                    continue
+                evaluator_class = getattr(axbench, evaluator_name)
+                evaluator = evaluator_class(model_name)
+                result = evaluator.compute_metrics(current_df)
+                if evaluator_name not in eval_results:
+                    eval_results[evaluator_name] = {}
+                eval_results[evaluator_name][model_name] = result
+
+        save_results(
+            dump_dir,
+            {"concept_id": concept_id + 1},
+            concept_id,
+            "latent",
+            eval_results,
+        )
+
+    # Generate plots
+    plot_latent(dump_dir, args.report_to if hasattr(args, 'report_to') else [],
+                args.wandb_name if hasattr(args, 'wandb_name') else None)
+
 
 def main():
     custom_args = [
