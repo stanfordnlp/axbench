@@ -38,6 +38,15 @@
 | PCA                          | 0.107 | 0.083 | 0.128 | 0.104 | 0.105 |
 | Probe                        | 0.095 | 0.091 | 0.108 | 0.099 | 0.098 |
 
+### Beyond rank-1
+
+Steering methods whose intervention is not restricted to a single direction.
+
+| Method                       | 2B L10 | 2B L20 | 9B L20 | 9B L31 |  Avg |
+|------------------------------|-------:|-------:|-------:|-------:|-----:|
+| FLAS [[Jin et al., 2026]](https://flas-ai.github.io) | - | 1.025 | 1.185 | - | 1.105 |
+
+
 ## Highlights
 
 1. **Scalabale evaluation harness**: Framework for generating synthetic training + eval data from concept lists (e.g. GemmaScope SAE labels).
